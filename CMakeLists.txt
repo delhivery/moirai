@@ -9,8 +9,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 option(ANALYZE "Analyze codebase for improvements" OFF)
 
 if(ANALYZE)
-  message(STATUS "Analysis on. Trying to find iwyu")
+  message(STATUS "Analysis on")
   find_program(IWYU_PATH NAMES include-what-you-use iwyu REQUIRED)
+  find_program(TIDY_PATH NAMES 
 endif(ANALYZE)
 
 find_package(Boost COMPONENTS graph)
