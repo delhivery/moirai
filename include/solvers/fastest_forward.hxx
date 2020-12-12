@@ -1,5 +1,5 @@
-#ifndef MOIRAI_SOLVER_FASTEST_FORWARD
-#define MOIRAI_SOLVER_FASTEST_FORWARD
+#ifndef MOIRAI_SOLVER_EARLIEST_FORWARD
+#define MOIRAI_SOLVER_EARLIEST_FORWARD
 #include "transportation/graph_helpers.hxx"
 #include "transportation/network_ownership.hxx"
 #include <boost/graph/dijkstra_shortest_paths.hpp>
@@ -28,7 +28,7 @@ template <transportation::Mode mode> struct Predicate {
 } // namespace detail
 
 template <transportation::Mode mode>
-class FastestForward : public transportation::BaseGraph {
+class EarliestForward : public transportation::BaseGraph {
 private:
   using Graph = transportation::detail::Graph;
   using Vertex = transportation::detail::Vertex;
@@ -40,7 +40,7 @@ private:
   FilteredGraph m_graph;
 
 public:
-  FastestForward() {
+  EarliestForward() {
     detail::Predicate<mode> predicate{&graph};
     m_graph = FilteredGraph(graph, predicate);
   }

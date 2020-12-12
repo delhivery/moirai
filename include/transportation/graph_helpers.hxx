@@ -18,15 +18,19 @@ struct TransportationNode;
 struct TransportationEdge;
 
 namespace detail {
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
-                              TransportationNode, TransportationEdge>
-    Graph;
+typedef boost::adjacency_list<boost::vecS,
+                              boost::vecS,
+                              boost::directedS,
+                              TransportationNode,
+                              TransportationEdge>
+  Graph;
 typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
 typedef boost::graph_traits<Graph>::edge_descriptor Edge;
 
 } // namespace detail
 
-struct TransportationNode {
+struct TransportationNode
+{
   std::string identifier;
   std::string human_readable_name;
 
@@ -37,7 +41,8 @@ struct TransportationNode {
   uint16_t time_latency_outbound_linehaul;
 };
 
-struct TransportationEdge {
+struct TransportationEdge
+{
   std::string identifier;
 
   std::string human_readable_name;
@@ -56,7 +61,8 @@ public:
                   const uint16_t) const;
 };
 
-class BaseGraph {
+class BaseGraph
+{
 private:
   std::map<std::string_view, detail::Vertex> vertices;
   std::map<std::string_view, detail::Edge> edges;
@@ -79,7 +85,9 @@ public:
                                          const detail::Vertex,
                                          const TransportationEdge);
 
-  virtual void find_path(std::string_view, std::string_view, const uint32_t) const = 0;
+  virtual void find_path(std::string_view,
+                         std::string_view,
+                         const uint32_t) const = 0;
 
   std::string to_string() const;
 };
