@@ -21,15 +21,16 @@ find_package(TBB REQUIRED)
 
 # add_library(${PROJECT_NAME}Headers INTERFACE)
 # target_include_directories(${PROJECT_NAME}Headers INTERFACE include/)
-# 
+#
 # add_executable(
 #   ${PROJECT_NAME}
 #   src/moirai.cxx
 #   src/graph.cxx
 #   src/optimal.cxx
 # )
-# 
+#
 add_library(${PROJECT_NAME} src/moiraiv2.cxx)
+target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 if(ANALYZE)
   set_property(
