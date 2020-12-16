@@ -6,7 +6,7 @@
 #include <map>
 #include <string>
 
-#include "utils.hxx"
+#include "date_utils.hxx"
 
 enum VehicleType : uint8_t
 {
@@ -38,6 +38,10 @@ using Latency = DURATION;
 
 struct TransportCenter
 {
+  std::string code;
+
+  std::string name;
+
 public:
   TransportCenter(std::string, std::string);
 
@@ -54,10 +58,6 @@ public:
   }
 
 private:
-  std::string code;
-
-  std::string name;
-
   std::map<std::pair<MovementType, ProcessType>, DURATION> latencies;
 };
 
@@ -70,6 +70,9 @@ struct TransportEdge
 
   VehicleType vehicle;
   MovementType movement;
+
+  template <PathTraversalMode M>
+  DURATION weight(CLOCK start);
 };
 
 #endif

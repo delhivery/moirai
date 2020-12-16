@@ -1,5 +1,5 @@
-#ifndef moirai_utils
-#define moirai_utils
+#ifndef moirai_date_utils
+#define moirai_date_utils
 
 #include <chrono>
 #include <cstdint>
@@ -8,6 +8,6 @@
 using DURATION = std::chrono::duration<int16_t, std::ratio<60>>;
 using CLOCK =
   std::chrono::time_point<std::chrono::system_clock,
-                          std::chrono::duration<int32_t, std::ratio<60>>>;
+                          std::chrono::duration<uint32_t, std::ratio<60>>>;
 
 #endif

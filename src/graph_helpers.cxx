@@ -1,20 +1,5 @@
 #include "graph_helpers.hxx"
-
-template<>
-CLOCK
-Combine<PathTraversalMode::FORWARD>::operator()(CLOCK start,
-                                                DURATION delta) const
-{
-  return start + delta;
-}
-
-template<>
-CLOCK
-Combine<PathTraversalMode::REVERSE>::operator()(CLOCK start,
-                                                DURATION delta) const
-{
-  return start - delta;
-}
+#include <boost/graph/adjacency_list.hpp>
 
 template<>
 bool
