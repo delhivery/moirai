@@ -29,7 +29,12 @@ find_package(TBB REQUIRED)
 #   src/optimal.cxx
 # )
 #
-add_library(${PROJECT_NAME} src/moiraiv2.cxx)
+add_library(
+  ${PROJECT_NAME}
+  src/graph_helpers.cxx
+  src/solver.cxx
+  src/transportation.cxx
+)
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 if(ANALYZE)

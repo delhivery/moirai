@@ -1,5 +1,7 @@
+#include <chrono>  // for operator<=>, duration, time_point
+#include <compare> // for operator<, strong_ordering
+
 #include "graph_helpers.hxx"
-#include <boost/graph/adjacency_list.hpp>
 
 template<>
 bool

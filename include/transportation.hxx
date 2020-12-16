@@ -43,6 +43,8 @@ struct TransportCenter
   std::string name;
 
 public:
+  TransportCenter() = default;
+
   TransportCenter(std::string, std::string);
 
   template<MovementType M, ProcessType P>
@@ -71,8 +73,8 @@ struct TransportEdge
   VehicleType vehicle;
   MovementType movement;
 
-  template <PathTraversalMode M>
-  DURATION weight(CLOCK start);
+  template<PathTraversalMode M>
+  CLOCK weight(CLOCK start);
 };
 
 #endif

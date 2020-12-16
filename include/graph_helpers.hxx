@@ -1,16 +1,17 @@
 #ifndef moirai_graph_helpers
 #define moirai_graph_helpers
-#include "date_utils.hxx"
-#include "transportation.hxx"
-#include <boost/graph/graph_traits.hpp>
-#include <chrono>
-#include <cstring>
-#include <type_traits>
+
+#include <cstring> // for memset
+
+#include <boost/graph/graph_traits.hpp> // for graph_traits
+
+#include "date_utils.hxx"     // for CLOCK
+#include "transportation.hxx" // for PathTraversalMode, VehicleType
 
 template<class G, VehicleType V>
 struct FilterByVehicleType
 {
-  G* graph;
+  const G* graph;
 
   FilterByVehicleType() = default;
 
@@ -18,10 +19,10 @@ struct FilterByVehicleType
     : graph(graph)
   {}
 
-  bool operator()(typename boost::graph_traits<G>::edge_descriptor edge)
+  bool operator()(const typename boost::graph_traits<G>::edge_descriptor& edge)
   {
     auto edge_props = graph[edge];
-    return edge_props.vehicle >= V;
+    return edge_props.vehicle <= V;
   }
 };
 
@@ -36,7 +37,7 @@ static E
 null_edge()
 {
   E null_e;
-  memset((char*)null_e, 0xFF, sizeof(E));
+  memset((char*)&null_e, 0xFF, sizeof(E));
   return null_e;
 }
 #endif
