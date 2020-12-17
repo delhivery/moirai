@@ -15,7 +15,7 @@ if(ANALYZE)
 endif(ANALYZE)
 
 find_package(Boost COMPONENTS graph)
-find_package(nlohmann_json REQUIRED)
+find_package(RapidJSON REQUIRED)
 find_package(fmt REQUIRED)
 find_package(TBB REQUIRED)
 
@@ -31,6 +31,7 @@ find_package(TBB REQUIRED)
 #
 add_library(
   ${PROJECT_NAME}
+  src/date_utils.cxx
   src/graph_helpers.cxx
   src/solver.cxx
   src/transportation.cxx
@@ -42,7 +43,7 @@ if(ANALYZE)
     TARGET ${PROJECT_NAME} PROPERTY CXX_INCLUDE_WHAT_YOU_USE
     ${IWYU_PATH}
   )
-  set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
+  set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
 endif(ANALYZE)
 
 
@@ -50,7 +51,7 @@ target_link_libraries(
   ${PROJECT_NAME}
   ${PROJECT_NAME}Headers
   Boost::graph
-  nlohmann_json::nlohmann_json
+  RapidJSON
   fmt::fmt
   tbb
 )

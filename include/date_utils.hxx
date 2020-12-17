@@ -1,11 +1,10 @@
 #ifndef moirai_date_utils
 #define moirai_date_utils
 
-#include <chrono>
-#include <cstdint>
-#include <ratio>
-
-#include <date/date.h>
+#include <chrono>  // for duration, system_clock, time_point
+#include <cstdint> // for int16_t, int32_t, uint8_t
+#include <ratio>   // for ratio
+#include <utility> // for pair
 
 typedef std::chrono::duration<std::int16_t, std::ratio<60>> DURATION;
 typedef DURATION TIME_OF_DAY;
