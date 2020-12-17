@@ -1,15 +1,38 @@
 #include "transportation.hxx"
+#include <chrono> // for operator+, __duration_common_type<>::type, days
+#include <ratio>  // for ratio
 
-template<>
-CLOCK
-TransportEdge::weight<PathTraversalMode::FORWARD>(CLOCK start)
+void
+TransportEdge::update(TransportCenter source, TransportCenter target)
 {
-  return start;
+
+  if (movement == MovementType::CARTING) {
+    offset_source =
+      source.get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
+    offset_target =
+      target.get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+  } else {
+    offset_source =
+      source.get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
+    offset_target =
+      target.get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
+  }
 }
 
 template<>
-CLOCK
-TransportEdge::weight<PathTraversalMode::REVERSE>(CLOCK start)
+COST
+TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
-  return start;
+  TIME_OF_DAY actual_departure{ (departure - offset_source).count() %
+                                std::chrono::days{ 1 }.count() };
+  return { actual_departure, offset_source + duration };
+}
+
+template<>
+COST
+TransportEdge::weight<PathTraversalMode::REVERSE>() const
+{
+  TIME_OF_DAY actual_departure{ (departure + duration + offset_target).count() %
+                                std::chrono::days{ 1 }.count() };
+  return { actual_departure, duration + offset_source + offset_target };
 }

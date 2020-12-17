@@ -1,13 +1,13 @@
 #include "solver.hxx"
-#include "date_utils.hxx"
-#include "graph_helpers.hxx"
-#include "transportation.hxx"
-#include <boost/graph/detail/adjacency_list.hpp>
-#include <boost/graph/dijkstra_shortest_paths.hpp>
-#include <boost/graph/filtered_graph.hpp>
-#include <boost/property_map/function_property_map.hpp>
-#include <boost/property_map/property_map.hpp>
-#include <boost/property_map/transform_value_property_map.hpp>
+#include "date_utils.hxx"                        // for CLOCK
+#include "graph_helpers.hxx"                     // for FilterByVehicleType
+#include "transportation.hxx"                    // for VehicleType, AIR
+#include <boost/graph/detail/adjacency_list.hpp> // for get, num_vertices
+#include <boost/graph/detail/edge.hpp>           // for operator!=, operator==
+#include <boost/graph/filtered_graph.hpp>        // for filtered_graph
+#include <boost/graph/reverse_graph.hpp>         // for get, make_reverse_g...
+#include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
+#include <string>                                // for string
 
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::string_view node_code_or_name) const
@@ -54,51 +54,11 @@ Solver::operator()<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& source,
   CLOCK start) const
 {
-  FilterByVehicleType<Graph, VehicleType::AIR> filter{ &graph };
-
-  typedef boost::filtered_graph<Graph,
-                                FilterByVehicleType<Graph, VehicleType::AIR>>
-    FilteredGraph;
-
+  typedef FilterByVehicleType<Graph, VehicleType::AIR> FilterType;
+  typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
+  FilterType filter{ &graph };
   FilteredGraph filtered_graph(graph, filter);
-
-  std::vector<Node<FilteredGraph>> predecessors(
-    boost::num_vertices(filtered_graph));
-  auto predecessor_map = boost::make_iterator_property_map(
-    predecessors.begin(), boost::get(boost::vertex_index, filtered_graph));
-
-  std::vector<CLOCK> distances(boost::num_vertices(filtered_graph));
-  auto distance_map = boost::make_iterator_property_map(
-    distances.begin(), boost::get(boost::vertex_index, filtered_graph));
-
-  CLOCK zero = CLOCK::min();
-  CLOCK infi = CLOCK::max();
-
-  auto compare = [](CLOCK lhs, CLOCK rhs) {
-    return Compare<PathTraversalMode::FORWARD>()(lhs, rhs);
-  };
-
-  auto combine = []<typename BinaryFunction>(
-                   CLOCK start, BinaryFunction f) -> CLOCK { return f(start); };
-
-  auto wmap = boost::weight_map(
-    get(&TransportEdge::weight<PathTraversalMode::FORWARD>, filtered_graph));
-  auto imap =
-    boost::vertex_index_map(boost::get(boost::vertex_index, filtered_graph));
-
-  boost::dijkstra_shortest_paths(
-    filtered_graph,
-    source,
-    boost::predecessor_map(predecessor_map),
-    boost::distance_map(distance_map),
-    boost::weight_map(boost::get(
-      &TransportEdge::weight<PathTraversalMode::FORWARD>, filtered_graph)),
-    boost::get(boost::vertex_index, filtered_graph),
-    compare,
-    combine,
-    CLOCK::min(),
-    CLOCK::max(),
-    boost::default_dijkstra_visitor());
+  path_forward(source, start, filtered_graph);
 }
 
 template<>
@@ -107,5 +67,39 @@ Solver::operator()<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& source,
   CLOCK start) const
 {
-  FilterByVehicleType<Graph, VehicleType::SURFACE> filter{ &graph };
+  typedef FilterByVehicleType<Graph, VehicleType::SURFACE> FilterType;
+  typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
+  FilterType filter{ &graph };
+  FilteredGraph filtered_graph(graph, filter);
+  path_forward(source, start, filtered_graph);
+}
+
+template<>
+void
+Solver::operator()<PathTraversalMode::REVERSE, VehicleType::AIR>(
+  const Node<Graph>& source,
+  CLOCK start) const
+{
+  typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
+  typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::AIR> FilterType;
+  typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;
+  REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
+  FilterType filter{ &reversed_graph };
+  FilteredGraph filtered_graph(reversed_graph, filter);
+  path_reverse(source, start, filtered_graph);
+}
+
+template<>
+void
+Solver::operator()<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+  const Node<Graph>& source,
+  CLOCK start) const
+{
+  typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
+  typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::SURFACE> FilterType;
+  typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;
+  REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
+  FilterType filter{ &reversed_graph };
+  FilteredGraph filtered_graph(reversed_graph, filter);
+  path_reverse(source, start, filtered_graph);
 }

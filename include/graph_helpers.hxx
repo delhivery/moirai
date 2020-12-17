@@ -19,9 +19,9 @@ struct FilterByVehicleType
     : graph(graph)
   {}
 
-  bool operator()(const typename boost::graph_traits<G>::edge_descriptor& edge)
+  bool operator()(const typename boost::graph_traits<G>::edge_descriptor& edge) const
   {
-    auto edge_props = graph[edge];
+    auto edge_props = (*graph)[edge];
     return edge_props.vehicle <= V;
   }
 };

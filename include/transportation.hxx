@@ -1,33 +1,32 @@
 #ifndef MOIRAI_TRANSPORTATION
 #define MOIRAI_TRANSPORTATION
 
-#include <chrono>
-#include <cstdint>
-#include <map>
-#include <string>
+#include "date_utils.hxx" // for DURATION, COST, TIME_OF_DAY
+#include <cstdint>        // for uint8_t
+#include <map>            // for map, map<>::mapped_type
+#include <string>         // for string
+#include <utility>        // for pair, make_pair
 
-#include "date_utils.hxx"
-
-enum VehicleType : uint8_t
+enum VehicleType : std::uint8_t
 {
   SURFACE = 0,
   AIR = 1,
 };
 
-enum MovementType : uint8_t
+enum MovementType : std::uint8_t
 {
   CARTING = 0,
   LINEHAUL = 1,
 };
 
-enum ProcessType : uint8_t
+enum ProcessType : std::uint8_t
 {
   INBOUND = 0,
   OUTBOUND = 1,
   CUSTODY = 2,
 };
 
-enum PathTraversalMode : uint8_t
+enum PathTraversalMode : std::uint8_t
 {
   FORWARD = 0,
   REVERSE = 1,
@@ -68,13 +67,23 @@ struct TransportEdge
   std::string code;
   std::string name;
 
+  TIME_OF_DAY departure;
+
   DURATION duration;
 
   VehicleType vehicle;
   MovementType movement;
 
   template<PathTraversalMode M>
-  CLOCK weight(CLOCK start);
+  COST weight() const;
+
+  int wgt() const;
+
+  void update(TransportCenter, TransportCenter);
+
+private:
+  DURATION offset_source;
+  DURATION offset_target;
 };
 
 #endif
