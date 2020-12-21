@@ -2,6 +2,25 @@
 #include <chrono> // for operator+, __duration_common_type<>::type, days
 #include <ratio>  // for ratio
 
+TransportCenter::TransportCenter(std::string code, std::string name)
+  : code(code)
+  , name(name)
+{}
+
+TransportEdge::TransportEdge(std::string code,
+                             std::string name,
+                             TIME_OF_DAY departure,
+                             DURATION duration,
+                             VehicleType vehicle,
+                             MovementType movement)
+  : code(code)
+  , name(name)
+  , departure(departure)
+  , duration(duration)
+  , vehicle(vehicle)
+  , movement(movement)
+{}
+
 void
 TransportEdge::update(TransportCenter source, TransportCenter target)
 {

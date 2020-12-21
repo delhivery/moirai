@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.10)
 
 project(moirai)
 
@@ -15,7 +15,6 @@ if(ANALYZE)
 endif(ANALYZE)
 
 find_package(Boost COMPONENTS graph)
-find_package(RapidJSON REQUIRED)
 find_package(fmt REQUIRED)
 find_package(TBB REQUIRED)
 
@@ -29,12 +28,13 @@ find_package(TBB REQUIRED)
 #   src/optimal.cxx
 # )
 #
-add_library(
+add_executable(
   ${PROJECT_NAME}
   src/date_utils.cxx
   src/graph_helpers.cxx
-  src/solver.cxx
   src/transportation.cxx
+  src/solver.cxx
+  src/moirai.cxx
 )
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 
@@ -49,9 +49,7 @@ endif(ANALYZE)
 
 target_link_libraries(
   ${PROJECT_NAME}
-  ${PROJECT_NAME}Headers
   Boost::graph
-  RapidJSON
   fmt::fmt
   tbb
 )
