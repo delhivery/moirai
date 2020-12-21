@@ -74,6 +74,10 @@ struct TransportEdge
   VehicleType vehicle;
   MovementType movement;
 
+  TransportEdge() = default;
+
+  TransportEdge(std::string, std::string, TIME_OF_DAY, DURATION, VehicleType, MovementType);
+
   template<PathTraversalMode M>
   COST weight() const;
 
