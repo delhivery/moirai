@@ -10,7 +10,7 @@
 #include <string>                                // for string
 
 std::pair<Node<Graph>, bool>
-Solver::add_node(std::string_view node_code_or_name) const
+Solver::add_node(std::string node_code_or_name) const
 {
   if (vertex_by_name.contains(node_code_or_name))
     return { vertex_by_name.at(node_code_or_name), true };
@@ -31,7 +31,7 @@ Solver::add_node(const TransportCenter& center)
 }
 
 std::pair<Edge<Graph>, bool>
-Solver::add_edge(std::string_view edge_code) const
+Solver::add_edge(std::string edge_code) const
 {
   if (edge_by_name.contains(edge_code))
     return { edge_by_name.at(edge_code), true };
@@ -49,35 +49,38 @@ Solver::add_edge(const Node<Graph>& source,
 }
 
 template<>
-void
-Solver::operator()<PathTraversalMode::FORWARD, VehicleType::AIR>(
+Path
+Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& source,
+  const Node<Graph>& target,
   CLOCK start) const
 {
   typedef FilterByVehicleType<Graph, VehicleType::AIR> FilterType;
   typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
   FilterType filter{ &graph };
   FilteredGraph filtered_graph(graph, filter);
-  path_forward(source, start, filtered_graph);
+  return path_forward(source, target, start, filtered_graph);
 }
 
 template<>
-void
-Solver::operator()<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+Path
+Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& source,
+  const Node<Graph>& target,
   CLOCK start) const
 {
   typedef FilterByVehicleType<Graph, VehicleType::SURFACE> FilterType;
   typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
   FilterType filter{ &graph };
   FilteredGraph filtered_graph(graph, filter);
-  path_forward(source, start, filtered_graph);
+  return path_forward(source, target, start, filtered_graph);
 }
 
 template<>
-void
-Solver::operator()<PathTraversalMode::REVERSE, VehicleType::AIR>(
+Path
+Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   const Node<Graph>& source,
+  const Node<Graph>& target,
   CLOCK start) const
 {
   typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
@@ -86,13 +89,14 @@ Solver::operator()<PathTraversalMode::REVERSE, VehicleType::AIR>(
   REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
   FilterType filter{ &reversed_graph };
   FilteredGraph filtered_graph(reversed_graph, filter);
-  path_reverse(source, start, filtered_graph);
+  return path_reverse(source, target, start, filtered_graph);
 }
 
 template<>
-void
-Solver::operator()<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+Path
+Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   const Node<Graph>& source,
+  const Node<Graph>& target,
   CLOCK start) const
 {
   typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
@@ -101,5 +105,5 @@ Solver::operator()<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
   FilterType filter{ &reversed_graph };
   FilteredGraph filtered_graph(reversed_graph, filter);
-  path_reverse(source, start, filtered_graph);
+  return path_reverse(source, target, start, filtered_graph);
 }

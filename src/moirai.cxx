@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fmt/core.h>
 #include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <sstream>
 #include <vector>
@@ -43,8 +44,8 @@ read_vertices(const std::filesystem::path filename)
              time_inbound_carting,
              time_inbound_linehaul,
              time_outbound_carting,
-             time_outbound_linehaul) = std::tie(center["center_name"],
-                                                center["center_code"],
+             time_outbound_linehaul) = std::tie(center["name"],
+                                                center["code"],
                                                 center["carting_inbound"],
                                                 center["linehaul_inbound"],
                                                 center["carting_outbound"],
@@ -90,11 +91,17 @@ read_connections(const std::filesystem ::path filename)
       route["reporting_time"].template get<std::string>();
     TIME_OF_DAY offset =
       std::chrono::duration_cast<TIME_OF_DAY>(make_time(reporting_time));
-    std::size_t halts = route["halts"].size();
+
+    auto stops = route["halt_centers"];
+
+    if (!stops.is_array()) {
+      std::cout << "Halt is not an array" << std::endl;
+    }
+    std::size_t halts = stops.size();
 
     for (int i = 0; i < halts - 1; ++i) {
-      auto source = route["halts"][i];
-      auto target = route["halts"][i + 1];
+      auto source = stops[i];
+      auto target = stops[i + 1];
       std::string departure = source["rel_etd"].template get<std::string>();
       std::string arrival = target["rel_eta"].template get<std::string>();
 
@@ -113,13 +120,20 @@ read_connections(const std::filesystem ::path filename)
         route_type == "Carting" ? MovementType::CARTING
                                 : MovementType::LINEHAUL,
       };
+      std::string source_center_code =
+        source["center_code"].template get<std::string>();
+      std::string source_center_name =
+        source["center_name"].template get<std::string>();
+      std::string target_center_code =
+        target["center_code"].template get<std::string>();
+      std::string target_center_name =
+        target["center_name"].template get<std::string>();
 
-      edges.push_back(
-        std::make_tuple(source["center_code"].template get<std::string>(),
-                        source["center_name"].template get<std::string>(),
-                        target["center_code"].template get<std::string>(),
-                        target["center_name"].template get<std::string>(),
-                        edge));
+      edges.push_back(std::make_tuple(source_center_code,
+                                      source_center_name,
+                                      target_center_code,
+                                      target_center_name,
+                                      edge));
     }
   });
 
@@ -132,12 +146,12 @@ main()
   Solver solver;
 
   for (const auto& center :
-       read_vertices("/home/amitprakash/moirai/data/centers.json")) {
+       read_vertices("/home/amitprakash/moirai/fixtures/centers.json")) {
     solver.add_node(center);
   }
 
-  for (const auto& edge :
-       read_connections("/home/amitprakash/moirai/fixtures/routes.json")) {
+  for (const auto& edge : read_connections(
+         "/home/amitprakash/moirai/fixtures/routes.lower.json")) {
 
     std::string source = std::get<0>(edge);
     std::string source_name = std::get<1>(edge);
@@ -171,4 +185,30 @@ main()
 
     solver.add_edge(src.first, tar.first, e);
   }
+
+  std::cout << "Graph has " << solver.show() << std::endl;
+
+  auto test_src = solver.add_node("bhavnagar_chitra_i");
+
+  if (!test_src.second) {
+    std::cout << "Node not found" << std::endl;
+    return 0;
+  }
+
+  std::cout << "Starting from " << test_src.first << std::endl;
+  auto test_tar = solver.add_node("bhavnagar_dc");
+
+  if (!test_tar.second) {
+    std::cout << "Target not found" << std::endl;
+    std::cout << "Nodes: " << solver.vertices() << std::endl;
+    return 0;
+  }
+
+  CLOCK start{ std::chrono::minutes(0) };
+
+  start = start + std::chrono::minutes(26809106);
+
+  auto solution =
+    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      test_src.first, test_tar.first, start);
 }

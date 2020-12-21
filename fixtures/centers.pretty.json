@@ -1,0 +1,3370 @@
+[
+    {
+        "name": "kolkata_dankuni_p",
+        "carting_outbound": "30",
+        "carting_inbound": "0",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "0",
+        "code": "ind712310aaa"
+    },
+    {
+        "name": "chandigarh_mehmdpur_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "ind160002aad"
+    },
+    {
+        "name": "gurgaon_bilaspur_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "ind122413aae"
+    },
+    {
+        "name": "sonipat_kundli_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "ind131028aaa"
+    },
+    {
+        "name": "bengaluru_soukyaroad_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "in560067a1h"
+    },
+    {
+        "name": "bengaluru_nelmngla_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "in562123a1k"
+    },
+    {
+        "name": "chennai_polivkam_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "ind602002aaa"
+    },
+    {
+        "name": "hyderabad_shamshbd_p",
+        "carting_outbound": "0",
+        "carting_inbound": "0",
+        "linehaul_outbound": "0",
+        "linehaul_inbound": "0",
+        "code": "ind501359aaf"
+    },
+    {
+        "name": "ahmedabad_aslaliroad_gw",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ingjaamw"
+    },
+    {
+        "name": "bhiwandi_mankoli_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind421302aah"
+    },
+    {
+        "name": "mumbai_chndivli_pc",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind400072aad"
+    },
+    {
+        "name": "surat_gidc_gw",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in395023a1e"
+    },
+    {
+        "name": "del_okhla_pc",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "75",
+        "code": "ind110044aab"
+    },
+    {
+        "name": "kharagpur_malancha_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind721301a1a"
+    },
+    {
+        "name": "dhanbad_kalynpur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind826004aaa"
+    },
+    {
+        "name": "berhampore_central_i_2",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind742102aab"
+    },
+    {
+        "name": "berhampur_khajuria_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind760003aab"
+    },
+    {
+        "name": "aizawl_itiveng_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in796005a1c"
+    },
+    {
+        "name": "durgapur_central_i_1",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind713205aab"
+    },
+    {
+        "name": "aligarh_bemanagar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inupaaxe"
+    },
+    {
+        "name": "rajahmundry_pata_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in533103a1c"
+    },
+    {
+        "name": "vellore_avrmpalyam_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intnaamu"
+    },
+    {
+        "name": "kamareddy_devenply_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind503111aac"
+    },
+    {
+        "name": "malda_mangalbari_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inwbaaqk"
+    },
+    {
+        "name": "muzaffarpur_gobarsahi_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraalo"
+    },
+    {
+        "name": "chhapra_central_i_3",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind841301aac"
+    },
+    {
+        "name": "lakhisarai_central_i_2",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind811311aab"
+    },
+    {
+        "name": "rourkela_chendcolny_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in769004a1b"
+    },
+    {
+        "name": "jeypore_phcolony_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in764003a1b"
+    },
+    {
+        "name": "ccu_dumdum_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind700028aab"
+    },
+    {
+        "name": "bhadrak_charampa_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inoraajz"
+    },
+    {
+        "name": "sasaram_madaini_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraalj"
+    },
+    {
+        "name": "jamshedpur_asanbani_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "injhaaex"
+    },
+    {
+        "name": "kolkata_north_i_4",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind712310aae"
+    },
+    {
+        "name": "ccu_new alipore_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind700053aaa"
+    },
+    {
+        "name": "kolkata_kulia_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "in700010a1a"
+    },
+    {
+        "name": "ccu_lake avenue_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind700026aac"
+    },
+    {
+        "name": "ajmer_parbatpura_i",
+        "carting_outbound": "15",
+        "carting_inbound": "45",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "45",
+        "code": "ind305001a1d"
+    },
+    {
+        "name": "delhi_rohini_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind110085aab"
+    },
+    {
+        "name": "moradabad_majhola_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in244001a1d"
+    },
+    {
+        "name": "udaipur_mangri_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind313001aab"
+    },
+    {
+        "name": "alwar_anndvhr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in301001a1d"
+    },
+    {
+        "name": "sikar_central_i_2",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind332001aac"
+    },
+    {
+        "name": "gzb_mohan_nagar_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind201007aaa"
+    },
+    {
+        "name": "jaipur_central_i_7",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind302014aab"
+    },
+    {
+        "name": "jammu_gangyalcrpf_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "injkaabc"
+    },
+    {
+        "name": "gorakhpur_tenua_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in273212a1a"
+    },
+    {
+        "name": "noida_sector7_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "in201301a1r"
+    },
+    {
+        "name": "kota_trnsprtngr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in324009a1b"
+    },
+    {
+        "name": "moga_wardno6_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind142001a1d"
+    },
+    {
+        "name": "rudrapur_indstrlarea_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inukaadl"
+    },
+    {
+        "name": "faizabad_manasngr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in224001a1d"
+    },
+    {
+        "name": "jodhpur_basni_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind342005aad"
+    },
+    {
+        "name": "pali_sumerpurrd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inrjaaqt"
+    },
+    {
+        "name": "fbd_balabhgarh_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind121004aab"
+    },
+    {
+        "name": "ggn_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind122001aaa"
+    },
+    {
+        "name": "mainpuri_agraroad_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind205001aab"
+    },
+    {
+        "name": "bathinda_sivian_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in151001a1e"
+    },
+    {
+        "name": "meerut_rihani_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inupaaxs"
+    },
+    {
+        "name": "amritsar_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind143001aaa"
+    },
+    {
+        "name": "delhi_nangli_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind110043aaa"
+    },
+    {
+        "name": "delhi_lajpat_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind110024aaa"
+    },
+    {
+        "name": "jhansi_ansalcol_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in284001a1b"
+    },
+    {
+        "name": "delhi_patparganj_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind110092aac"
+    },
+    {
+        "name": "delhi_mayapuri_pc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind110064aaa"
+    },
+    {
+        "name": "delhi_kishangarh_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind110030aad"
+    },
+    {
+        "name": "kurnool_dinnedevrpdu_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaanu"
+    },
+    {
+        "name": "mysore_yadvgiri_ip",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind570020aaa"
+    },
+    {
+        "name": "karimnagar_bypassrd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intsaana"
+    },
+    {
+        "name": "warangal_battupallyxrd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intsaany"
+    },
+    {
+        "name": "hyderabad_kokapet_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "in500089a1d"
+    },
+    {
+        "name": "hyderabad_alwal_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind500010aaa"
+    },
+    {
+        "name": "bangalore_east_i_20",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind560300aab"
+    },
+    {
+        "name": "tirupur_koliplm_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind641607aaa"
+    },
+    {
+        "name": "hyderabad_chikdply_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind500080aab"
+    },
+    {
+        "name": "gulbarga_nehrugnj_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind585104aaa"
+    },
+    {
+        "name": "villupuram_thirumtr_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind605601aaa"
+    },
+    {
+        "name": "anantapur_rudrampeta_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in515004a1c"
+    },
+    {
+        "name": "ongole_autonagar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaaob"
+    },
+    {
+        "name": "mangalore_bkmpdy_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in575011a1a"
+    },
+    {
+        "name": "hassan_pandrnga_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind573201aab"
+    },
+    {
+        "name": "khammam_pedathnda_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intsaanu"
+    },
+    {
+        "name": "tirupati_autonagar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inapaalu"
+    },
+    {
+        "name": "blr_jpnagar_pc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind560078aac"
+    },
+    {
+        "name": "chennai_sidco_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "in600098a1d"
+    },
+    {
+        "name": "bangalore_indirangr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inkaaarc"
+    },
+    {
+        "name": "bengaluru_kengeri_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind560060aab"
+    },
+    {
+        "name": "mahabubnagar_srinivasaclny_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind509001a1c"
+    },
+    {
+        "name": "visakhapatnam_thokada_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in530012a1d"
+    },
+    {
+        "name": "hyderabad_uppal_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind500039aac"
+    },
+    {
+        "name": "srikakulam_kuslpram_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind532001aab"
+    },
+    {
+        "name": "patancheru_ameenpur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind500050aaa"
+    },
+    {
+        "name": "tirunelveli_krishnapuram_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intnaaox"
+    },
+    {
+        "name": "bengaluru_hoodi_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind560048aab"
+    },
+    {
+        "name": "tumkur_veersagr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind572101aaa"
+    },
+    {
+        "name": "hbr layout pc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind560043aac"
+    },
+    {
+        "name": "bellary_millerpet_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in583101a1b"
+    },
+    {
+        "name": "chennai_porur_dpc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind600116aab"
+    },
+    {
+        "name": "blr_hsr_layout_pc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind000000acs"
+    },
+    {
+        "name": "chennai_chrompet_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600044aad"
+    },
+    {
+        "name": "chennai_egmore_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600008aac"
+    },
+    {
+        "name": "chennai_perungudi_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600016aac"
+    },
+    {
+        "name": "bengaluru_peenya_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind560058aab"
+    },
+    {
+        "name": "satna_ramtekri_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inmpaajh"
+    },
+    {
+        "name": "sagar_bahreya_p",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "75",
+        "code": "inmpaaig"
+    },
+    {
+        "name": "surat_central_i_4",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind395023aad"
+    },
+    {
+        "name": "jabalpur_padwarkalan_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in482002a1a"
+    },
+    {
+        "name": "solan_deothi_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inhpaadx"
+    },
+    {
+        "name": "junagadh_dolatpara_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ingjaaju"
+    },
+    {
+        "name": "dhule_midc_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in424006a1d"
+    },
+    {
+        "name": "mehsana_panchot_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind384205aaa"
+    },
+    {
+        "name": "vapi_indestat_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind396191aac"
+    },
+    {
+        "name": "bhavnagar_chitra_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ingjaamu"
+    },
+    {
+        "name": "mumbai_east_i_21",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind421302aar"
+    },
+    {
+        "name": "pnq pashan dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind411021aaa"
+    },
+    {
+        "name": "nashik_tgrniard_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ind422011aad"
+    },
+    {
+        "name": "nanded_aswningr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "ind431603aaa"
+    },
+    {
+        "name": "gwalior_purnichhwani_p",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inmpaaii"
+    },
+    {
+        "name": "akola_gaurkshn_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind444005aab"
+    },
+    {
+        "name": "gandhidham_ward10_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in370201a1a"
+    },
+    {
+        "name": "mumbai_vashi_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inmhaazj"
+    },
+    {
+        "name": "pnq rahatani dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind411017aaa"
+    },
+    {
+        "name": "mumbai_mirard_ip",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind401104aaa"
+    },
+    {
+        "name": "mumbai_cottongreen_dpc",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind400015aaa"
+    },
+    {
+        "name": "mumbai_jogeshwriwest_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inmhabes"
+    },
+    {
+        "name": "rajkot_sokhda_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "30",
+        "code": "in360003a1h"
+    },
+    {
+        "name": "hisar_dabra_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in125001a1a"
+    },
+    {
+        "name": "jalandhar_qajimandi_p",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inpbaafl"
+    },
+    {
+        "name": "agartala_eastchmpmura_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intraaaz"
+    },
+    {
+        "name": "begusarai_bihat_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraamv"
+    },
+    {
+        "name": "motihari_bariyarpur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inbraako"
+    },
+    {
+        "name": "allahabad_central_h_1",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ind211002aab"
+    },
+    {
+        "name": "aluva_peedika_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind683511aaa"
+    },
+    {
+        "name": "aurangabad_gngapr_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in431007a1a"
+    },
+    {
+        "name": "bangalore_nelmngla_h",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "ind562132aaa"
+    },
+    {
+        "name": "bengaluru_soukyaroad_h",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "in560067a1f"
+    },
+    {
+        "name": "bengaluru_kgairprt_hb",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "60",
+        "code": "ind560300aaa"
+    },
+    {
+        "name": "bhiwandi_mankoli_hb",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind421302aag"
+    },
+    {
+        "name": "bhopal_pipaliya_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inmpaakh"
+    },
+    {
+        "name": "bhubaneshwar_central_h_6",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind751010aaa"
+    },
+    {
+        "name": "ccu_hub",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "60",
+        "code": "ind700136aab"
+    },
+    {
+        "name": "chandigarh_mehmdpur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "60",
+        "code": "ind160002aac"
+    },
+    {
+        "name": "chennai_hub",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "60",
+        "code": "ind600032aab"
+    },
+    {
+        "name": "coimbatore_kaniyur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "intnaaor"
+    },
+    {
+        "name": "dibrugarh_bokule_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind786001aab"
+    },
+    {
+        "name": "goa_hub",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind403726aaa"
+    },
+    {
+        "name": "gurgaon_bilaspur_hb",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind000000acb"
+    },
+    {
+        "name": "guwahati_kaikchi_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "in781018a1h"
+    },
+    {
+        "name": "hyderabad_shamshbd_h",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "ind501359aae"
+    },
+    {
+        "name": "indore_manglaya_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "inmpaaka"
+    },
+    {
+        "name": "kanpur_central_h_6",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind209304aaa"
+    },
+    {
+        "name": "kolhapur_central_h_2",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind416122aaa"
+    },
+    {
+        "name": "kolkata_naiti_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in712311a1g"
+    },
+    {
+        "name": "kollam_madannada_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in691010a1a"
+    },
+    {
+        "name": "kottayam_chungam_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in686001a1a"
+    },
+    {
+        "name": "kozhikode_central_h_4",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind673632aaa"
+    },
+    {
+        "name": "ludhiana_khakat_h",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inpbaafv"
+    },
+    {
+        "name": "maa_poonamallee_hb",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind600056aab"
+    },
+    {
+        "name": "madurai_utchapatti_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "45",
+        "code": "in625008a1d"
+    },
+    {
+        "name": "mumbai hub",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind400072aab"
+    },
+    {
+        "name": "nagpur_nimji_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inmhaaxf"
+    },
+    {
+        "name": "patna_gaurichak_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in804453a1c"
+    },
+    {
+        "name": "pune_tathawde_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind411033aaa"
+    },
+    {
+        "name": "purnia_kasba_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inbraalh"
+    },
+    {
+        "name": "ranchi_namkom_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind834033aaa"
+    },
+    {
+        "name": "salem_kadtmpty_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind636005aaa"
+    },
+    {
+        "name": "sambalpur_tentelpara_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in768006a1a"
+    },
+    {
+        "name": "silchar_sirikona_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "120",
+        "code": "ind788026aac"
+    },
+    {
+        "name": "siliguri_dabgrm_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in734004a1b"
+    },
+    {
+        "name": "sonipat_kundli_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "ind131028aab"
+    },
+    {
+        "name": "tiruchi_navalur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "intnaapw"
+    },
+    {
+        "name": "trivandrum_mnanthla_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "ind695012aaa"
+    },
+    {
+        "name": "varanasi_birbhanpur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in221311a1a"
+    },
+    {
+        "name": "vijayawada_tadpali_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in520002a1a"
+    },
+    {
+        "name": "hubli_jnntnagar_h",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in580028a1c"
+    },
+    {
+        "name": "gurgaon_tauru_h",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "in122105a1b"
+    },
+    {
+        "name": "jaipur_hub",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind302014aaa"
+    },
+    {
+        "name": "lucknow_memaura_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in226401a1a"
+    },
+    {
+        "name": "agra_sunari_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in282007a1a"
+    },
+    {
+        "name": "raipur_sarona_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "30",
+        "code": "in492013a1c"
+    },
+    {
+        "name": "bilaspur_dylband_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in495006a1b"
+    },
+    {
+        "name": "azamgarh_semraha_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inupaazt"
+    },
+    {
+        "name": "darbhanga_sundarpur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraamw"
+    },
+    {
+        "name": "bongaigaon_doligaon_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in783380a1d"
+    },
+    {
+        "name": "delhi_airport_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "120",
+        "code": "in110037a1z"
+    },
+    {
+        "name": "bhiwandi_heavy_h",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "90",
+        "linehaul_inbound": "90",
+        "code": "in421308a1e"
+    },
+    {
+        "name": "chandrapur_khutala_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in442406a1a"
+    },
+    {
+        "name": "dehradun_rjndrngr_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "in248001a1g"
+    },
+    {
+        "name": "gaya_kukra_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in823002a1b"
+    },
+    {
+        "name": "guna_modltnwcolny_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in473001a1c"
+    },
+    {
+        "name": "jorhat_sonrigon_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "in785010a1a"
+    },
+    {
+        "name": "shimoga_gdikopa_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in577205a1b"
+    },
+    {
+        "name": "tezpur_sirajuli_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in784150a1a"
+    },
+    {
+        "name": "bilaspurhp_kothi_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inhpaacp"
+    },
+    {
+        "name": "ahmednagar_anadngr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "in414005a1a"
+    },
+    {
+        "name": "goalpara_bhatipara_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in783101a1b"
+    },
+    {
+        "name": "raichur_lsroad_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind584101aaa"
+    },
+    {
+        "name": "beawar_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind305901aaa"
+    },
+    {
+        "name": "bhiwani_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind127021aaa"
+    },
+    {
+        "name": "chittaurgarh_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind312001aaa"
+    },
+    {
+        "name": "hanumangarh_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind335513aaa"
+    },
+    {
+        "name": "mahad_govndsgr_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind402301aaa"
+    },
+    {
+        "name": "pen_bljimrkt_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind402107aaa"
+    },
+    {
+        "name": "nalgonda_hydroad_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind508001aaa"
+    },
+    {
+        "name": "naharlagun_jmpucntr_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind791110aaa"
+    },
+    {
+        "name": "nirmal_shasthri_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind504106aab"
+    },
+    {
+        "name": "sathupally_vidyangr_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind507303aaa"
+    },
+    {
+        "name": "humnabad_ebroad_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind585330aae"
+    },
+    {
+        "name": "pasighat_missonrd_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind791102aaa"
+    },
+    {
+        "name": "coochbehar_psthrjhr_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind736101aaa"
+    },
+    {
+        "name": "asansol_kanyapr_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in713305a1a"
+    },
+    {
+        "name": "duliajan_statonrd_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind786602aaa"
+    },
+    {
+        "name": "saintala_jampadar_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in767032a1a"
+    },
+    {
+        "name": "pathankot_dc",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind145001aaa"
+    },
+    {
+        "name": "chamba_central_d_2",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind176310aab"
+    },
+    {
+        "name": "tura_sracmplx_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind794101aaa"
+    },
+    {
+        "name": "bangalore_hebbal_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "inkaaarj"
+    },
+    {
+        "name": "davangere_karur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inkaaasp"
+    },
+    {
+        "name": "delhi_jahangirpuri_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "indlaaeo"
+    },
+    {
+        "name": "hyderabad_shamshbd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "intsaame"
+    },
+    {
+        "name": "kolkata_naiti_gw",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inwbaaov"
+    },
+    {
+        "name": "mumbai_mankoli_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inmhaazh"
+    },
+    {
+        "name": "noida_sector59_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "inupaaut"
+    },
+    {
+        "name": "solan_kandaghat_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inhpaacu"
+    },
+    {
+        "name": "vadodara_dasranth_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ingjaajm"
+    },
+    {
+        "name": "vapi_gidc_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ingjaakl"
+    },
+    {
+        "name": "chennai_alandur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600016a1b"
+    },
+    {
+        "name": "kohima_hghsclrd_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind797001aaa"
+    },
+    {
+        "name": "mumbai_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in400099a1b"
+    },
+    {
+        "name": "patna_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in800014a1b"
+    },
+    {
+        "name": "vadodara_harnird_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ingjaakc"
+    },
+    {
+        "name": "kanpur_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in208008a1b"
+    },
+    {
+        "name": "sambalpur_tentelpara_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in768212a1b"
+    },
+    {
+        "name": "varanasi_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in221202a1b"
+    },
+    {
+        "name": "aluva_peedika_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in683111a1e"
+    },
+    {
+        "name": "rajamundry_atongrrd_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in533103a1b"
+    },
+    {
+        "name": "bengaluru_kgairprt_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in560300a1e"
+    },
+    {
+        "name": "chandigarh_mehmdpur_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in160003a1d"
+    },
+    {
+        "name": "goa_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in403801a1b"
+    },
+    {
+        "name": "hyderabad_shamshbd_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in500016a1f"
+    },
+    {
+        "name": "hubli_adargchi_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in580030a1c"
+    },
+    {
+        "name": "portblair_hudcocol_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in744101a1d"
+    },
+    {
+        "name": "aizawl_hunthrvg_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in796410a1b"
+    },
+    {
+        "name": "chennai_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in600027a1b"
+    },
+    {
+        "name": "guwahati_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in781015a1b"
+    },
+    {
+        "name": "silchar_sirikona_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in788003a1e"
+    },
+    {
+        "name": "vijayawada_rynapadu_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in521102a1b"
+    },
+    {
+        "name": "madurai_kappalur_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in625022a1d"
+    },
+    {
+        "name": "agartala_chmpmura_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in799009a1b"
+    },
+    {
+        "name": "visakhapatnam_gajuwaka_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in530009a1e"
+    },
+    {
+        "name": "nagpur_gondkhry_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in440005a1b"
+    },
+    {
+        "name": "gorakhpur_matriprm_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in273002a1b"
+    },
+    {
+        "name": "delhi_airport_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in110037a1w"
+    },
+    {
+        "name": "jabalpur_padwarkalan_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in482005a1b"
+    },
+    {
+        "name": "coimbatore_karayam_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in641014a1b"
+    },
+    {
+        "name": "surat_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in395007a1f"
+    },
+    {
+        "name": "bhopal_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in462036a1b"
+    },
+    {
+        "name": "jaipur_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in302017a1c"
+    },
+    {
+        "name": "delhi_skynet_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in110037a1y"
+    },
+    {
+        "name": "siliguri_fulwrird_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in734421a1b"
+    },
+    {
+        "name": "ranchi_namkom_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in834002a1e"
+    },
+    {
+        "name": "ahmedabad_east_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in380003a1b"
+    },
+    {
+        "name": "lucknow_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in226009a1b"
+    },
+    {
+        "name": "kozhikode_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in673647a1b"
+    },
+    {
+        "name": "pune_tathawde_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in411032a1c"
+    },
+    {
+        "name": "mangalore_kuntikna_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in574142a1b"
+    },
+    {
+        "name": "jammu_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in194104a1b"
+    },
+    {
+        "name": "amritsar_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in143101a1b"
+    },
+    {
+        "name": "udaipur_mangri_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in313022a1b"
+    },
+    {
+        "name": "trivandrum_mnanthla_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in695008a1e"
+    },
+    {
+        "name": "tirunelveli_vdkkusrt_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in628103a1b"
+    },
+    {
+        "name": "dibrugarh_bokule_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in786012a1b"
+    },
+    {
+        "name": "raipur_katora_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in492015a1b"
+    },
+    {
+        "name": "ccu_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in700060a1b"
+    },
+    {
+        "name": "bhubaneshwar_central_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in751020a1e"
+    },
+    {
+        "name": "indore_dewasnka_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in452005a1c"
+    },
+    {
+        "name": "kozhikode_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in673647a1a"
+    },
+    {
+        "name": "silchar_sirikona_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in788003a1d"
+    },
+    {
+        "name": "guwahati_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in781015a1a"
+    },
+    {
+        "name": "nagpur_gondkhry_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in440005a1a"
+    },
+    {
+        "name": "tirunelveli_vdkkusrt_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in628103a1a"
+    },
+    {
+        "name": "chandigarh_mehmdpur_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in160003a1c"
+    },
+    {
+        "name": "vadodara_harnird_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ingjaakb"
+    },
+    {
+        "name": "lucknow_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in226009a1a"
+    },
+    {
+        "name": "pune_tathawde_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in411032a1b"
+    },
+    {
+        "name": "gorakhpur_matriprm_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in273002a1a"
+    },
+    {
+        "name": "rajamundry_atongrrd_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in533103a1a"
+    },
+    {
+        "name": "dibrugarh_bokule_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in786012a1a"
+    },
+    {
+        "name": "raipur_katora_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in492015a1a"
+    },
+    {
+        "name": "amritsar_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in143101a1a"
+    },
+    {
+        "name": "delhi_skynet_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in110037a1x"
+    },
+    {
+        "name": "sambalpur_tentelpara_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in768212a1a"
+    },
+    {
+        "name": "bhopal_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in462036a1a"
+    },
+    {
+        "name": "bhubaneshwar_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in751020a1d"
+    },
+    {
+        "name": "coimbatore_karayam_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in641014a1a"
+    },
+    {
+        "name": "aizawl_hunthrvg_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in796410a1a"
+    },
+    {
+        "name": "jaipur_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in302017a1b"
+    },
+    {
+        "name": "ranchi_namkom_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in834002a1d"
+    },
+    {
+        "name": "vijayawada_rynapadu_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in521102a1a"
+    },
+    {
+        "name": "agartala_chmpmura_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in799009a1a"
+    },
+    {
+        "name": "indore_dewasnka_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in452005a1b"
+    },
+    {
+        "name": "jammu_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in194104a1a"
+    },
+    {
+        "name": "portblair_hudcocol_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in744101a1c"
+    },
+    {
+        "name": "patna_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in800014a1a"
+    },
+    {
+        "name": "mangalore_kuntikna_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in574142a1a"
+    },
+    {
+        "name": "varanasi_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in221202a1a"
+    },
+    {
+        "name": "udaipur_mangri_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in313022a1a"
+    },
+    {
+        "name": "bengaluru_kgairprt_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in560300a1d"
+    },
+    {
+        "name": "goa_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in403801a1a"
+    },
+    {
+        "name": "madurai_kappalur_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in625022a1c"
+    },
+    {
+        "name": "mumbai_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in400099a1a"
+    },
+    {
+        "name": "trivandrum_mnanthla_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in695008a1d"
+    },
+    {
+        "name": "siliguri_fulwrird_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in734421a1a"
+    },
+    {
+        "name": "delhi_airport_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in110037a1v"
+    },
+    {
+        "name": "hyderabad_shamshbd_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in500016a1e"
+    },
+    {
+        "name": "visakhapatnam_gajuwaka_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in530009a1d"
+    },
+    {
+        "name": "aluva_peedika_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in683111a1c"
+    },
+    {
+        "name": "hubli_adargchi_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in580030a1b"
+    },
+    {
+        "name": "kanpur_central_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in208008a1a"
+    },
+    {
+        "name": "chennai_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in600027a1a"
+    },
+    {
+        "name": "ccu_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in700060a1a"
+    },
+    {
+        "name": "jabalpur_padwarkalan_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in482005a1a"
+    },
+    {
+        "name": "surat_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in395007a1e"
+    },
+    {
+        "name": "ahmedabad_east_ot",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in380003a1a"
+    },
+    {
+        "name": "delhi_nangliskrwati_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "indlaafg"
+    },
+    {
+        "name": "delhi_myapuriphase1_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "indlaafa"
+    },
+    {
+        "name": "dimapur_nahrbari_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "ind797116aaa"
+    },
+    {
+        "name": "bhiwandi_mega_gw",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "120",
+        "code": "inmhabbs"
+    },
+    {
+        "name": "hanumangarh_dhaanmandi_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inrjaaps"
+    },
+    {
+        "name": "pune_hinjawadi_p",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "inmhabcf"
+    },
+    {
+        "name": "faridabad_mthurard_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inhraaiy"
+    },
+    {
+        "name": "chandigarh_rajpura_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "60",
+        "code": "inpbaafr"
+    },
+    {
+        "name": "vijayawada_doneatkuru_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "intsaank"
+    },
+    {
+        "name": "dehradun_badowala_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inukaaco"
+    },
+    {
+        "name": "dibrugarh_mohanbari_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inasaahn"
+    },
+    {
+        "name": "viluppuram_genjird_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "intnaaog"
+    },
+    {
+        "name": "mehsana_dediysngidc_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ingjaamf"
+    },
+    {
+        "name": "udaipur_bhuwana_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inrjaaon"
+    },
+    {
+        "name": "dhanbad_jamari_h",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in826004a1b"
+    },
+    {
+        "name": "bangalore_soukyaroad_gw",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "inkaaave"
+    },
+    {
+        "name": "delhi_bamnoli_p",
+        "carting_outbound": "30",
+        "carting_inbound": "60",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "in110077a1b"
+    },
+    {
+        "name": "nirjuli_tagohsptl_d",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "in791109a1b"
+    },
+    {
+        "name": "kolkata_madhyamgram_h",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inwbaaqm"
+    },
+    {
+        "name": "kalpetta_madiyur_d (kerala)",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "inklaahm"
+    },
+    {
+        "name": "noida_sector63dblock_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inupaazc"
+    },
+    {
+        "name": "jaipur_bagru_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inrjaaqp"
+    },
+    {
+        "name": "salem_ramalingapuram_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "intnaapy"
+    },
+    {
+        "name": "patna_sabalpur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "inbraama"
+    },
+    {
+        "name": "jaipur_bagru_gw",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inrjaaqn"
+    },
+    {
+        "name": "gurgaon_tauru_gw",
+        "carting_outbound": "60",
+        "carting_inbound": "30",
+        "linehaul_outbound": "60",
+        "linehaul_inbound": "90",
+        "code": "inhraajc"
+    },
+    {
+        "name": "bangalore_hsr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inkaaavr"
+    },
+    {
+        "name": "mumbai_miraroad_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inmhabct"
+    },
+    {
+        "name": "moga_duneke_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inpbaagl"
+    },
+    {
+        "name": "durgapur_bamunara_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inwbaarl"
+    },
+    {
+        "name": "ghazipur_miranpur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "inupabap"
+    },
+    {
+        "name": "delhi_okhla_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "indlaafy"
+    },
+    {
+        "name": "pathankot_abrolngrrd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "inpbaafo"
+    },
+    {
+        "name": "solapur_central_i_2",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind413002aaa"
+    },
+    {
+        "name": "hassan_katihalli_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inkaaaxa"
+    },
+    {
+        "name": "bahadurgarh_nehrupark_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind124507a1e"
+    },
+    {
+        "name": "bhilwara_azadngr_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inrjaaqa"
+    },
+    {
+        "name": "ccu_beleghta_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind700065aab"
+    },
+    {
+        "name": "ccu_lake avenue_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind700026aab"
+    },
+    {
+        "name": "ccu_purbalok_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inwbaaoq"
+    },
+    {
+        "name": "chennai_alandur_bfsi_c",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "intnaaph"
+    },
+    {
+        "name": "chennai_alandur_c",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600016aab"
+    },
+    {
+        "name": "chennai_egmore_c",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind600008aaa"
+    },
+    {
+        "name": "coimbatore_elngongr_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind641006aad"
+    },
+    {
+        "name": "gurgaon_begumpur_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind122004aaa"
+    },
+    {
+        "name": "hyderabad_chikdply_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind000000ack"
+    },
+    {
+        "name": "hyderabad_kothapet_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind500035aab"
+    },
+    {
+        "name": "hyderabad_mhdiptnm_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind000000acn"
+    },
+    {
+        "name": "kanpur_shyamngr_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in208013a1b"
+    },
+    {
+        "name": "kolkata_narynpur_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind700136aag"
+    },
+    {
+        "name": "lowerparel_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind400011aaa"
+    },
+    {
+        "name": "ludhiana_gtroad_p",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind000000adu"
+    },
+    {
+        "name": "manipal_manchi_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in576104a1b"
+    },
+    {
+        "name": "mumbai_marol_p",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in400059a1b"
+    },
+    {
+        "name": "panipat_sec29_p",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in132103a1c"
+    },
+    {
+        "name": "tirupur_knpcolny_p",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind641601aab"
+    },
+    {
+        "name": "vadodara_tandalja_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in390012a1d"
+    },
+    {
+        "name": "faizabad_darshnngr_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inupabab"
+    },
+    {
+        "name": "chhapra_ramnagar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraamo"
+    },
+    {
+        "name": "eluru_autonagar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaaqg"
+    },
+    {
+        "name": "bijapur_jamakhandi_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inkaaawt"
+    },
+    {
+        "name": "thrissur_karuvannur_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inklaair"
+    },
+    {
+        "name": "renukoot_kharpathar_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inupabar"
+    },
+    {
+        "name": "nalgonda_duppalapally_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intsaapf"
+    },
+    {
+        "name": "guntur_etukururd_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaapx"
+    },
+    {
+        "name": "jhajjar_policeline_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inhraajp"
+    },
+    {
+        "name": "ramagundam_godavarikhani_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "intsaapi"
+    },
+    {
+        "name": "kozhikode_kakkancheri_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inklaait"
+    },
+    {
+        "name": "jabalpur_binaiki_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inmpaakz"
+    },
+    {
+        "name": "kanpur_sachendi_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "60",
+        "code": "inupaawt"
+    },
+    {
+        "name": "coochbehar_baburhat_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inwbaasg"
+    },
+    {
+        "name": "kannur_chalode_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inklaaiq"
+    },
+    {
+        "name": "ahmedabad_paldi_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind380006aaa"
+    },
+    {
+        "name": "ahmedabad_naroda_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind382346a1a"
+    },
+    {
+        "name": "ahmedabad_rakhiyal_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaalu"
+    },
+    {
+        "name": "ahmedabad_maningar_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaajy"
+    },
+    {
+        "name": "ahmedabad_chndkhedard_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaanx"
+    },
+    {
+        "name": "ahmedabad_mithakal_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ind380006aab"
+    },
+    {
+        "name": "bopal_shela_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "in380058a1c"
+    },
+    {
+        "name": "ahmedabad_aslaliroad_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaamy"
+    },
+    {
+        "name": "ahmedabad_thaltej_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaanp"
+    },
+    {
+        "name": "ahmedabad_vejalpur_d",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "ingjaamt"
+    },
+    {
+        "name": "noida_sector63dblock_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inupaazb"
+    },
+    {
+        "name": "ahmedabad_rakhiyal_c",
+        "carting_outbound": "15",
+        "carting_inbound": "30",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "30",
+        "code": "ingjaanl"
+    },
+    {
+        "name": "gaya_kharanti_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inbraams"
+    },
+    {
+        "name": "chandigarh_raiprkln_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind160102aad"
+    },
+    {
+        "name": "jaipur_baisgodam_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "inrjaaok"
+    },
+    {
+        "name": "kollam_kilikollur_h",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "90",
+        "code": "inklaaii"
+    },
+    {
+        "name": "ccu_howrah_cp",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "ind711101aaa"
+    },
+    {
+        "name": "chennai_sidco_c",
+        "carting_outbound": "30",
+        "carting_inbound": "30",
+        "linehaul_outbound": "30",
+        "linehaul_inbound": "30",
+        "code": "in600098a1c"
+    },
+    {
+        "name": "solapur_hydroad_i",
+        "carting_outbound": "15",
+        "carting_inbound": "15",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "15",
+        "code": "inmhabdm"
+    },
+    {
+        "name": "anantapur_ayyavaripallird_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaapv"
+    },
+    {
+        "name": "rajahmundry_rajanagaram_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inapaaqo"
+    },
+    {
+        "name": "nanded_wajegaon_h",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "75",
+        "code": "inmhabfn"
+    },
+    {
+        "name": "vadodara_ranoli_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "ingjaaoi"
+    },
+    {
+        "name": "sikar_industrialarea_i",
+        "carting_outbound": "15",
+        "carting_inbound": "60",
+        "linehaul_outbound": "15",
+        "linehaul_inbound": "60",
+        "code": "inrjaarc"
+    },
+    {
+        "name": "aurangabad_gngapr_dt",
+        "carting_outbound": "8",
+        "carting_inbound": "8",
+        "linehaul_outbound": "8",
+        "linehaul_inbound": "8",
+        "code": "inmhabbb"
+    }
+]
