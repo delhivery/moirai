@@ -1,0 +1,65 @@
+[{
+"id": 652552,
+"name": "bhavnagar_chitra_i-bhavnagar_dc",
+"route_schedule_uuid": "thanos::sroute:db217a95-202f-4487-aa33-f56d50da4381",
+"source_center": "ingjaamu",
+"destination_center": "ingjaamu",
+"reporting_time": "06:30:00",
+"transporter_name": "",
+"flight_number": null,
+"route_type": "carting",
+"days_of_week": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+],
+"is_adhoc": false,
+"is_active": true,
+"previous_route_schedule_uuid": "thanos::sroute:b067e271-cf70-477f-9f89-6785825c0296",
+"cost_per_kg": 0.0,
+"vehicle_type_id": 8,
+"route_subtype": null,
+"business_line": null,
+"gps_lock_enabled": false,
+"oct": null,
+"dct": null,
+"contract_id": null,
+"halt_centers": [
+    {
+        "center_code": "ingjaamu",
+        "center_name": "bhavnagar_chitra_i",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.0,
+        "rel_eta": "0:00:00",
+        "rel_etd": "0:00:00",
+        "position": 0
+    },
+    {
+        "center_code": "ind364001aaa",
+        "center_name": "bhavnagar_dc",
+        "past_travel_hrs": 0.5,
+        "halt_hrs": 0.5,
+        "rel_eta": "0:30:00",
+        "rel_etd": "1:00:00",
+        "position": 1
+    },
+    {
+        "center_code": "ingjaamu",
+        "center_name": "bhavnagar_chitra_i",
+        "past_travel_hrs": 0.5,
+        "halt_hrs": 0.5,
+        "rel_eta": "1:30:00",
+        "rel_etd": "2:00:00",
+        "position": 2
+    }
+],
+"route_surface_distance": 0.0,
+"prev_contract_uuid": null,
+"action_type": "create",
+"action_date": "1598958065008721",
+"new_route_next": false
+}]

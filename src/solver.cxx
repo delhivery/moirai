@@ -18,16 +18,22 @@ Solver::add_node(std::string node_code_or_name) const
 }
 
 std::pair<Node<Graph>, bool>
-Solver::add_node(const TransportCenter& center)
+Solver::add_node(std::shared_ptr<TransportCenter> center)
 {
-  auto created = add_node(center.code);
+  auto created = add_node(center->code);
 
   if (created.second)
     return created;
   Node<Graph> node = boost::add_vertex(center, graph);
-  vertex_by_name[center.name] = node;
-  vertex_by_name[center.code] = node;
+  vertex_by_name[center->name] = node;
+  vertex_by_name[center->code] = node;
   return { node, true };
+}
+
+std::shared_ptr<TransportCenter>
+Solver::get_node(const Node<Graph> node) const
+{
+  return graph[node];
 }
 
 std::pair<Edge<Graph>, bool>
@@ -41,10 +47,10 @@ Solver::add_edge(std::string edge_code) const
 std::pair<Edge<Graph>, bool>
 Solver::add_edge(const Node<Graph>& source,
                  const Node<Graph>& target,
-                 const TransportEdge& route)
+                 std::shared_ptr<TransportEdge> route)
 {
-  if (edge_by_name.contains(route.code))
-    return { edge_by_name.at(route.code), true };
+  if (edge_by_name.contains(route->code))
+    return { edge_by_name.at(route->code), true };
   return boost::add_edge(source, target, route, graph);
 }
 
