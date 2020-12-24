@@ -159,8 +159,8 @@ solve_tests(const Solver& solver,
                                test_case["src"].template get<std::string>(),
                                test_case["tar"].template get<std::string>(),
                                test_case["fin"].template get<std::string>(),
-                               test_case["sta"].template get<int>(),
-                               test_case["bef"].template get<int>());
+                               test_case["sta"].template get<int>() + 330,
+                               test_case["bef"].template get<int>() + 330);
     solutions.push_back(response);
   }
   std::ofstream ostream;

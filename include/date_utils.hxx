@@ -22,4 +22,6 @@ struct CalcualateTraversalCost
   CLOCK operator()(CLOCK start, COST cost) const;
 };
 
+uint16_t datemod(DURATION, DURATION);
+
 #endif
