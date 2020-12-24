@@ -44,8 +44,8 @@ template<>
 COST
 TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
-  TIME_OF_DAY actual_departure{ (departure - offset_source).count() %
-                                std::chrono::days{ 1 }.count() };
+  TIME_OF_DAY actual_departure{ datemod(departure - offset_source,
+                                        std::chrono::days{ 1 }) };
   /*
    * std::cout << fmt::format("Calculating cost for using edge {}: Departure:
    {}, " "Offset: {} Duration {} <{}, {}> ", code, departure.count(),
@@ -61,7 +61,7 @@ template<>
 COST
 TransportEdge::weight<PathTraversalMode::REVERSE>() const
 {
-  TIME_OF_DAY actual_departure{ (departure + duration + offset_target).count() %
-                                std::chrono::days{ 1 }.count() };
+  TIME_OF_DAY actual_departure{ datemod(departure + duration + offset_target,
+                                        std::chrono::days{ 1 }) };
   return { actual_departure, duration + offset_source + offset_target };
 }
