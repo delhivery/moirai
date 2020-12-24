@@ -81,6 +81,9 @@ struct TransportEdge
   template<PathTraversalMode M>
   COST weight() const;
 
+  template <PathTraversalMode M>
+  COST weight_alt(CLOCK) const;
+
   int wgt() const;
 
   void update(TransportCenter, TransportCenter);

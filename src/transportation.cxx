@@ -1,6 +1,8 @@
 #include "transportation.hxx"
 #include <chrono> // for operator+, __duration_common_type<>::type, days
-#include <ratio>  // for ratio
+#include <fmt/core.h>
+#include <iostream>
+#include <ratio> // for ratio
 
 TransportCenter::TransportCenter(std::string code, std::string name)
   : code(code)
@@ -44,6 +46,14 @@ TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
   TIME_OF_DAY actual_departure{ (departure - offset_source).count() %
                                 std::chrono::days{ 1 }.count() };
+  /*
+   * std::cout << fmt::format("Calculating cost for using edge {}: Departure:
+   {}, " "Offset: {} Duration {} <{}, {}> ", code, departure.count(),
+                           offset_source.count(),
+                           duration.count(),
+                           actual_departure.count(),
+                           offset_source.count())
+            << std::endl; */
   return { actual_departure, offset_source + duration };
 }
 
