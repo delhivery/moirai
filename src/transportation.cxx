@@ -24,19 +24,20 @@ TransportEdge::TransportEdge(std::string code,
 {}
 
 void
-TransportEdge::update(TransportCenter source, TransportCenter target)
+TransportEdge::update(std::shared_ptr<TransportCenter> source,
+                      std::shared_ptr<TransportCenter> target)
 {
 
   if (movement == MovementType::CARTING) {
     offset_source =
-      source.get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
+      source->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
     offset_target =
-      target.get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+      target->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
   } else {
     offset_source =
-      source.get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
+      source->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
     offset_target =
-      target.get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
+      target->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
   }
 }
 
@@ -47,14 +48,16 @@ TransportEdge::weight<PathTraversalMode::FORWARD>() const
   TIME_OF_DAY actual_departure{ datemod(departure - offset_source,
                                         std::chrono::days{ 1 }) };
   /*
-   * std::cout << fmt::format("Calculating cost for using edge {}: Departure:
-   {}, " "Offset: {} Duration {} <{}, {}> ", code, departure.count(),
-                           offset_source.count(),
-                           duration.count(),
+  std::cout << fmt::format("Actual departure for edge {}: {}, {}. Departure: "
+                           "{} Offset source: {}",
+                           code,
                            actual_departure.count(),
+                           (offset_source + duration).count(),
+                           departure.count(),
                            offset_source.count())
-            << std::endl; */
-  return { actual_departure, offset_source + duration };
+            << std::endl;
+  */
+  return { actual_departure, offset_source + duration + offset_target };
 }
 
 template<>

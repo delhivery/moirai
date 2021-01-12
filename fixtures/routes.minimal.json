@@ -1,65 +1,343 @@
-[{
-"id": 652552,
-"name": "bhavnagar_chitra_i-bhavnagar_dc",
-"route_schedule_uuid": "thanos::sroute:db217a95-202f-4487-aa33-f56d50da4381",
-"source_center": "ingjaamu",
-"destination_center": "ingjaamu",
-"reporting_time": "06:30:00",
-"transporter_name": "",
-"flight_number": null,
-"route_type": "carting",
-"days_of_week": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6
-],
-"is_adhoc": false,
-"is_active": true,
-"previous_route_schedule_uuid": "thanos::sroute:b067e271-cf70-477f-9f89-6785825c0296",
-"cost_per_kg": 0.0,
-"vehicle_type_id": 8,
-"route_subtype": null,
-"business_line": null,
-"gps_lock_enabled": false,
-"oct": null,
-"dct": null,
-"contract_id": null,
-"halt_centers": [
-    {
-        "center_code": "ingjaamu",
-        "center_name": "bhavnagar_chitra_i",
+[
+  {
+    "id": 720998,
+    
+    "route_schedule_uuid": "thanos::sroute:9ebcd0f8-390b-4a3c-ab32-3b0c70dcd760",
+    "source_center": "in734004a1b",
+    "destination_center": "inmhabbs",
+    "reporting_time": "10:00:00",
+    "transporter_name": "middlemile pro llp",
+    "flight_number": null,
+    "route_type": "ftl",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "previous_route_schedule_uuid": "thanos::sroute:52c450b6-71de-4d91-bf4d-254b8fcbc767",
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 14,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": false,
+    "oct": null,
+    "dct": null,
+    "contract_id": "fms::contract::90d9e22e-d81b-4bdd-a391-150abe395856",
+    "halt_centers": [
+      {
+        "center_code": "in734004a1b",
+        "center_name": "siliguri_dabgrm_h",
         "past_travel_hrs": 0.0,
         "halt_hrs": 0.0,
-        "rel_eta": "0:00:00",
-        "rel_etd": "0:00:00",
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:00:00",
         "position": 0
-    },
-    {
-        "center_code": "ind364001aaa",
-        "center_name": "bhavnagar_dc",
-        "past_travel_hrs": 0.5,
-        "halt_hrs": 0.5,
-        "rel_eta": "0:30:00",
-        "rel_etd": "1:00:00",
+      },
+      {
+        "center_code": "inbraalh",
+        "center_name": "purnia_kasba_h",
+        "past_travel_hrs": 6.0,
+        "halt_hrs": 2.0,
+        "rel_eta": "06:00:00",
+        "rel_etd": "08:00:00",
         "position": 1
-    },
-    {
-        "center_code": "ingjaamu",
-        "center_name": "bhavnagar_chitra_i",
+      },
+      {
+        "center_code": "inmpaaka",
+        "center_name": "indore_manglaya_h",
+        "past_travel_hrs": 46.0,
+        "halt_hrs": 2.0,
+        "rel_eta": "54:00:00",
+        "rel_etd": "56:00:00",
+        "position": 2
+      },
+      {
+        "center_code": "inmhabbs",
+        "center_name": "bhiwandi_mega_gw",
+        "past_travel_hrs": 14.0,
+        "halt_hrs": 0.5,
+        "rel_eta": "70:00:00",
+        "rel_etd": "70:30:00",
+        "position": 3
+      }
+    ],
+    "route_surface_distance": 2768.874675,
+    "prev_contract_uuid": "fms::contract::90d9e22e-d81b-4bdd-a391-150abe395856",
+    "action_type": "create",
+    "action_date": "1606373184911474",
+    "new_route_next": false,
+    "halt_distance": [
+      {
+        "source": "in734004a1b",
+        "destination": "inbraalh",
+        "distance": 199.07075999999998
+      },
+      {
+        "source": "inbraalh",
+        "destination": "inmpaaka",
+        "distance": 1823.632755
+      },
+      {
+        "source": "inmpaaka",
+        "destination": "inmhabbs",
+        "distance": 746.17116
+      }
+    ],
+    "start_date": {}
+  },
+  {
+    "id": 721607,
+    "name": "bhiwandi_mega_gw--bhiwandi_mega_r",
+    "route_schedule_uuid": "thanos::sroute:bbd9d622-a78e-40e4-a6ca-6fa907ce9c99",
+    "source_center": "inmhabbs",
+    "destination_center": "inmhalit",
+    "reporting_time": "09:00:00",
+    "transporter_name": "not known",
+    "flight_number": null,
+    "route_type": "carting",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 13,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": false,
+    "oct": null,
+    "dct": null,
+    "contract_id": null,
+    "halt_centers": [
+      {
+        "center_code": "inmhabbs",
+        "center_name": "bhiwandi_mega_gw",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.0,
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:00:00",
+        "position": 0
+      },
+      {
+        "center_code": "inmhalit",
+        "center_name": "bhiwandi_mega_r",
         "past_travel_hrs": 0.5,
         "halt_hrs": 0.5,
-        "rel_eta": "1:30:00",
-        "rel_etd": "2:00:00",
+        "rel_eta": "00:30:00",
+        "rel_etd": "01:00:00",
+        "position": 1
+      }
+    ],
+    "route_surface_distance": 0.0,
+    "prev_contract_uuid": null,
+    "action_type": "create",
+    "action_date": "1606452419996489",
+    "new_route_next": false
+  },
+  {
+    "id": 707676,
+    "name": "gurgaon-bhiwandi-gurgaon trailer",
+    "route_schedule_uuid": "thanos::sroute:b409853e-34f4-4b0c-a807-a4628185aa0f",
+    "source_center": "inhraajc",
+    "destination_center": "inmhabbs",
+    "reporting_time": "15:00:00",
+    "transporter_name": "delhivery",
+    "flight_number": null,
+    "route_type": "ftl",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "previous_route_schedule_uuid": "thanos::sroute:ea1b5ed3-34bc-4d28-adf9-de21839375a6",
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 31,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": false,
+    "oct": null,
+    "dct": null,
+    "contract_id": "fms::contract::3315c708-5ef0-4035-97cb-f3690b5b5e22",
+    "halt_centers": [
+      {
+        "center_code": "inhraajc",
+        "center_name": "gurgaon_tauru_gw",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.0,
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:00:00",
+        "position": 0
+      },
+      {
+        "center_code": "inmhabbs",
+        "center_name": "bhiwandi_mega_gw",
+        "past_travel_hrs": 32.0,
+        "halt_hrs": 0.5,
+        "rel_eta": "32:00:00",
+        "rel_etd": "32:30:00",
+        "position": 1
+      }
+    ],
+    "route_surface_distance": 1411.4331,
+    "prev_contract_uuid": "fms::contract::3315c708-5ef0-4035-97cb-f3690b5b5e22",
+    "action_type": "create",
+    "action_date": "1604932534498381",
+    "new_route_next": false,
+    "halt_distance": [
+      {
+        "source": "inhraajc",
+        "destination": "inmhabbs",
+        "distance": 1411.4331
+      }
+    ],
+    "start_date": {}
+  },
+  {
+    "id": 660018,
+    "name": "delhi_airport_gw--gurgaon_bilaspur_hb",
+    "route_schedule_uuid": "thanos::sroute:3e79fda8-ec49-44bb-9dc8-dcd00516fa0a",
+    "source_center": "in110037a1z",
+    "destination_center": "inhraajc",
+    "reporting_time": "07:00:00",
+    "transporter_name": "",
+    "flight_number": null,
+    "route_type": "carting",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "previous_route_schedule_uuid": "thanos::sroute:60e7b54b-bbac-4fa5-a56d-557fa3a7a0cd",
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 21,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": false,
+    "oct": null,
+    "dct": null,
+    "contract_id": null,
+    "halt_centers": [
+      {
+        "center_code": "in110037a1z",
+        "center_name": "delhi_airport_gw",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.0,
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:00:00",
+        "position": 0
+      },
+      {
+        "center_code": "inhraajc",
+        "center_name": "gurgaon_tauru_gw",
+        "past_travel_hrs": 2.0,
+        "halt_hrs": 0.5,
+        "rel_eta": "02:00:00",
+        "rel_etd": "02:30:00",
+        "position": 1
+      }
+    ],
+    "route_surface_distance": 0.0,
+    "prev_contract_uuid": null,
+    "action_type": "create",
+    "action_date": "1600072580638652",
+    "new_route_next": false
+  },
+  {
+    "id": 627972,
+    "name": "delhi-purnia-siliguri-delhi",
+    "route_schedule_uuid": "thanos::sroute:e652fc9d-71d1-480d-9c48-4c322e47a6aa",
+    "source_center": "in734004a1b",
+    "destination_center": "in110037a1z",
+    "reporting_time": "12:30:00",
+    "transporter_name": "delhivery",
+    "flight_number": null,
+    "route_type": "ftl",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "previous_route_schedule_uuid": "thanos::sroute:b2b1c26f-0133-404e-9b6b-6690e7509f8c",
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 19,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": true,
+    "oct": null,
+    "dct": null,
+    "contract_id": "fms::contract::61bb7048-e9a1-42ad-9d07-792bea8f3016",
+    "halt_centers": [
+      {
+        "center_code": "in734004a1b",
+        "center_name": "siliguri_dabgrm_h",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.5,
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:30:00",
+        "position": 0
+      },
+      {
+        "center_code": "in110037a1z",
+        "center_name": "delhi_airport_gw",
+        "past_travel_hrs": 39.0,
+        "halt_hrs": 0.5,
+        "rel_eta": "39:30:00",
+        "rel_etd": "40:00:00",
+        "position": 1
+      }
+    ],
+    "route_surface_distance": 1532.6598,
+    "prev_contract_uuid": "fms::contract::61bb7048-e9a1-42ad-9d07-792bea8f3016",
+    "action_type": "create",
+    "action_date": "1596543222737074",
+    "new_route_next": false,
+    "start_date": {}
+  },
+  {
+    "id": 663779,
+    "name": "siliguri_dabgrm_h-siliguri_ashram_dc--siliguri_dabgrm_h",
+    "route_schedule_uuid": "thanos::sroute:c414ce63-9134-44f0-b39d-51c7b209f9dc",
+    "source_center": "in734004a1b",
+    "destination_center": "in734004a1b",
+    "reporting_time": "10:00:00",
+    "transporter_name": "mudita",
+    "flight_number": null,
+    "route_type": "carting",
+    "days_of_week": [0, 1, 2, 3, 4, 5, 6],
+    "is_adhoc": false,
+    "is_active": true,
+    "previous_route_schedule_uuid": "thanos::sroute:5f1b4385-a04c-4094-a478-8cfd22e507c6",
+    "cost_per_kg": 0.0,
+    "vehicle_type_id": 16,
+    "route_subtype": null,
+    "business_line": null,
+    "gps_lock_enabled": false,
+    "oct": null,
+    "dct": null,
+    "contract_id": null,
+    "halt_centers": [
+      {
+        "center_code": "in734004a1b",
+        "center_name": "siliguri_dabgrm_h",
+        "past_travel_hrs": 0.0,
+        "halt_hrs": 0.0,
+        "rel_eta": "00:00:00",
+        "rel_etd": "00:00:00",
+        "position": 0
+      },
+      {
+        "center_code": "in734010a1a",
+        "center_name": "siliguri_shyamngr_d",
+        "past_travel_hrs": 0.75,
+        "halt_hrs": 0.25,
+        "rel_eta": "00:45:00",
+        "rel_etd": "01:00:00",
+        "position": 1
+      },
+      {
+        "center_code": "in734004a1b",
+        "center_name": "siliguri_dabgrm_h",
+        "past_travel_hrs": 0.5,
+        "halt_hrs": 0.5,
+        "rel_eta": "01:30:00",
+        "rel_etd": "02:00:00",
         "position": 2
-    }
-],
-"route_surface_distance": 0.0,
-"prev_contract_uuid": null,
-"action_type": "create",
-"action_date": "1598958065008721",
-"new_route_next": false
-}]
+      }
+    ],
+    "route_surface_distance": 0.0,
+    "prev_contract_uuid": null,
+    "action_type": "create",
+    "action_date": "1600665076588382",
+    "new_route_next": false
+  }
+]

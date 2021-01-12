@@ -6,6 +6,7 @@
 #include <map>            // for map, map<>::mapped_type
 #include <string>         // for string
 #include <utility>        // for pair, make_pair
+#include <memory>         // for shared_ptr
 
 enum VehicleType : std::uint8_t
 {
@@ -76,17 +77,23 @@ struct TransportEdge
 
   TransportEdge() = default;
 
-  TransportEdge(std::string, std::string, TIME_OF_DAY, DURATION, VehicleType, MovementType);
+  TransportEdge(std::string,
+                std::string,
+                TIME_OF_DAY,
+                DURATION,
+                VehicleType,
+                MovementType);
 
   template<PathTraversalMode M>
   COST weight() const;
 
-  template <PathTraversalMode M>
+  template<PathTraversalMode M>
   COST weight_alt(CLOCK) const;
 
   int wgt() const;
 
-  void update(TransportCenter, TransportCenter);
+  void update(std::shared_ptr<TransportCenter>,
+              std::shared_ptr<TransportCenter>);
 
 private:
   DURATION offset_source;
