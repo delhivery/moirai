@@ -278,7 +278,7 @@ read_connections(const std::filesystem ::path filename)
             << fmt::format(
                  "Invalid connection added {}.{} Arr: {} Dep: {} Off: {}",
                  uuid,
-                 i * stops.size() + j - 1,
+                 i * (stops.size() - 1) + j - i - 1,
                  debug_arrival.count(),
                  debug_departure.count(),
                  debug_offset.count())
@@ -289,7 +289,7 @@ read_connections(const std::filesystem ::path filename)
         }
 
         TransportEdge edge{
-          fmt::format("{}.{}", uuid, i),
+          fmt::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
           name,
           t_departure,
           t_duration,
@@ -305,6 +305,15 @@ read_connections(const std::filesystem ::path filename)
           target["center_code"].template get<std::string>();
         std::string target_center_name =
           target["center_name"].template get<std::string>();
+
+        /*
+        std::cout << fmt::format("Adding edge {}.{} from {} to {}",
+                                 uuid,
+                                 i * (stops.size() - 1) + j - i - 1,
+                                 source_center_name,
+                                 target_center_name)
+                  << std::endl;
+        */
 
         edges.push_back(std::make_tuple(source_center_code,
                                         source_center_name,
