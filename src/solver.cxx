@@ -25,7 +25,6 @@ Solver::add_node(std::shared_ptr<TransportCenter> center)
   if (created.second)
     return created;
   Node<Graph> node = boost::add_vertex(center, graph);
-  vertex_by_name[center->name] = node;
   vertex_by_name[center->code] = node;
   return { node, true };
 }

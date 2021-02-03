@@ -40,12 +40,10 @@ struct TransportCenter
 {
   std::string code;
 
-  std::string name;
-
 public:
   TransportCenter() = default;
 
-  TransportCenter(std::string, std::string);
+  TransportCenter(std::string);
 
   template<MovementType M, ProcessType P>
   void set_latency(Latency<M, P> latency)

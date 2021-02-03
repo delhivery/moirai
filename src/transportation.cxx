@@ -4,9 +4,8 @@
 #include <iostream>
 #include <ratio> // for ratio
 
-TransportCenter::TransportCenter(std::string code, std::string name)
+TransportCenter::TransportCenter(std::string code)
   : code(code)
-  , name(name)
 {}
 
 TransportEdge::TransportEdge(std::string code,
