@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <nlohmann/json.hpp>
+#include "json.hpp"
 #include <regex>
 #include <sstream>
 #include <vector>
@@ -179,6 +179,8 @@ read_vertices(const std::filesystem::path filename)
   std::ifstream stream;
   stream.open(filename);
 
+
+
   assert(stream.is_open());
   assert(!stream.fail());
 
@@ -323,35 +325,37 @@ main(int argc, char* argv[])
 {
   Solver solver;
   std::filesystem::path center_filepath{
-    "/home/amitprakash/moirai/fixtures/centers.pretty.json"
+    "/home/harsh/Documents/projects/EP_New_C_plus2/moirai/fixtures/centers.pretty.json"
   };
 
   std::filesystem::path edges_filepath{
-    "/home/amitprakash/moirai/fixtures/routes.pretty.json"
+    "/home/harsh/Documents/projects/EP_New_C_plus2/moirai/fixtures/routes.pretty.json"
   };
 
   std::filesystem::path tests_filepath{
-    "/home/amitprakash/moirai/fixtures/tests.pretty.json"
+    "/home/harsh/Documents/projects/EP_New_C_plus2/moirai/fixtures/tests.pretty.json"
   };
 
   std::filesystem::path outcomes_filepath{
-    "/home/amitprakash/moirai/build/outputs.json"
+    "/home/harsh/Documents/projects/EP_New_C_plus2/moirai/build/outputs.json"
   };
 
   if (argc > 1) {
-    center_filepath = argv[1];
+    center_filepath = "../fixtures/centers.pretty.json"; // argv[1];  // centers
   }
 
+  std:: cout << "center::::::: ";
+  std:: cout << center_filepath  ;
   if (argc > 2) {
-    edges_filepath = argv[2];
+    edges_filepath = "../fixtures/routes.pretty.json";  // argv[2];  //   routes
   }
 
   if (argc > 3) {
-    tests_filepath = argv[3];
+    tests_filepath = "../fixtures/tests.pretty.json";  // argv[3];  // test
   }
 
   if (argc > 4) {
-    outcomes_filepath = argv[4];
+    outcomes_filepath = "../fixtures/outputs.pretty.json";  // argv[4]; // outcome
   }
 
   for (const auto& center : read_vertices(center_filepath)) {
@@ -389,7 +393,25 @@ main(int argc, char* argv[])
     }
 
     solver.add_edge(src.first, tar.first, e);
+
+
   }
+
+
+   // print graph 
+    #include <boost/graph/graphviz.hpp>
+
+    using namespace boost;
+
+    // Graph type
+    // typedef adjacency_list<vecS, vecS, directedS, VertexProperties, EdgeProperty> Graph;
+    // Graph g;
+    std::vector<std::string> NameVec; // for dot file names
+
+
+    // write the dot file
+    std::ofstream dotfile (strDotFile.c_str ());
+    write_graphviz (dotfile, solver, make_label_writer(&NameVec[0]));
 
   solve_tests(solver, tests_filepath, outcomes_filepath);
 }

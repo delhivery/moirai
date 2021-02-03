@@ -5,6 +5,13 @@
 #include <date/date.h>
 #include <iostream>
 
+// #include "date/date.h"
+// #include <chrono>
+// #include <iostream>
+// #include <algorithm>
+// #include <chrono>
+
+
 std::uint16_t
 datemod(DURATION lhs, DURATION rhs)
 {
@@ -19,8 +26,7 @@ CLOCK
 CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(CLOCK start,
                                                                 COST cost) const
 {
-  TIME_OF_DAY minutes_start{ start -
-                             std::chrono::floor<std::chrono::days>(start) };
+  TIME_OF_DAY minutes_start{ start - std::chrono::floor<std::chrono::days>(start) };
   DURATION wait_time{ datemod(cost.first - minutes_start,
                               std::chrono::days{ 1 }) };
   return start + wait_time + cost.second;
@@ -32,8 +38,7 @@ CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
                                                                 COST cost) const
 {
 
-  TIME_OF_DAY minutes_start{ start -
-                             std::chrono::floor<std::chrono::days>(start) };
+  TIME_OF_DAY minutes_start{ start - std::chrono::floor<std::chrono::days>(start) };
   DURATION wait_time{ datemod(minutes_start - cost.first,
                               std::chrono::days{ 1 }) };
   return start - wait_time - cost.second;

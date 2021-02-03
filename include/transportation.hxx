@@ -47,9 +47,9 @@ public:
   TransportCenter(std::string, std::string);
 
   template<MovementType M, ProcessType P>
-  void set_latency(Latency<M, P> latency)
+  void set_latency(Latency<M, P> latency)  //e.g.  M=carting #P=INBOUND
   {
-    latencies[std::make_pair(M, P)] = latency;
+    latencies[std::make_pair(M, P)] = latency;   // hash map key is pair value is DURATION
   }
 
   template<MovementType M, ProcessType P>
