@@ -1,12 +1,18 @@
+#include <Poco/Base64Encoder.h>
 #include <Poco/DateTimeFormatter.h>
 #include <Poco/Exception.h>
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Net/HTTPCredentials.h>
+#include <Poco/Net/HTTPMessage.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
+#include <Poco/Net/HTTPSClientSession.h>
+#include <Poco/NullStream.h>
 #include <Poco/Runnable.h>
+#include <Poco/StreamCopier.h>
 #include <Poco/Task.h>
 #include <Poco/TaskManager.h>
+#include <Poco/URI.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Util/Option.h>
@@ -18,8 +24,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <istream>
 #include <librdkafka/rdkafkacpp.h>
+#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <numeric>
+#include <sstream>
+#include <tbb/concurrent_queue.h>
 
 #ifdef __cpp_lib_format
 #include <format>
@@ -45,6 +56,7 @@ private:
   static const std::string consumer_group;
   std::vector<std::string> topics;
   std::atomic<bool> running;
+  tbb::concurrent_queue<std::string> *queue;
 
 public:
   KafkaReader(const std::string broker_url, const uint16_t batch_size,
@@ -151,6 +163,12 @@ public:
         app.logger().information(std::format(
             "Message in {} [{}] at offset {}", message->topic_name(),
             message->partition(), message->offset()));
+        if (message->topic_name() == "Load") {
+          std::string data(static_cast<const char *>(message->payload()));
+          // Check if data is type bag and parses out correctly
+          queue->push(data);
+        }
+
         delete message;
       }
     }
@@ -159,25 +177,56 @@ public:
 
 class SearchWriter : public Poco::Runnable {
 private:
-  const std::string search_user;
-  const std::string search_pass;
+  Poco::URI uri;
+  const std::string username;
+  const std::string password;
   const std::string search_index;
+  tbb::concurrent_queue<std::string> *queue;
 
 public:
-  SearchWriter(std::string &search_url, std::string &search_user,
-               std::string &search_pass, std::string &search_index)
-      : Poco::Runnable(), search_user(std::move(search_user)),
-        search_pass(std::move(search_pass)),
-        search_index(std::move(search_index)) {}
+  SearchWriter(const Poco::URI &uri, const std::string &search_user,
+               const std::string &search_pass, const std::string &search_index)
+      : uri(uri), username(search_user), password(search_pass),
+        search_index(search_index) {}
+
+  inline std::string indexAndTypeToPath() const {
+    return std::format("/{}/{}/", search_index, "doc");
+  }
+
+  inline std::string getEncodedCredentials() const {
+    std::ostringstream out_stringstream;
+    Poco::Base64Encoder encoder(out_stringstream);
+    encoder.rdbuf()->setLineLength(0);
+    encoder << username << ":" << password;
+    encoder.close();
+    return out_stringstream.str();
+  }
 
   virtual void run() {
-    Poco::URI search_uri(search_url);
-    std::string search_path(search_uri.getPathAndQuery());
-    Poco::Net::HTTPCredentials credentials(search_user, search_pass);
-    Poco::Net::HTTPClientSession session(search_uri.getHost(),
-                                         search_uri.getPort());
+    Poco::Util::Application &app = Poco::Util::Application::instance();
+    Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
+
     while (true) {
-      Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
+      std::string results;
+      while (queue->try_pop(results)) {
+        Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
+                                       indexAndTypeToPath(),
+                                       Poco::Net::HTTPMessage::HTTP_1_1);
+        request.setCredentials("Basic", getEncodedCredentials());
+        request.setContentType("application/json");
+        request.setContentLength((int)results.length());
+        session.sendRequest(request) << results;
+        app.logger().debug(
+            std::format("Sending payload for indexing {}", results));
+        Poco::Net::HTTPResponse response;
+        std::istream &response_stream = session.receiveResponse(response);
+        if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
+          std::stringstream response;
+          Poco::StreamCopier::copyStream(response_stream, response);
+          app.logger().information(std::format(
+              "Got successful response from ES Host: {}", response.str()));
+        }
+      }
     }
   }
 };
@@ -190,6 +239,11 @@ private:
   std::map<std::string, std::string> topic_map;
   uint16_t batch_size;
   uint16_t timeout;
+
+  std::string search_uri;
+  std::string search_user;
+  std::string search_pass;
+  std::string search_index;
 
 public:
   Moirai() {}
@@ -247,7 +301,7 @@ protected:
                 this, &Moirai::set_batch_timeout)));
 
     options.addOption(
-        Poco::Util::Option("batch-size", "s",
+        Poco::Util::Option("batch-size", "z",
                            "Number of documents to fetch per batch")
             .required(false)
             .repeatable(false)
@@ -273,6 +327,46 @@ protected:
             .repeatable(false)
             .callback(Poco::Util::OptionCallback<Moirai>(
                 this, &Moirai::set_load_topic)));
+
+    options.addOption(Poco::Util::Option("search-uri", "s", "Elasticsearch URI")
+                          .required(true)
+                          .repeatable(false)
+                          .callback(Poco::Util::OptionCallback<Moirai>(
+                              this, &Moirai::set_search_uri)));
+    options.addOption(
+        Poco::Util::Option("search-user", "u", "Elasticsearch username")
+            .required(true)
+            .repeatable(false)
+            .callback(Poco::Util::OptionCallback<Moirai>(
+                this, &Moirai::set_search_username)));
+    options.addOption(
+        Poco::Util::Option("search-pass", "w", "Elasticsearch password")
+            .required(true)
+            .repeatable(false)
+            .callback(Poco::Util::OptionCallback<Moirai>(
+                this, &Moirai::set_search_password)));
+    options.addOption(
+        Poco::Util::Option("search-index", "i", "Elasticsearch index")
+            .required(true)
+            .repeatable(false)
+            .callback(Poco::Util::OptionCallback<Moirai>(
+                this, &Moirai::set_search_index)));
+  }
+
+  void set_search_uri(const std::string &name, const std::string &value) {
+    search_uri = value;
+  }
+
+  void set_search_username(const std::string &name, const std::string &value) {
+    search_user = value;
+  }
+
+  void set_search_password(const std::string &name, const std::string &value) {
+    search_pass = value;
+  }
+
+  void set_search_index(const std::string &name, const std::string &value) {
+    search_index = value;
   }
 
   void set_batch_timeout(const std::string &name, const std::string &value) {
@@ -317,8 +411,11 @@ protected:
       KafkaReader reader(
           std::accumulate(broker_url.begin(), broker_url.end(), std::string{}),
           batch_size, timeout, std::vector<std::string>{});
+      SearchWriter writer(Poco::URI(search_uri), search_user, search_pass,
+                          search_index);
       Poco::Thread thread;
       thread.start(reader);
+      thread.start(writer);
       thread.join();
     }
     return Poco::Util::Application::EXIT_OK;
