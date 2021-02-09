@@ -697,6 +697,7 @@ protected:
       Poco::Util::Option("kafka-broker", "k", "Kafka broker url")
         .required(true)
         .repeatable(true)
+        .argument("<broker_uri:broker_port>", true)
         .callback(
           Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_broker_url)));
 
@@ -705,6 +706,7 @@ protected:
         "batch-timeout", "t", "Seconds to wait before processing batch")
         .required(false)
         .repeatable(false)
+        .argument("<milliseconds>", true)
         .callback(Poco::Util::OptionCallback<Moirai>(
           this, &Moirai::set_batch_timeout)));
 
@@ -713,12 +715,14 @@ protected:
         "batch-size", "z", "Number of documents to fetch per batch")
         .required(false)
         .repeatable(false)
+        .argument("<int>", true)
         .callback(
           Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_batch_size)));
 
     options.addOption(Poco::Util::Option("route-topic", "r", "Route data topic")
                         .required(true)
                         .repeatable(false)
+                        .argument("<topic_name>", true)
                         .callback(Poco::Util::OptionCallback<Moirai>(
                           this, &Moirai::set_edge_topic)));
 
@@ -726,6 +730,7 @@ protected:
       Poco::Util::Option("facility-topic", "f", "Facility data topic")
         .required(true)
         .repeatable(false)
+        .argument("<topic_name>", true)
         .callback(
           Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_node_topic)));
 
@@ -733,30 +738,35 @@ protected:
       Poco::Util::Option("package-topic", "p", "Package data topic")
         .required(true)
         .repeatable(false)
+        .argument("<topic_name>", true)
         .callback(
           Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_load_topic)));
 
     options.addOption(Poco::Util::Option("search-uri", "s", "Elasticsearch URI")
                         .required(true)
                         .repeatable(false)
+                        .argument("<es_uri>", true)
                         .callback(Poco::Util::OptionCallback<Moirai>(
                           this, &Moirai::set_search_uri)));
     options.addOption(
       Poco::Util::Option("search-user", "u", "Elasticsearch username")
         .required(true)
         .repeatable(false)
+        .argument("<string>", true)
         .callback(Poco::Util::OptionCallback<Moirai>(
           this, &Moirai::set_search_username)));
     options.addOption(
       Poco::Util::Option("search-pass", "w", "Elasticsearch password")
         .required(true)
         .repeatable(false)
+        .argument("<string>", true)
         .callback(Poco::Util::OptionCallback<Moirai>(
           this, &Moirai::set_search_password)));
     options.addOption(
       Poco::Util::Option("search-index", "i", "Elasticsearch index")
         .required(true)
         .repeatable(false)
+        .argument("<string>", true)
         .callback(
           Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_search_index)));
   }
@@ -860,6 +870,7 @@ protected:
       threads[0].start(reader);
       threads[1].start(writer);
       threads[2].start(wrapper);
+      waitForTerminationRequest();
       for (auto& thread : threads)
         thread.join();
     }
