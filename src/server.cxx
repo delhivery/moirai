@@ -563,10 +563,12 @@ public:
       "/home/amitprakash/moirai/fixtures/routes.utcized.json"
     };
 
+    app.logger().information("Adding vertices");
     for (const auto& center : read_vertices(center_filepath)) {
       solver.add_node(center);
     }
 
+    app.logger().information("Adding edges");
     for (const auto& edge : read_connections(edges_filepath)) {
       std::string source = std::get<0>(edge);
       std::string target = std::get<1>(edge);
@@ -604,6 +606,7 @@ public:
       solver.add_edge(src.first, tar.first, e);
     }
 
+    app.logger().information("Processing loads");
     while (true) {
       Poco::Thread::sleep(200);
       std::string payload;
