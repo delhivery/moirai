@@ -856,11 +856,12 @@ protected:
                           search_index,
                           solution_queue);
       SolverWrapper wrapper(load_queue, solution_queue);
-      Poco::Thread thread;
-      thread.start(reader);
-      thread.start(writer);
-      thread.start(wrapper);
-      thread.join();
+      std::vector<Poco::Thread> threads;
+      threads[0].start(reader);
+      threads[1].start(writer);
+      threads[2].start(wrapper);
+      for (auto& thread : threads)
+        thread.join();
     }
     return Poco::Util::Application::EXIT_OK;
   }
