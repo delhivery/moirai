@@ -29,12 +29,15 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <istream>
 #include <librdkafka/rdkafkacpp.h>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <numeric>
+#include <fstream>
+#include <regex>
 #include <sstream>
 #include <tuple>
 
@@ -52,6 +55,19 @@ now()
 {
   auto n = std::chrono::system_clock::now();
   return n.time_since_epoch().count() / 1000 / 1000;
+}
+
+std::chrono::minutes
+make_time(const std::string& str)
+{
+  std::regex split_time_regex(":");
+  const std::vector<std::string> parts(
+    std::sregex_token_iterator(str.begin(), str.end(), split_time_regex, -1),
+    std::sregex_token_iterator());
+  std::uint16_t time =
+    std::atoi(parts[0].c_str()) * 60 + std::atoi(parts[1].c_str());
+
+  return std::chrono::minutes(time);
 }
 
 typedef boost::bimap<std::string, std::string> StringToStringMap;
@@ -283,6 +299,142 @@ public:
     , solution_queue(solution_queue)
   {}
 
+  std::vector<std::shared_ptr<TransportCenter>> read_vertices(
+    const std::filesystem::path filename)
+  {
+    std::ifstream stream;
+    stream.open(filename);
+
+    assert(stream.is_open());
+    assert(!stream.fail());
+
+    std::vector<std::shared_ptr<TransportCenter>> centers;
+
+    auto data = nlohmann::json::parse(stream);
+
+    for (auto& center : data) {
+      nlohmann::json center_code, time_outbound_carting, time_outbound_linehaul,
+        time_inbound_carting, time_inbound_linehaul;
+
+      std::tie(center_code,
+               time_inbound_carting,
+               time_inbound_linehaul,
+               time_outbound_carting,
+               time_outbound_linehaul) = std::tie(center["code"],
+                                                  center["carting_inbound"],
+                                                  center["linehaul_inbound"],
+                                                  center["carting_outbound"],
+                                                  center["linehaul_outbound"]);
+
+      TransportCenter transport_center(center_code);
+      transport_center.set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+        DURATION(time_inbound_carting.get<unsigned long>()));
+      transport_center
+        .set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+          DURATION(time_outbound_carting.get<unsigned long>()));
+      transport_center
+        .set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+          DURATION(time_inbound_linehaul.get<unsigned long>()));
+      transport_center
+        .set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+          DURATION(time_outbound_carting.get<unsigned long>()));
+
+      centers.push_back(std::make_shared<TransportCenter>(transport_center));
+    }
+    return centers;
+  }
+
+  std::vector<
+    std::tuple<std::string, std::string, std::shared_ptr<TransportEdge>>>
+  read_connections(const std::filesystem ::path filename)
+  {
+    std::ifstream stream;
+    stream.open(filename);
+
+    assert(stream.is_open());
+    assert(!stream.fail());
+
+    auto data = nlohmann::json::parse(stream);
+    std::vector<
+      std::tuple<std::string, std::string, std::shared_ptr<TransportEdge>>>
+      edges;
+
+    std::for_each(data.begin(), data.end(), [&edges](auto const route) {
+      std::string uuid =
+        route["route_schedule_uuid"].template get<std::string>();
+      std::string name = route["name"].template get<std::string>();
+      std::string route_type = route["route_type"].template get<std::string>();
+
+      std::string reporting_time =
+        route["reporting_time"].template get<std::string>();
+      TIME_OF_DAY offset =
+        std::chrono::duration_cast<TIME_OF_DAY>(make_time(reporting_time));
+
+      auto stops = route["halt_centers"];
+
+      if (!stops.is_array()) {
+        std::cout << "Halt is not an array" << std::endl;
+      }
+
+      for (int i = 0; i < stops.size(); ++i) {
+        for (int j = i + 1; j < stops.size(); ++j) {
+
+          auto source = stops[i];
+          auto target = stops[j];
+          std::string departure = source["rel_etd"].template get<std::string>();
+          std::string arrival = target["rel_eta"].template get<std::string>();
+
+          auto debug_arrival = make_time(arrival);
+          auto debug_departure = make_time(departure);
+          auto debug_offset = offset;
+
+          TIME_OF_DAY t_departure(
+            offset +
+            std::chrono::duration_cast<TIME_OF_DAY>(make_time(departure)));
+          DURATION t_duration(
+            std::chrono::duration_cast<TIME_OF_DAY>(make_time(arrival)) -
+            std::chrono::duration_cast<TIME_OF_DAY>(make_time(departure)));
+
+          if (t_departure.count() < 0 || t_duration.count() < 0) {
+            std::cout
+              << fmt::format(
+                   "Invalid connection added {}.{} Arr: {} Dep: {} Off: {}",
+                   uuid,
+                   i * (stops.size() - 1) + j - i - 1,
+                   debug_arrival.count(),
+                   debug_departure.count(),
+                   debug_offset.count())
+              << std::endl;
+
+            assert(t_departure.count() > 0);
+            assert(t_duration.count() > 0);
+          }
+
+          TransportEdge edge{
+            fmt::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
+            name,
+            t_departure,
+            t_duration,
+            route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
+            route_type == "carting" ? MovementType::CARTING
+                                    : MovementType::LINEHAUL,
+          };
+          std::string source_center_code =
+            source["center_code"].template get<std::string>();
+          std::string target_center_code =
+            target["center_code"].template get<std::string>();
+
+          edges.push_back(
+            std::make_tuple(source_center_code,
+                            target_center_code,
+                            std::make_shared<TransportEdge>(edge)));
+        }
+      }
+    });
+
+    return edges;
+  }
+
   auto find_paths(std::string bag,
                   std::string bag_source,
                   std::string bag_target,
@@ -395,12 +547,62 @@ public:
       }
       response["ultimate"]["locations"].push_back(location);
     }
+
+    response["pdd"] = date::format("%D %T", bag_pdd);
     return response;
   }
 
   virtual void run()
   {
     Poco::Util::Application& app = Poco::Util::Application::instance();
+    std::filesystem::path center_filepath{
+      "/home/amitprakash/moirai/fixtures/centers.pretty.json"
+    };
+
+    std::filesystem::path edges_filepath{
+      "/home/amitprakash/moirai/fixtures/routes.utcized.json"
+    };
+
+    for (const auto& center : read_vertices(center_filepath)) {
+      solver.add_node(center);
+    }
+
+    for (const auto& edge : read_connections(edges_filepath)) {
+      std::string source = std::get<0>(edge);
+      std::string target = std::get<1>(edge);
+      std::shared_ptr<TransportEdge> e = std::get<2>(edge);
+
+      auto src = solver.add_node(source);
+      auto tar = solver.add_node(target);
+
+      TransportCenter s, t;
+
+      if (!src.second) {
+        s = TransportCenter{ source };
+        s.set_latency<MovementType::CARTING, ProcessType::INBOUND>(DURATION(0));
+        s.set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+          DURATION(0));
+        s.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+          DURATION(0));
+        s.set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+          DURATION(0));
+        src = solver.add_node(std::make_shared<TransportCenter>(s));
+      }
+
+      if (!tar.second) {
+        t = TransportCenter{ target };
+        t.set_latency<MovementType::CARTING, ProcessType::INBOUND>(DURATION(0));
+        t.set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+          DURATION(0));
+        t.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+          DURATION(0));
+        t.set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+          DURATION(0));
+        tar = solver.add_node(std::make_shared<TransportCenter>(t));
+      }
+
+      solver.add_edge(src.first, tar.first, e);
+    }
 
     while (true) {
       Poco::Thread::sleep(200);
@@ -423,7 +625,9 @@ public:
                      data["destination"].template get<std::string>(),
                      data["time"].template get<int32_t>(),
                      packages);
-
+        solution["cs_slid"] = data["cs_slid"].template get<std::string>();
+        solution["cs_act"] = data["cs_act"].template get<std::string>();
+        solution["pid"] = data["pid"].template get<std::string>();
         solution_queue->enqueue(solution.dump());
       }
     }
