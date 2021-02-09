@@ -30,13 +30,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <istream>
 #include <librdkafka/rdkafkacpp.h>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <numeric>
-#include <fstream>
 #include <regex>
 #include <sstream>
 #include <tuple>
@@ -814,7 +814,13 @@ protected:
     broker_url.push_back(value);
     logger().debug(std::format(
       "Set kafka broker url to {}",
-      std::accumulate(broker_url.begin(), broker_url.end(), std::string{})));
+      std::accumulate(broker_url.begin(),
+                      broker_url.end(),
+                      std::string{},
+                      [](const std::string& acc, const std::string& arg) {
+                        return acc.empty() ? arg
+                                           : std::format("{},{}", acc, arg);
+                      })));
   }
 
   void handle_help(const std::string& name, const std::string& value)
@@ -833,7 +839,13 @@ protected:
       moodycamel::ConcurrentQueue<std::string>* solution_queue =
         new moodycamel::ConcurrentQueue<std::string>();
       KafkaReader reader(
-        std::accumulate(broker_url.begin(), broker_url.end(), std::string{}),
+        std::accumulate(broker_url.begin(),
+                        broker_url.end(),
+                        std::string{},
+                        [](const std::string& acc, const std::string& arg) {
+                          return acc.empty() ? arg
+                                             : std::format("{},{}", acc, arg);
+                        }),
         batch_size,
         timeout,
         topic_map,
