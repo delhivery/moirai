@@ -135,7 +135,7 @@ public:
 
     delete config;
 
-    for (auto const& topic_entry : topic_map.right) {
+    for (auto const& topic_entry : topic_map.left) {
       topics.push_back(topic_entry.second);
     }
 
@@ -177,7 +177,7 @@ public:
           break;
         default:
           app.logger().error(
-            std::format("%% Consumer error: ", message->errstr()));
+            std::format("%% Consumer error: {}", message->errstr()));
           running = false;
           delete message;
           return messages;
