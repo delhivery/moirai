@@ -866,7 +866,7 @@ protected:
                           search_index,
                           solution_queue);
       SolverWrapper wrapper(load_queue, solution_queue);
-      std::vector<Poco::Thread> threads;
+      std::vector<Poco::Thread> threads(3);
       threads[0].start(reader);
       threads[1].start(writer);
       threads[2].start(wrapper);
