@@ -2,6 +2,7 @@
 #include "date_utils.hxx"
 #include "transportation.hxx"
 #include <Poco/Util/ServerApplication.h>
+#include <algorithm>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -155,6 +156,15 @@ SolverWrapper::read_connections(const std::filesystem ::path& filename)
   return edges;
 }
 
+void
+to_lower(std::string& input_string)
+{
+  std::transform(input_string.begin(),
+                 input_string.end(),
+                 input_string.begin(),
+                 [](unsigned char c) { return std::to_lower(c); });
+}
+
 auto
 SolverWrapper::find_paths(
   std::string bag,
@@ -166,6 +176,8 @@ SolverWrapper::find_paths(
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
   CLOCK bag_pdd = CLOCK::max();
+  to_lower(bag_source);
+  to_lower(bag_target);
   const auto [source, has_source] = solver.add_node(bag_source);
   const auto [target, has_target] = solver.add_node(bag_target);
 
@@ -183,8 +195,10 @@ SolverWrapper::find_paths(
     CLOCK bag_earliest_pdd = std::get<3>(solution_earliest[0]);
 
     for (auto const& package : packages) {
+      std::string package_target_string = std::get<0>(package);
+      to_lower(package_target_string);
       const auto [package_target, has_package_target] =
-        solver.add_node(std::get<0>(package));
+        solver.add_node(package_target_string);
       CLOCK package_pdd = ZERO + std::chrono::minutes(std::get<1>(package));
 
       if (has_package_target && package_pdd >= bag_earliest_pdd) {
