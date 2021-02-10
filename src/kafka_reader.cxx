@@ -130,10 +130,10 @@ KafkaReader::run()
         std::format("Accumulated {} messages", messages.size()));
 
     for (auto& message : messages) {
-      app.logger().debug(std::format("Message in {} [{}] at offset {}",
-                                     message->topic_name(),
-                                     message->partition(),
-                                     message->offset()));
+      app.logger().information(std::format("Message in {} [{}] at offset {}",
+                                           message->topic_name(),
+                                           message->partition(),
+                                           message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
       if (topic_map.right.at(message->topic_name()) == "load") {
         // Check if data is type bag and parses out correctly
