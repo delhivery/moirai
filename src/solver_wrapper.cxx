@@ -6,6 +6,7 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <string>
 #include <vector>
 
 #ifdef __cpp_lib_format
