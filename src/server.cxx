@@ -209,7 +209,7 @@ public:
                                        message->partition(),
                                        message->offset()));
         std::string data(static_cast<const char*>(message->payload()));
-        if (topic_map.right.at(message->topic_name()) == "Load") {
+        if (topic_map.right.at(message->topic_name()) == "load") {
           // Check if data is type bag and parses out correctly
           load_queue->enqueue(data);
         } else {
