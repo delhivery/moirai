@@ -225,6 +225,7 @@ SolverWrapper::find_paths(
   nlohmann::json response;
   response["_id"] = bag;
   response["waybill"] = bag;
+  response["package"] = bag;
 
   if (packages.size() > 0) {
     response["package"] = std::get<2>(packages[0]);
@@ -282,8 +283,8 @@ SolverWrapper::find_paths(
       location["route"]["code"] =
         inbound_edge->code.substr(0, inbound_edge->code.find('.'));
       location["route"]["name"] = inbound_edge->name;
-      location["departure"] = date::format(
-        "%D %T", get_departure(distance, inbound_edge->departure));
+      location["departure"] =
+        date::format("%D %T", get_departure(distance, inbound_edge->departure));
     }
     response["ultimate"]["locations"].push_back(location);
   }

@@ -17,6 +17,14 @@ indexAndTypeToPath(const std::string& search_index, const std::string& doc_type)
 }
 
 std::string
+indexAndTypeToPath(const std::string& search_index,
+                   const std::string& doc_type,
+                   const std::string& doc_id)
+{
+  return std::format("/{}/{}/{}/", search_index, doc_type, doc_id);
+}
+
+std::string
 getEncodedCredentials(const std::string& username, const std::string& password)
 {
   std::ostringstream out_stringstream;
