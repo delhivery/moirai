@@ -33,6 +33,10 @@ add_executable(
   src/graph_helpers.cxx
   src/transportation.cxx
   src/solver.cxx
+  src/utils.cxx
+  src/kafka_reader.cxx
+  src/search_writer.cxx
+  src/solver_wrapper.cxx
   src/server.cxx
 )
 target_include_directories(${PROJECT_NAME} PUBLIC include)
