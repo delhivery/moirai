@@ -94,16 +94,7 @@ public:
       source,
       boost::distance_map(&distances[0])
         .weight_map(w_map)
-        .distance_compare([](CLOCK lhs, CLOCK rhs) {
-          /*
-          std::cout << fmt::format("Comparing old {} and new {}: {}",
-                                   lhs.time_since_epoch().count() * 60,
-                                   rhs.time_since_epoch().count() * 60,
-                                   lhs > rhs)
-                    << std::endl;
-          */
-          return lhs < rhs;
-        })
+        .distance_compare([](CLOCK lhs, CLOCK rhs) { return lhs < rhs; })
         .distance_combine([](CLOCK initial, COST cost) {
           CalcualateTraversalCost calculator;
           CLOCK computed =

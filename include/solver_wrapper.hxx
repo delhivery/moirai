@@ -31,7 +31,7 @@ public:
                   std::string bag_source,
                   std::string bag_target,
                   int32_t bag_start,
-                  std::vector<std::tuple<std::string, int32_t>>&);
+                  std::vector<std::tuple<std::string, int32_t, std::string>>&);
 
   virtual void run();
 };

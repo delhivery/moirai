@@ -90,3 +90,13 @@ time_string_to_time(const std::string& time_string)
 
   return std::chrono::minutes(time);
 }
+
+CLOCK
+get_departure(CLOCK start, TIME_OF_DAY departure)
+{
+  TIME_OF_DAY minutes_start{ start -
+                             std::chrono::floor<std::chrono::days>(start) };
+  DURATION wait_time{ datemod(departure - minutes_start,
+                              std::chrono::days{ 1 }) };
+  return start + wait_time;
+}
