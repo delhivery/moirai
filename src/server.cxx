@@ -632,21 +632,26 @@ public:
           for (auto& waybill : data["items"]) {
             packages.emplace_back(
               waybill["id"].template get<std::string>(),
-              waybill["cpdd_destination"].template get<int32_t>());
+              iso_to_date(
+                waybill["cpdd_destination"].template get<std::string>())
+                .time_since_epoch()
+                .count());
           }
 
           nlohmann::json solution =
             find_paths(data["id"].template get<std::string>(),
                        data["location"].template get<std::string>(),
                        data["destination"].template get<std::string>(),
-                       data["time"].template get<int32_t>(),
+                       iso_to_date(data["time"].template get<std::string>)
+                         .time_since_epoch()
+                         .count(),
                        packages);
           solution["cs_slid"] = data["cs_slid"].template get<std::string>();
           solution["cs_act"] = data["cs_act"].template get<std::string>();
           solution["pid"] = data["pid"].template get<std::string>();
           solution_queue->enqueue(solution.dump());
         } catch (const std::exception& exc) {
-          std::cout << "Error occurred " << exc.what() << std::endl;
+          app.logger().error(std::format("Solver Error: {}", exc.what()));
         }
       }
     }
