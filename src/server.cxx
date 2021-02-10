@@ -271,6 +271,8 @@ public:
       Poco::Thread::sleep(200);
       std::string results;
       if (solution_queue->try_dequeue(results)) {
+        app.logger().information(
+          std::format("Sending payload for indexing {}", results));
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        indexAndTypeToPath(),
                                        Poco::Net::HTTPMessage::HTTP_1_1);
@@ -278,8 +280,6 @@ public:
         request.setContentType("application/json");
         request.setContentLength((int)results.length());
         session.sendRequest(request) << results;
-        app.logger().debug(
-          std::format("Sending payload for indexing {}", results));
         Poco::Net::HTTPResponse response;
         std::istream& response_stream = session.receiveResponse(response);
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
