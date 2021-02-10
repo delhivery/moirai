@@ -642,7 +642,7 @@ public:
             find_paths(data["id"].template get<std::string>(),
                        data["location"].template get<std::string>(),
                        data["destination"].template get<std::string>(),
-                       iso_to_date(data["time"].template get<std::string>)
+                       iso_to_date(data["time"].template get<std::string>())
                          .time_since_epoch()
                          .count(),
                        packages);
