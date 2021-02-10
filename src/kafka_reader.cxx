@@ -126,7 +126,7 @@ KafkaReader::run()
     Poco::Thread::sleep(200);
     auto messages = consume_batch(consumer, batch_size, timeout);
     if (messages.size() > 0)
-      app.logger().debug(
+      app.logger().information(
         std::format("Accumulated {} messages", messages.size()));
 
     for (auto& message : messages) {
