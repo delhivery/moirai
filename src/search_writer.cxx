@@ -58,16 +58,16 @@ SearchWriter::run()
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
         std::istream& response_stream = session.receiveResponse(response);
+        std::stringstream response_raw;
+        Poco::StreamCopier::copyStream(response_stream, response_raw);
+
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
-          std::stringstream response;
-          Poco::StreamCopier::copyStream(response_stream, response);
           app.logger().debug(std::format(
-            "Got successful response from ES Host: {}", response.str()));
+            "Got successful response from ES Host: {}", response_raw.str()));
         } else {
-          std::stringstream response;
-          Poco::StreamCopier::copyStream(response_stream, response);
-          app.logger().error(
-            std::format("Error uploading data: {}", response.str()));
+          app.logger().error(std::format("Error uploading data: <{}>: {}",
+                                         response.getStatus(),
+                                         response_raw.str()));
         }
       } catch (const std::exception& err) {
         app.logger().error(std::format("Error pushing data: {}", err.what()));
