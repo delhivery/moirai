@@ -623,27 +623,31 @@ public:
         std::format("C: Queue size: {}", load_queue->size_approx()));
 
       if (load_queue->try_dequeue(payload)) {
-        app.logger().information(std::format("Dequeued: {}", payload));
-        nlohmann::json data = nlohmann::json::parse(payload);
+        try {
+          app.logger().information(std::format("Dequeued: {}", payload));
+          nlohmann::json data = nlohmann::json::parse(payload);
 
-        std::vector<std::tuple<std::string, int32_t>> packages;
+          std::vector<std::tuple<std::string, int32_t>> packages;
 
-        for (auto& waybill : data["items"]) {
-          packages.emplace_back(
-            waybill["id"].template get<std::string>(),
-            waybill["cpdd_destination"].template get<int32_t>());
+          for (auto& waybill : data["items"]) {
+            packages.emplace_back(
+              waybill["id"].template get<std::string>(),
+              waybill["cpdd_destination"].template get<int32_t>());
+          }
+
+          nlohmann::json solution =
+            find_paths(data["id"].template get<std::string>(),
+                       data["location"].template get<std::string>(),
+                       data["destination"].template get<std::string>(),
+                       data["time"].template get<int32_t>(),
+                       packages);
+          solution["cs_slid"] = data["cs_slid"].template get<std::string>();
+          solution["cs_act"] = data["cs_act"].template get<std::string>();
+          solution["pid"] = data["pid"].template get<std::string>();
+          solution_queue->enqueue(solution.dump());
+        } catch (const std::exception& exc) {
+          std::cout << "Error occurred " << exc.what() << std::endl;
         }
-
-        nlohmann::json solution =
-          find_paths(data["id"].template get<std::string>(),
-                     data["location"].template get<std::string>(),
-                     data["destination"].template get<std::string>(),
-                     data["time"].template get<int32_t>(),
-                     packages);
-        solution["cs_slid"] = data["cs_slid"].template get<std::string>();
-        solution["cs_act"] = data["cs_act"].template get<std::string>();
-        solution["pid"] = data["pid"].template get<std::string>();
-        solution_queue->enqueue(solution.dump());
       }
     }
   }
