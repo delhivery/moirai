@@ -1,9 +1,11 @@
 #include "date_utils.hxx"
 #include "transportation.hxx"
-#include <bits/stdint-intn.h>
 #include <cstdint>
+#include <cstdlib>
 #include <date/date.h>
 #include <iostream>
+#include <regex>
+#include <vector>
 
 #ifdef __cpp_lib_format
 #include <format>
@@ -66,4 +68,25 @@ iso_to_date(std::string date_string)
   CLOCK clock;
   date_stream >> date::parse("%F %T", clock);
   return clock;
+}
+
+int64_t
+now_as_int64()
+{
+  return std::chrono::system_clock::now().time_since_epoch().count() / 1000 /
+         1000;
+}
+
+std::chrono::minutes
+time_string_to_time(const std::string& time_string)
+{
+  std::regex split_time_regex(":");
+  const std::vector<std::string> parts(
+    std::sregex_token_iterator(
+      time_string.begin(), time_string.end(), split_time_regex, -1),
+    std::sregex_token_iterator());
+  std::uint16_t time =
+    std::atoi(parts[0].c_str()) * 60 + std::atoi(parts[1].c_str());
+
+  return std::chrono::minutes(time);
 }
