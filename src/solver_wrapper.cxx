@@ -246,7 +246,7 @@ SolverWrapper::find_paths(
       location["departure"] =
         date::format("%D %T", get_departure(distance, edge_used->departure));
       location["route"]["code"] =
-        inbound_edge->code.substr(0, outbound_edge->code.find('.'));
+        inbound_edge->code.substr(0, inbound_edge->code.find('.'));
       location["route"]["name"] = inbound_edge->name;
     }
     response["earliest"]["locations"].push_back(location);
@@ -261,7 +261,7 @@ SolverWrapper::find_paths(
       location["departure"] =
         date::format("%D %T", get_departure(start, inbound_edge->departure));
       location["route"]["code"] =
-        inbound_edge->code.substr(0, outbound_edge->code.find("."));
+        inbound_edge->code.substr(0, inbound_edge->code.find("."));
       location["route"]["name"] = inbound_edge->name;
     }
     response["earliest"]["locations"].push_back(location);
@@ -280,7 +280,7 @@ SolverWrapper::find_paths(
 
     if (inbound_edge != nullptr) {
       location["route"]["code"] =
-        inbound_edge->code.substr(0, outbound_edge->code.find('.'));
+        inbound_edge->code.substr(0, inbound_edge->code.find('.'));
       location["route"]["name"] = inbound_edge->name;
       location["departure"] = date::format(
         "%D %T", get_departure(distance, inbound_edge->departure));
@@ -293,7 +293,7 @@ SolverWrapper::find_paths(
                                 { "arrival", date::format("%D %T", start) } };
     if (inbound_edge != nullptr) {
       location["route"]["code"] =
-        inbound_edge->code.substr(0, outbound_edge->code.find("."));
+        inbound_edge->code.substr(0, inbound_edge->code.find("."));
       location["route"]["name"] = inbound_edge->name;
       location["departure"] =
         date::format("%D %T", get_departure(start, inbound_edge->departure));
