@@ -60,9 +60,10 @@ CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
 }
 
 CLOCK
-iso_to_date(std::stringstream date_string)
+iso_to_date(std::string date_string)
 {
+  std::stringstream date_stream{ date_string };
   CLOCK clock;
-  date_string >> date::parse("%F %T", clock);
+  date_stream >> date::parse("%F %T", clock);
   return clock;
 }
