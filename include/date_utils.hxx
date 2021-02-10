@@ -33,4 +33,6 @@ now_as_int64();
 std::chrono::minutes
 time_string_to_time(const std::string&);
 
+CLOCK
+get_departure(CLOCK, TIME_OF_DAY);
 #endif

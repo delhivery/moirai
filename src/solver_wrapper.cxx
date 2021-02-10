@@ -172,7 +172,7 @@ SolverWrapper::find_paths(
   std::string bag_source,
   std::string bag_target,
   int32_t bag_start,
-  std::vector<std::tuple<std::string, int32_t>>& packages)
+  std::vector<std::tuple<std::string, int32_t, std::string>>& packages)
 {
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
@@ -223,66 +223,83 @@ SolverWrapper::find_paths(
     solution_ultimate = solution_earliest;
 
   nlohmann::json response;
+  response["id"] = bag;
   response["waybill"] = bag;
+
+  if (packages.size() > 0) {
+    response["package"] = std::get<2>(packages[0]);
+  }
+
   response["earliest"]["locations"] = {};
   response["ultimate"]["locations"] = {};
 
-  std::shared_ptr<TransportEdge> inbound_edge = nullptr;
+  std::shared_ptr<TransportEdge> outbound_edge = nullptr;
   for (auto idx = 0; idx < solution_earliest.size(); ++idx) {
     auto [edge_source, edge_target, edge_used, distance] =
       solution_earliest[idx];
     std::string code = edge_target->code;
     std::string arrival = date::format("%D %T", distance);
-
+    outbound_edge = edge_used;
     nlohmann::json location = { { "code", code }, { "arrival", arrival } };
 
-    if (inbound_edge != nullptr) {
+    if (outbound_edge != nullptr) {
+      location["departure"] =
+        date::format("%D %T", get_departure(distance, edge_used->departure));
       location["route"]["code"] =
-        inbound_edge->code.substr(0, inbound_edge->code.find('.'));
-      location["route"]["name"] = inbound_edge->name;
+        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
+      location["route"]["name"] = outbound_edge->name;
     }
-    inbound_edge = edge_used;
     response["earliest"]["locations"].push_back(location);
   }
   {
     auto start_location = solver.get_node(source);
-    nlohmann::json location = { { "code", start_location->code },
-                                { "arrival", date::format("%D %T", start) } };
-    if (inbound_edge != nullptr) {
+    nlohmann::json location = {
+      { "code", start_location->code },
+      { "arrival", date::format("%D %T", start) },
+    };
+    if (outbound_edge != nullptr) {
+      location["departure"] =
+        date::format("%D %T", get_departure(start, outbound_edge->departure));
       location["route"]["code"] =
-        inbound_edge->code.substr(0, inbound_edge->code.find("."));
-      location["route"]["name"] = inbound_edge->name;
+        outbound_edge->code.substr(0, outbound_edge->code.find("."));
+      location["route"]["name"] = outbound_edge->name;
     }
     response["earliest"]["locations"].push_back(location);
+    response["earliest"]["first"] = location;
   }
-  inbound_edge = nullptr;
+  outbound_edge = nullptr;
 
   for (auto idx = 0; idx < solution_ultimate.size(); ++idx) {
     auto [edge_source, edge_target, edge_used, distance] =
       solution_ultimate[idx];
     std::string code = edge_target->code;
     std::string arrival = date::format("%D %T", distance);
+    outbound_edge = edge_used;
 
     nlohmann::json location = { { "code", code }, { "arrival", arrival } };
 
-    if (inbound_edge != nullptr) {
+    if (outbound_edge != nullptr) {
       location["route"]["code"] =
-        inbound_edge->code.substr(0, inbound_edge->code.find('.'));
-      location["route"]["name"] = inbound_edge->name;
+        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
+      location["route"]["name"] = outbound_edge->name;
+      location["departure"] = date::format(
+        "%D %T", get_departure(distance, outbound_edge->departure));
     }
-    inbound_edge = edge_used;
     response["ultimate"]["locations"].push_back(location);
   }
   {
     auto start_location = solver.get_node(source);
     nlohmann::json location = { { "code", start_location->code },
                                 { "arrival", date::format("%D %T", start) } };
-    if (inbound_edge != nullptr) {
+    if (outbound_edge != nullptr) {
       location["route"]["code"] =
-        inbound_edge->code.substr(0, inbound_edge->code.find("."));
-      location["route"]["name"] = inbound_edge->name;
+        outbound_edge->code.substr(0, outbound_edge->code.find("."));
+      location["route"]["name"] = outbound_edge->name;
+      location["departure"] =
+        date::format("%D %T", get_departure(start, outbound_edge->departure));
     }
     response["ultimate"]["locations"].push_back(location);
+    response["ultimate"]["first"] = location;
   }
 
   response["pdd"] = date::format("%D %T", bag_pdd);
@@ -351,16 +368,17 @@ SolverWrapper::run()
         app.logger().debug(std::format("Dequeued: {}", payload));
         nlohmann::json data = nlohmann::json::parse(payload);
 
-        std::vector<std::tuple<std::string, int32_t>> packages;
+        std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
         for (auto& waybill : data["items"]) {
           if (!waybill["cpdd_destination"].is_null())
             packages.emplace_back(
-              waybill["id"].template get<std::string>(),
+              "",
               iso_to_date(
                 waybill["cpdd_destination"].template get<std::string>())
                 .time_since_epoch()
-                .count());
+                .count(),
+              waybill["id"].template get<std::string>());
         }
 
         nlohmann::json solution =
