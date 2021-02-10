@@ -212,6 +212,8 @@ public:
         if (topic_map.right.at(message->topic_name()) == "load") {
           // Check if data is type bag and parses out correctly
           load_queue->enqueue(data);
+          app.logger().debug(std::format(
+            "Queue size: {}. Attempting {}", load_queue->size_approx(), data));
         } else {
           app.logger().information(
             std::format("Unsupported topic: {}",
@@ -617,8 +619,11 @@ public:
     while (true) {
       Poco::Thread::sleep(200);
       std::string payload;
+      app.logger().information(
+        std::format("C: Queue size: {}", load_queue->size_approx()));
 
       if (load_queue->try_dequeue(payload)) {
+        app.logger().information(std::format("Dequeued: {}", payload));
         nlohmann::json data = nlohmann::json::parse(payload);
 
         std::vector<std::tuple<std::string, int32_t>> packages;
