@@ -126,10 +126,10 @@ public:
 
       if (distance == CLOCK::max())
         break;
-      auto conn = filtered_graph[edge_descriptor];
-      auto sour = filtered_graph[sour_descriptor];
-      auto targ = filtered_graph[current];
-      path.push_back(std::make_tuple(sour, targ, conn, distance));
+      path.push_back(std::make_tuple(filtered_graph[current],
+                                     filtered_graph[sour_descriptor],
+                                     filtered_graph[edge_descriptor],
+                                     distance));
     }
 
     return path;
