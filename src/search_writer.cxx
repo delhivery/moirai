@@ -69,6 +69,7 @@ SearchWriter::run()
           app.logger().error(std::format("Error uploading data: <{}>: {}",
                                          response.getStatus(),
                                          response_raw.str()));
+          app.logger().error(std::format("Raw data: {}", stringified));
         }
       } catch (const std::exception& err) {
         app.logger().error(std::format("Error pushing data: {}", err.what()));
