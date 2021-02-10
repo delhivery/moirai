@@ -38,7 +38,7 @@ SearchWriter::run()
     Poco::Thread::sleep(200);
     std::string results;
     if (solution_queue->try_dequeue(results)) {
-      app.logger().information(
+      app.logger().debug(
         std::format("Sending payload for indexing {}", results));
       try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
@@ -56,6 +56,9 @@ SearchWriter::run()
           Poco::StreamCopier::copyStream(response_stream, response);
           app.logger().debug(std::format(
             "Got successful response from ES Host: {}", response.str()));
+        } else {
+          app.logger().error(
+            std::format("Error uploading data: {}", response.str()));
         }
       } catch (const std::exception& err) {
         app.logger().error(std::format("Error pushing data: {}", err.what()));
