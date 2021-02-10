@@ -273,20 +273,24 @@ public:
       if (solution_queue->try_dequeue(results)) {
         app.logger().information(
           std::format("Sending payload for indexing {}", results));
-        Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
-                                       indexAndTypeToPath(),
-                                       Poco::Net::HTTPMessage::HTTP_1_1);
-        request.setCredentials("Basic", getEncodedCredentials());
-        request.setContentType("application/json");
-        request.setContentLength((int)results.length());
-        session.sendRequest(request) << results;
-        Poco::Net::HTTPResponse response;
-        std::istream& response_stream = session.receiveResponse(response);
-        if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
-          std::stringstream response;
-          Poco::StreamCopier::copyStream(response_stream, response);
-          app.logger().debug(std::format(
-            "Got successful response from ES Host: {}", response.str()));
+        try {
+          Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
+                                         indexAndTypeToPath(),
+                                         Poco::Net::HTTPMessage::HTTP_1_1);
+          request.setCredentials("Basic", getEncodedCredentials());
+          request.setContentType("application/json");
+          request.setContentLength((int)results.length());
+          session.sendRequest(request) << results;
+          Poco::Net::HTTPResponse response;
+          std::istream& response_stream = session.receiveResponse(response);
+          if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
+            std::stringstream response;
+            Poco::StreamCopier::copyStream(response_stream, response);
+            app.logger().debug(std::format(
+              "Got successful response from ES Host: {}", response.str()));
+          }
+        } catch (const std::exception& err) {
+          app.logger().error(std::format("Error pushing data: {}", err.what()));
         }
       }
     }
