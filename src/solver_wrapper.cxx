@@ -163,7 +163,7 @@ to_lower(std::string& input_string)
   std::transform(input_string.begin(),
                  input_string.end(),
                  input_string.begin(),
-                 [](unsigned char c) { return std::to_lower(c); });
+                 [](unsigned char c) { return std::tolower(c); });
 }
 
 auto
