@@ -261,9 +261,9 @@ SolverWrapper::find_paths(
   }
   {
     auto current_node = solver.get_node(source);
-    nlohmann::json location_entry = {
-      { "code", source }, { "arrival", date::format("%D %T", start) }
-    };
+    nlohmann::json location_entry = { { "code", solver.get_node(source)->code },
+                                      { "arrival",
+                                        date::format("%D %T", start) } };
 
     if (outbound_edge != nullptr) {
       location_entry["departure"] =
