@@ -5,6 +5,7 @@
 #include <Poco/Net/HTTPSClientSession.h>
 #include <Poco/Thread.h>
 #include <Poco/Util/ServerApplication.h>
+#include <nlohmann/json.hpp>
 
 #ifdef __cpp_lib_format
 #include <format>
@@ -38,17 +39,23 @@ SearchWriter::run()
     Poco::Thread::sleep(200);
     std::string results;
     if (solution_queue->try_dequeue(results)) {
+      nlohmann::json data = nlohmann::json::parse(results);
+
       app.logger().debug(
         std::format("Sending payload for indexing {}", results));
       try {
-        Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
-                                       indexAndTypeToPath(search_index, "doc"),
-                                       Poco::Net::HTTPMessage::HTTP_1_1);
+        Poco::Net::HTTPRequest request(
+          Poco::Net::HTTPRequest::HTTP_POST,
+          indexAndTypeToPath(
+            search_index, "doc", data["_id"].template get<std::string>()),
+          Poco::Net::HTTPMessage::HTTP_1_1);
+        data.erase("_id");
         request.setCredentials("Basic",
                                getEncodedCredentials(username, password));
         request.setContentType("application/json");
-        request.setContentLength((int)results.length());
-        session.sendRequest(request) << results;
+        std::string stringified = data.dump();
+        request.setContentLength((int)stringified.length());
+        session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
         std::istream& response_stream = session.receiveResponse(response);
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {

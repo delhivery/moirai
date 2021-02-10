@@ -10,6 +10,9 @@ std::string
 indexAndTypeToPath(const std::string&, const std::string&);
 
 std::string
+indexAndTypeToPath(const std::string&, const std::string&, const std::string&);
+
+std::string
 getEncodedCredentials(const std::string&, const std::string&);
 
 #endif
