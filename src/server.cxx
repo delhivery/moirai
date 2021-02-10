@@ -630,12 +630,13 @@ public:
           std::vector<std::tuple<std::string, int32_t>> packages;
 
           for (auto& waybill : data["items"]) {
-            packages.emplace_back(
-              waybill["id"].template get<std::string>(),
-              iso_to_date(
-                waybill["cpdd_destination"].template get<std::string>())
-                .time_since_epoch()
-                .count());
+            if (!waybill["cpdd_destination"].is_null())
+              packages.emplace_back(
+                waybill["id"].template get<std::string>(),
+                iso_to_date(
+                  waybill["cpdd_destination"].template get<std::string>())
+                  .time_since_epoch()
+                  .count());
           }
 
           nlohmann::json solution =
@@ -646,9 +647,17 @@ public:
                          .time_since_epoch()
                          .count(),
                        packages);
-          solution["cs_slid"] = data["cs_slid"].template get<std::string>();
-          solution["cs_act"] = data["cs_act"].template get<std::string>();
-          solution["pid"] = data["pid"].template get<std::string>();
+
+          solution["cs_slid"] = data["cs_slid"].is_null()
+                                  ? ""
+                                  : data["cs_slid"].template get<std::string>();
+
+          solution["cs_act"] = data["cs_act"].is_null()
+                                 ? ""
+                                 : data["cs_act"].template get<std::string>();
+          solution["pid"] = data["pid"].is_null()
+                              ? ""
+                              : data["pid"].template get<std::string>();
           solution_queue->enqueue(solution.dump());
         } catch (const std::exception& exc) {
           app.logger().error(std::format("Solver Error: {}", exc.what()));
