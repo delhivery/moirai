@@ -61,7 +61,8 @@ SearchWriter::run()
         std::stringstream response_raw;
         Poco::StreamCopier::copyStream(response_stream, response_raw);
 
-        if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
+        if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK or
+            response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
           app.logger().debug(std::format(
             "Got successful response from ES Host: {}", response_raw.str()));
         } else {
