@@ -58,3 +58,11 @@ CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
                               std::chrono::days{ 1 }) };
   return start - wait_time - cost.second;
 }
+
+CLOCK
+iso_to_date(std::stringstream date_string)
+{
+  CLOCK clock;
+  date_string >> date::parse("%F %T", clock);
+  return clock;
+}
