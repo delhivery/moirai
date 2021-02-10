@@ -100,7 +100,7 @@ public:
     , load_queue(load_queue)
   {
     Poco::Util::Application& app = Poco::Util::Application::instance();
-    app.logger().information("Configuring kafka reader");
+    app.logger().debug("Configuring kafka reader");
     config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 
     std::string error_string;
@@ -200,7 +200,7 @@ public:
       Poco::Thread::sleep(200);
       auto messages = consume_batch(consumer, batch_size, timeout);
       if (messages.size() > 0)
-        app.logger().information(
+        app.logger().debug(
           std::format("Accumulated {} messages", messages.size()));
 
       for (auto& message : messages) {
@@ -215,7 +215,7 @@ public:
           app.logger().debug(std::format(
             "Queue size: {}. Attempting {}", load_queue->size_approx(), data));
         } else {
-          app.logger().information(
+          app.logger().error(
             std::format("Unsupported topic: {}",
                         topic_map.right.at(message->topic_name())));
         }
@@ -285,7 +285,7 @@ public:
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
           std::stringstream response;
           Poco::StreamCopier::copyStream(response_stream, response);
-          app.logger().information(std::format(
+          app.logger().debug(std::format(
             "Got successful response from ES Host: {}", response.str()));
         }
       }
@@ -563,7 +563,7 @@ public:
   virtual void run()
   {
     Poco::Util::Application& app = Poco::Util::Application::instance();
-    app.logger().information("Initializing solver");
+    app.logger().debug("Initializing solver");
     std::filesystem::path center_filepath{
       "/home/amitprakash/moirai/fixtures/centers.pretty.json"
     };
@@ -572,12 +572,12 @@ public:
       "/home/amitprakash/moirai/fixtures/routes.utcized.json"
     };
 
-    app.logger().information("Adding vertices");
+    app.logger().debug("Adding vertices");
     for (const auto& center : read_vertices(center_filepath)) {
       solver.add_node(center);
     }
 
-    app.logger().information("Adding edges");
+    app.logger().debug("Adding edges");
     for (const auto& edge : read_connections(edges_filepath)) {
       std::string source = std::get<0>(edge);
       std::string target = std::get<1>(edge);
@@ -615,16 +615,16 @@ public:
       solver.add_edge(src.first, tar.first, e);
     }
 
-    app.logger().information("Processing loads");
+    app.logger().debug("Processing loads");
     while (true) {
       Poco::Thread::sleep(200);
       std::string payload;
-      app.logger().information(
+      app.logger().debug(
         std::format("C: Queue size: {}", load_queue->size_approx()));
 
       if (load_queue->try_dequeue(payload)) {
         try {
-          app.logger().information(std::format("Dequeued: {}", payload));
+          app.logger().debug(std::format("Dequeued: {}", payload));
           nlohmann::json data = nlohmann::json::parse(payload);
 
           std::vector<std::tuple<std::string, int32_t>> packages;
@@ -705,12 +705,12 @@ protected:
   {
     loadConfiguration();
     Poco::Util::ServerApplication::initialize(self);
-    logger().information("Starting up");
+    logger().debug("Starting up");
   }
 
   void uninitialize()
   {
-    logger().information("Shutting down");
+    logger().debug("Shutting down");
     Poco::Util::ServerApplication::uninitialize();
   }
 
