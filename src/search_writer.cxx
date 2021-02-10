@@ -57,6 +57,8 @@ SearchWriter::run()
           app.logger().debug(std::format(
             "Got successful response from ES Host: {}", response.str()));
         } else {
+          std::stringstream response;
+          Poco::StreamCopier::copyStream(response_stream, response);
           app.logger().error(
             std::format("Error uploading data: {}", response.str()));
         }
