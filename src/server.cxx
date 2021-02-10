@@ -199,18 +199,24 @@ public:
     while (running) {
       Poco::Thread::sleep(200);
       auto messages = consume_batch(consumer, batch_size, timeout);
-      app.logger().information(
-        std::format("Accumulated {} messages", messages.size()));
+      if (messages.size() > 0)
+        app.logger().information(
+          std::format("Accumulated {} messages", messages.size()));
 
       for (auto& message : messages) {
-        app.logger().information(std::format("Message in {} [{}] at offset {}",
-                                             message->topic_name(),
-                                             message->partition(),
-                                             message->offset()));
+        app.logger().debug(std::format("Message in {} [{}] at offset {}",
+                                       message->topic_name(),
+                                       message->partition(),
+                                       message->offset()));
         std::string data(static_cast<const char*>(message->payload()));
-        if (topic_map.right.at(message->topic_name()) == "Load")
+        if (topic_map.right.at(message->topic_name()) == "Load") {
           // Check if data is type bag and parses out correctly
           load_queue->enqueue(data);
+        } else {
+          app.logger().information(
+            std::format("Unsupported topic: {}",
+                        topic_map.right.at(message->topic_name())));
+        }
         delete message;
       }
     }
@@ -555,6 +561,7 @@ public:
   virtual void run()
   {
     Poco::Util::Application& app = Poco::Util::Application::instance();
+    app.logger().information("Initializing solver");
     std::filesystem::path center_filepath{
       "/home/amitprakash/moirai/fixtures/centers.pretty.json"
     };
