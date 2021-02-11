@@ -15,4 +15,6 @@ indexAndTypeToPath(const std::string&, const std::string&, const std::string&);
 std::string
 getEncodedCredentials(const std::string&, const std::string&);
 
+void
+to_lower(std::string&);
 #endif

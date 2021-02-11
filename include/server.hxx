@@ -19,6 +19,7 @@ private:
   std::string search_pass;
   std::string search_index;
 
+  std::string facility_timings_filename;
   std::string facility_uri;
   std::string facility_token;
 
@@ -70,6 +71,8 @@ protected:
   void set_load_topic(const std::string&, const std::string&);
 
   void set_broker_url(const std::string&, const std::string&);
+
+  void set_facility_timings_file(const std::string&, const std::string&);
 
   void handle_help(const std::string&, const std::string&);
 

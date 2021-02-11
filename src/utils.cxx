@@ -34,3 +34,12 @@ getEncodedCredentials(const std::string& username, const std::string& password)
   encoder.close();
   return out_stringstream.str();
 }
+
+void
+to_lower(std::string& input_string)
+{
+  std::transform(input_string.begin(),
+                 input_string.end(),
+                 input_string.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+}

@@ -66,6 +66,14 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
                       .callback(Poco::Util::OptionCallback<Moirai>(
                         this, &Moirai::set_route_api)));
 
+  options.addOption(
+    Poco::Util::Option("facility-timings", "b", "Path to facility timings file")
+      .required(true)
+      .repeatable(false)
+      .argument("<path>", true)
+      .callback(Poco::Util::OptionCallback<Moirai>(
+        this, &Moirai::set_facility_timings_file)));
+
   options.addOption(Poco::Util::Option("facility-api", "c", "Facility dump API")
                       .required(true)
                       .repeatable(false)
@@ -168,6 +176,13 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
 }
 
 void
+Moirai::set_facility_timings_file(const std::string& name,
+                                  const std::string& value)
+{
+  facility_timings_filename = value;
+}
+
+void
 Moirai::set_facility_api(const std::string& name, const std::string& value)
 {
   facility_uri = value;
@@ -265,6 +280,10 @@ Moirai::main(const ArgVec& arg)
 {
 
   if (!help_requested) {
+    moodycamel::ConcurrentQueue<std::string>* node_queue =
+      new moodycamel::ConcurrentQueue<std::string>();
+    moodycamel::ConcurrentQueue<std::string>* edge_queue =
+      new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* load_queue =
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
@@ -280,13 +299,23 @@ Moirai::main(const ArgVec& arg)
       batch_size,
       timeout,
       topic_map,
+      node_queue,
+      edge_queue,
       load_queue);
     SearchWriter writer(Poco::URI(search_uri),
                         search_user,
                         search_pass,
                         search_index,
                         solution_queue);
-    SolverWrapper wrapper(load_queue, solution_queue);
+    SolverWrapper wrapper(node_queue,
+                          edge_queue,
+                          load_queue,
+                          solution_queue,
+                          facility_uri,
+                          facility_token,
+                          route_uri,
+                          route_token,
+                          facility_timings_filename);
     std::vector<Poco::Thread> threads(3);
     threads[0].start(reader);
     threads[1].start(writer);

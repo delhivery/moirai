@@ -21,6 +21,8 @@ private:
   std::vector<std::string> topics;
   StringToStringMap topic_map;
   std::atomic<bool> running;
+  moodycamel::ConcurrentQueue<std::string>* node_queue;
+  moodycamel::ConcurrentQueue<std::string>* edge_queue;
   moodycamel::ConcurrentQueue<std::string>* load_queue;
 
 public:
@@ -28,6 +30,8 @@ public:
               const uint16_t,
               const uint16_t,
               const StringToStringMap&,
+              moodycamel::ConcurrentQueue<std::string>*,
+              moodycamel::ConcurrentQueue<std::string>*,
               moodycamel::ConcurrentQueue<std::string>*);
 
   ~KafkaReader();

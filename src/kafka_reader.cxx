@@ -17,12 +17,16 @@ KafkaReader::KafkaReader(const std::string& broker_url,
                          const uint16_t batch_size,
                          const uint16_t timeout,
                          const StringToStringMap& topic_map,
+                         moodycamel::ConcurrentQueue<std::string>* node_queue,
+                         moodycamel::ConcurrentQueue<std::string>* edge_queue,
                          moodycamel::ConcurrentQueue<std::string>* load_queue)
   : Poco::Runnable()
   , broker_url(broker_url)
   , batch_size(batch_size)
   , timeout(timeout)
   , topic_map(topic_map)
+  , node_queue(node_queue)
+  , edge_queue(edge_queue)
   , load_queue(load_queue)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
@@ -135,11 +139,13 @@ KafkaReader::run()
                                            message->partition(),
                                            message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
-      if (topic_map.right.at(message->topic_name()) == "load") {
-        // Check if data is type bag and parses out correctly
+      std::string topic_name = topic_map.right.at(message->topic_name());
+      if (topic_name == "load") {
         load_queue->enqueue(data);
-        app.logger().debug(std::format(
-          "Queue size: {}. Attempting {}", load_queue->size_approx(), data));
+      } else if (topic_name == "edge") {
+        edge_queue->enqueue(data);
+      } else if (topic_name == "node") {
+        node_queue->enqueue(data);
       } else {
         app.logger().error(std::format(
           "Unsupported topic: {}", topic_map.right.at(message->topic_name())));
