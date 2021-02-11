@@ -45,9 +45,11 @@ SolverWrapper::SolverWrapper(
   , edge_init_uri(edge_uri)
   , edge_init_auth_token(edge_token)
 {
+  Poco::Util::Application& app = Poco::Util::Application::instance();
   init_timings(center_timings_filename);
   init_nodes();
   init_edges();
+  app.logger().information("Initialized graph");
 }
 
 void
