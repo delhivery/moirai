@@ -96,36 +96,48 @@ SolverWrapper::init_nodes(int16_t page)
   session.sendRequest(request);
   Poco::Net::HTTPResponse response;
   std::istream& response_stream = session.receiveResponse(response);
-  auto response_json = nlohmann::json::parse(response_stream);
-  auto data = response_json["result"]["data"];
 
-  std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
-    std::string facility_code =
-      facility["facility_code"].template get<std::string>();
-    std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
-      0, 0, 0, 0
-    };
-    if (facility_timings_map.contains(facility_code)) {
-      facility_timings = facility_timings_map[facility_code];
-    }
+  if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
+    auto response_json = nlohmann::json::parse(response_stream);
+    auto data = response_json["result"]["data"];
 
-    auto transport_center = std::make_shared<TransportCenter>(facility_code);
-    transport_center->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
-      DURATION(std::get<0>(facility_timings)));
-    transport_center->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
-      DURATION(std::get<1>(facility_timings)));
-    transport_center->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
-      DURATION(std::get<2>(facility_timings)));
-    transport_center
-      ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-        DURATION(std::get<3>(facility_timings)));
-    solver.add_node(transport_center);
-  });
+    std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
+      std::string facility_code =
+        facility["facility_code"].template get<std::string>();
+      std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
+        0, 0, 0, 0
+      };
+      if (facility_timings_map.contains(facility_code)) {
+        facility_timings = facility_timings_map[facility_code];
+      }
 
-  auto pages =
-    response_json["result"]["total_page_count"].template get<int16_t>();
-  if (page < pages)
-    init_nodes(page + 1);
+      auto transport_center = std::make_shared<TransportCenter>(facility_code);
+      transport_center
+        ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+          DURATION(std::get<0>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+          DURATION(std::get<1>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+          DURATION(std::get<2>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+          DURATION(std::get<3>(facility_timings)));
+      solver.add_node(transport_center);
+    });
+
+    auto pages =
+      response_json["result"]["total_page_count"].template get<int16_t>();
+    if (page < pages)
+      init_nodes(page + 1);
+  } else {
+    std::stringstream response_raw;
+    Poco::StreamCopier::copyStream(response_stream, response_raw);
+    app.logger().error(std::format("Unable to fetch facility data: <{}>: {}",
+                                   response.getStatus(),
+                                   response_raw.str()));
+  }
 }
 
 void
@@ -145,78 +157,87 @@ SolverWrapper::init_edges()
   session.sendRequest(request);
   Poco::Net::HTTPResponse response;
   std::istream& response_stream = session.receiveResponse(response);
-  auto response_json = nlohmann::json::parse(response_stream);
-  auto data = response_json["data"];
-  std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
-    std::string uuid = route["route_schedule_uuid"].template get<std::string>();
-    std::string name = route["name"].template get<std::string>();
-    std::string route_type = route["route_type"].template get<std::string>();
-    std::string reporting_time =
-      route["reporting_time"].template get<std::string>();
-    TIME_OF_DAY offset = std::chrono::duration_cast<TIME_OF_DAY>(
-      time_string_to_time(reporting_time));
-    auto stops = route["halt_centers"];
+  if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
+    auto response_json = nlohmann::json::parse(response_stream);
+    auto data = response_json["data"];
+    std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
+      std::string uuid =
+        route["route_schedule_uuid"].template get<std::string>();
+      std::string name = route["name"].template get<std::string>();
+      std::string route_type = route["route_type"].template get<std::string>();
+      std::string reporting_time =
+        route["reporting_time"].template get<std::string>();
+      TIME_OF_DAY offset = std::chrono::duration_cast<TIME_OF_DAY>(
+        time_string_to_time(reporting_time));
+      auto stops = route["halt_centers"];
 
-    if (!stops.is_array()) {
-      app.logger().error(std::format("Edge<{}> stops is not an array", uuid));
-      return;
-    }
-    for (int i = 0; i < stops.size(); ++i) {
-      for (int j = i + 1; j < stops.size(); ++j) {
-        auto source = stops[i];
-        auto target = stops[j];
+      if (!stops.is_array()) {
+        app.logger().error(std::format("Edge<{}> stops is not an array", uuid));
+        return;
+      }
+      for (int i = 0; i < stops.size(); ++i) {
+        for (int j = i + 1; j < stops.size(); ++j) {
+          auto source = stops[i];
+          auto target = stops[j];
 
-        std::string departure = source["rel_etd"].template get<std::string>();
-        std::string arrival = target["rel_eta"].template get<std::string>();
+          std::string departure = source["rel_etd"].template get<std::string>();
+          std::string arrival = target["rel_eta"].template get<std::string>();
 
-        TIME_OF_DAY departure_as_time(offset +
-                                      std::chrono::duration_cast<TIME_OF_DAY>(
-                                        time_string_to_time(departure)));
-        DURATION duration(std::chrono::duration_cast<TIME_OF_DAY>(
-          time_string_to_time(arrival) -
-          std::chrono::duration_cast<TIME_OF_DAY>(
-            time_string_to_time(departure))));
+          TIME_OF_DAY departure_as_time(offset +
+                                        std::chrono::duration_cast<TIME_OF_DAY>(
+                                          time_string_to_time(departure)));
+          DURATION duration(std::chrono::duration_cast<TIME_OF_DAY>(
+            time_string_to_time(arrival) -
+            std::chrono::duration_cast<TIME_OF_DAY>(
+              time_string_to_time(departure))));
 
-        if (departure_as_time.count() < 0 or duration.count() < 0) {
-          app.logger().error(
-            std::format("Edge<{}>: Departure<{}> or duration<{}> negative",
-                        uuid,
-                        departure_as_time.count(),
-                        duration.count()));
-          return;
-        }
+          if (departure_as_time.count() < 0 or duration.count() < 0) {
+            app.logger().error(
+              std::format("Edge<{}>: Departure<{}> or duration<{}> negative",
+                          uuid,
+                          departure_as_time.count(),
+                          duration.count()));
+            return;
+          }
 
-        std::string source_center_code =
-          source["center_code"].template get<std::string>();
-        std::string target_center_code =
-          target["center_code"].template get<std::string>();
+          std::string source_center_code =
+            source["center_code"].template get<std::string>();
+          std::string target_center_code =
+            target["center_code"].template get<std::string>();
 
-        auto [source_vertex, has_source_vertex] =
-          solver.add_node(source_center_code);
-        auto [target_vertex, has_target_vertex] =
-          solver.add_node(target_center_code);
-        auto edge = std::make_shared<TransportEdge>(
-          std::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
-          name,
-          departure_as_time,
-          duration,
-          route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
-          route_type == "carting" ? MovementType::CARTING
-                                  : MovementType::LINEHAUL);
-        if (has_source_vertex and has_target_vertex) {
-          solver.add_edge(source_vertex, target_vertex, edge);
-        } else {
-          app.logger().error(std::format(
-            "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
-            uuid,
-            source_center_code,
-            has_source_vertex,
-            target_center_code,
-            has_target_vertex));
+          auto [source_vertex, has_source_vertex] =
+            solver.add_node(source_center_code);
+          auto [target_vertex, has_target_vertex] =
+            solver.add_node(target_center_code);
+          auto edge = std::make_shared<TransportEdge>(
+            std::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
+            name,
+            departure_as_time,
+            duration,
+            route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
+            route_type == "carting" ? MovementType::CARTING
+                                    : MovementType::LINEHAUL);
+          if (has_source_vertex and has_target_vertex) {
+            solver.add_edge(source_vertex, target_vertex, edge);
+          } else {
+            app.logger().error(std::format(
+              "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
+              uuid,
+              source_center_code,
+              has_source_vertex,
+              target_center_code,
+              has_target_vertex));
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    std::stringstream response_raw;
+    Poco::StreamCopier::copyStream(response_stream, response_raw);
+    app.logger().error(std::format("Unable to fetch route data: <{}>: {}",
+                                   response.getStatus(),
+                                   response_raw.str()));
+  }
 }
 
 auto

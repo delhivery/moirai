@@ -288,6 +288,15 @@ Moirai::main(const ArgVec& arg)
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
       new moodycamel::ConcurrentQueue<std::string>();
+    SolverWrapper wrapper(node_queue,
+                          edge_queue,
+                          load_queue,
+                          solution_queue,
+                          facility_uri,
+                          facility_token,
+                          route_uri,
+                          route_token,
+                          facility_timings_filename);
     KafkaReader reader(
       std::accumulate(broker_url.begin(),
                       broker_url.end(),
@@ -307,15 +316,6 @@ Moirai::main(const ArgVec& arg)
                         search_pass,
                         search_index,
                         solution_queue);
-    SolverWrapper wrapper(node_queue,
-                          edge_queue,
-                          load_queue,
-                          solution_queue,
-                          facility_uri,
-                          facility_token,
-                          route_uri,
-                          route_token,
-                          facility_timings_filename);
     std::vector<Poco::Thread> threads(3);
     threads[0].start(reader);
     threads[1].start(writer);
