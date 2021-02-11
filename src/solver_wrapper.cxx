@@ -162,6 +162,8 @@ SolverWrapper::init_edges()
   if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["data"];
+
+    app.logger().information(std::format("Got {} edges", data.size()));
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
       std::string uuid =
         route["route_schedule_uuid"].template get<std::string>();
