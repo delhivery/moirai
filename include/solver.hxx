@@ -63,6 +63,8 @@ public:
                                         const Node<Graph>&,
                                         std::shared_ptr<TransportEdge>);
 
+  std::string show() const;
+
   template<typename FilteredGraph>
   Path path_forward(const Node<FilteredGraph>& source,
                     const Node<FilteredGraph>& target,

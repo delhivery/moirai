@@ -9,6 +9,15 @@
 #include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
 #include <string>                                // for string
 
+#ifdef __cpp_lib_format
+#include <format>
+#else
+#include <fmt/core.h>
+namespace std {
+using fmt::format;
+};
+#endif
+
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::string node_code_or_name) const
 {
@@ -112,4 +121,11 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   FilterType filter{ &reversed_graph };
   FilteredGraph filtered_graph(reversed_graph, filter);
   return path_reverse(source, target, start, filtered_graph);
+}
+
+std::string
+Solver::show() const
+{
+  return std::format(
+    "Graph<{}, {}>", boost::num_vertices(graph), boost::num_edges(graph));
 }

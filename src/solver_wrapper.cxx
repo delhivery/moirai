@@ -49,7 +49,7 @@ SolverWrapper::SolverWrapper(
   init_timings(center_timings_filename);
   init_nodes();
   init_edges();
-  app.logger().information("Initialized graph");
+  app.logger().information(std::format("Initialized graph: {}", solver.show()));
 }
 
 void
@@ -250,6 +250,7 @@ SolverWrapper::find_paths(
   int32_t bag_start,
   std::vector<std::tuple<std::string, int32_t, std::string>>& packages)
 {
+  Poco::Util::Application& app = Poco::Util::Application::instance();
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
   CLOCK bag_pdd = CLOCK::max();
@@ -258,6 +259,13 @@ SolverWrapper::find_paths(
   const auto [target, has_target] = solver.add_node(bag_target);
 
   if (!has_source || !has_target) {
+    app.logger().error(
+      "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
+      bag,
+      bag_source,
+      has_source,
+      bag_target,
+      has_target);
     return nlohmann::json({});
   }
 
@@ -291,6 +299,10 @@ SolverWrapper::find_paths(
         }
       }
     }
+  } else {
+    app.logger().error(std::format(
+      "{}: No legitimate path from {} to {}", bag, bag_source, bag_target));
+    return nlohmann::json({});
   }
 
   if (bag_pdd == CLOCK::max()) {
