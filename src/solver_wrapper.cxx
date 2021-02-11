@@ -318,7 +318,15 @@ SolverWrapper::find_paths(
       solution_earliest[idx];
 
     std::string current_node_code = current_node->code;
-    std::string current_node_arrival = date::format("%D %T", distance_current);
+    DURATION latency =
+      current_node->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
+
+    if (inbound_edge->movement == MovementType::CARTING)
+      latency = current_node
+                  ->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+    std::string current_node_arrival =
+      date::format("%D %T", distance_current - latency);
+
     nlohmann::json location_entry = { { "code", current_node_code },
                                       { "arrival", current_node_arrival } };
 
@@ -355,13 +363,23 @@ SolverWrapper::find_paths(
       solution_ultimate[idx];
 
     std::string current_node_code = current_node->code;
+
+    DURATION latency =
+      current_node
+        ->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
+
+    if (outbound_edge->movement == MovementType::CARTING)
+      latency = current_node
+                  ->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
+
     std::string current_node_arrival = date::format("%D %T", distance_current);
     nlohmann::json location_entry = {
       { "code", current_node_code },
       { "arrival", current_node_arrival },
       { "departure",
-        date::format(
-          "%D %T", get_departure(distance_current, outbound_edge->departure)) },
+        date::format("%D %T",
+                     get_departure(distance_current, outbound_edge->departure) +
+                       latency) },
       { "route", outbound_edge->code.substr(0, outbound_edge->code.find('.')) }
     };
     response["ultimate"]["locations"].push_back(location_entry);
