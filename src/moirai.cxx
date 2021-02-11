@@ -61,12 +61,10 @@ find_paths(const Solver& solver,
 
     for (auto idx = 0; idx < forward_path.size(); ++idx) {
       auto [edge_source, edge_target, edge_used, distance] = forward_path[idx];
-      std::string node_name = edge_target->name;
       std::string node_code = edge_target->code;
       std::string arrival = date::format("%D %T", distance);
 
-      nlohmann::json location = { { "name", node_name }, // edge source name
-                                  { "code", node_code }, // edge source code
+      nlohmann::json location = { { "code", node_code }, // edge source code
                                   { "arrival", arrival } };
 
       if (inbound_edge != nullptr) {
@@ -78,8 +76,7 @@ find_paths(const Solver& solver,
     }
     {
       auto start_loc = solver.get_node(source);
-      nlohmann::json location = { { "name", start_loc->name },
-                                  { "code", start_loc->code },
+      nlohmann::json location = { { "code", start_loc->code },
                                   { "arrival", date::format("%D %T", start) } };
 
       if (inbound_edge != nullptr) {
@@ -95,7 +92,6 @@ find_paths(const Solver& solver,
     for (auto idx = 0; idx < forward_path.size(); ++idx) {
       auto [edge_source, edge_target, edge_used, distance] = forward_path[idx];
       nlohmann::json location = {
-        { "name", edge_target->name }, // edge source name
         { "code", edge_target->code }, // edge source code
         { "arrival", date::format("%D %T", distance) }
       };
@@ -110,12 +106,10 @@ find_paths(const Solver& solver,
     {
       std::shared_ptr<TransportCenter> start_loc = nullptr;
       start_loc = solver.get_node(target);
-      nlohmann::json location = { { "name", start_loc->name },
-                                  { "code", start_loc->code },
+      nlohmann::json location = { { "code", start_loc->code },
                                   { "arrival", date::format("%D %T", start) } };
       if (inbound_edge != nullptr) {
         location["route"]["code"] = inbound_edge->code;
-        location["route"]["name"] = inbound_edge->name;
       }
       response["ultimate"]["locations"].push_back(location);
     }
@@ -187,22 +181,20 @@ read_vertices(const std::filesystem::path filename)
   auto data = nlohmann::json::parse(stream);
 
   for (auto& center : data) {
-    nlohmann::json center_name, center_code, time_outbound_carting,
+    nlohmann::json center_code, time_outbound_carting,
       time_outbound_linehaul, time_inbound_carting, time_inbound_linehaul;
 
-    std::tie(center_name,
-             center_code,
+    std::tie(center_code,
              time_inbound_carting,
              time_inbound_linehaul,
              time_outbound_carting,
-             time_outbound_linehaul) = std::tie(center["name"],
-                                                center["code"],
+             time_outbound_linehaul) = std::tie(center["code"],
                                                 center["carting_inbound"],
                                                 center["linehaul_inbound"],
                                                 center["carting_outbound"],
                                                 center["linehaul_outbound"]);
 
-    TransportCenter transport_center(center_code, center_name);
+    TransportCenter transport_center(center_code);
     transport_center.set_latency<MovementType::CARTING, ProcessType::INBOUND>(
       DURATION(time_inbound_carting.get<unsigned long>()));
     transport_center.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
@@ -219,8 +211,6 @@ read_vertices(const std::filesystem::path filename)
 
 std::vector<std::tuple<std::string,
                        std::string,
-                       std::string,
-                       std::string,
                        std::shared_ptr<TransportEdge>>>
 read_connections(const std::filesystem ::path filename)
 {
@@ -232,8 +222,6 @@ read_connections(const std::filesystem ::path filename)
 
   auto data = nlohmann::json::parse(stream);
   std::vector<std::tuple<std::string,
-                         std::string,
-                         std::string,
                          std::string,
                          std::shared_ptr<TransportEdge>>>
     edges;
@@ -278,7 +266,7 @@ read_connections(const std::filesystem ::path filename)
             << fmt::format(
                  "Invalid connection added {}.{} Arr: {} Dep: {} Off: {}",
                  uuid,
-                 i * stops.size() + j - 1,
+                 i * (stops.size() - 1) + j - i - 1,
                  debug_arrival.count(),
                  debug_departure.count(),
                  debug_offset.count())
@@ -289,7 +277,7 @@ read_connections(const std::filesystem ::path filename)
         }
 
         TransportEdge edge{
-          fmt::format("{}.{}", uuid, i),
+          fmt::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
           name,
           t_departure,
           t_duration,
@@ -299,17 +287,11 @@ read_connections(const std::filesystem ::path filename)
         };
         std::string source_center_code =
           source["center_code"].template get<std::string>();
-        std::string source_center_name =
-          source["center_name"].template get<std::string>();
         std::string target_center_code =
           target["center_code"].template get<std::string>();
-        std::string target_center_name =
-          target["center_name"].template get<std::string>();
 
         edges.push_back(std::make_tuple(source_center_code,
-                                        source_center_name,
                                         target_center_code,
-                                        target_center_name,
                                         std::make_shared<TransportEdge>(edge)));
       }
     }
@@ -327,11 +309,11 @@ main(int argc, char* argv[])
   };
 
   std::filesystem::path edges_filepath{
-    "/home/amitprakash/moirai/fixtures/routes.pretty.json"
+    "/home/amitprakash/moirai/fixtures/routes.utcized.json"
   };
 
   std::filesystem::path tests_filepath{
-    "/home/amitprakash/moirai/fixtures/tests.pretty.json"
+    "/home/amitprakash/moirai/fixtures/tests.staging.json"
   };
 
   std::filesystem::path outcomes_filepath{
@@ -360,10 +342,8 @@ main(int argc, char* argv[])
 
   for (const auto& edge : read_connections(edges_filepath)) {
     std::string source = std::get<0>(edge);
-    std::string source_name = std::get<1>(edge);
-    std::string target = std::get<2>(edge);
-    std::string target_name = std::get<3>(edge);
-    std::shared_ptr<TransportEdge> e = std::get<4>(edge);
+    std::string target = std::get<1>(edge);
+    std::shared_ptr<TransportEdge> e = std::get<2>(edge);
 
     auto src = solver.add_node(source);
     auto tar = solver.add_node(target);
@@ -371,7 +351,7 @@ main(int argc, char* argv[])
     TransportCenter s, t;
 
     if (!src.second) {
-      s = TransportCenter{ source, source_name };
+      s = TransportCenter{ source };
       s.set_latency<MovementType::CARTING, ProcessType::INBOUND>(DURATION(0));
       s.set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(DURATION(0));
       s.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(DURATION(0));
@@ -380,7 +360,7 @@ main(int argc, char* argv[])
     }
 
     if (!tar.second) {
-      t = TransportCenter{ target, target_name };
+      t = TransportCenter{ target };
       t.set_latency<MovementType::CARTING, ProcessType::INBOUND>(DURATION(0));
       t.set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(DURATION(0));
       t.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(DURATION(0));

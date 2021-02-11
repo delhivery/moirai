@@ -25,7 +25,6 @@ Solver::add_node(std::shared_ptr<TransportCenter> center)
   if (created.second)
     return created;
   Node<Graph> node = boost::add_vertex(center, graph);
-  vertex_by_name[center->name] = node;
   vertex_by_name[center->code] = node;
   return { node, true };
 }
@@ -51,6 +50,7 @@ Solver::add_edge(const Node<Graph>& source,
 {
   if (edge_by_name.contains(route->code))
     return { edge_by_name.at(route->code), true };
+  route->update(graph[source], graph[target]);
   return boost::add_edge(source, target, route, graph);
 }
 
