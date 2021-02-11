@@ -59,21 +59,22 @@ SolverWrapper::init_timings(
   facility_timings_stream.open(facility_timings_filename);
 
   assert(facility_timings_stream.is_open());
-  assert(facility_timings_stream.fail());
+  assert(!facility_timings_stream.fail());
 
   auto facility_timings_json = nlohmann::json::parse(facility_timings_stream);
 
-  std::for_each(facility_timings_json.begin(),
-                facility_timings_json.end(),
-                [this](auto const& facility_timing_entry) {
-                  facility_timings_map[facility_timing_entry["code"]
-                                         .template get<std::string>()] =
-                    std::make_tuple(
-                      facility_timing_entry["ci"].template get<int16_t>(),
-                      facility_timing_entry["co"].template get<int16_t>(),
-                      facility_timing_entry["li"].template get<int16_t>(),
-                      facility_timing_entry["lo"].template get<int16_t>());
-                });
+  std::for_each(
+    facility_timings_json.begin(),
+    facility_timings_json.end(),
+    [this](auto const& facility_timing_entry) {
+      facility_timings_map[facility_timing_entry["code"]
+                             .template get<std::string>()] =
+        std::make_tuple(
+          std::stoi(facility_timing_entry["ci"].template get<std::string>()),
+          std::stoi(facility_timing_entry["co"].template get<std::string>()),
+          std::stoi(facility_timing_entry["li"].template get<std::string>()),
+          std::stoi(facility_timing_entry["lo"].template get<std::string>()));
+    });
 }
 
 void
