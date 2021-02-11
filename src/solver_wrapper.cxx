@@ -164,6 +164,7 @@ SolverWrapper::init_edges()
     auto data = response_json["data"];
 
     app.logger().information(std::format("Got {} edges", data.size()));
+
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
       std::string uuid =
         route["route_schedule_uuid"].template get<std::string>();
@@ -171,8 +172,10 @@ SolverWrapper::init_edges()
       std::string route_type = route["route_type"].template get<std::string>();
       std::string reporting_time =
         route["reporting_time"].template get<std::string>();
-      TIME_OF_DAY offset = std::chrono::duration_cast<TIME_OF_DAY>(
-        time_string_to_time(reporting_time));
+      TIME_OF_DAY offset{ datemod(std::chrono::duration_cast<TIME_OF_DAY>(
+                                    time_string_to_time(reporting_time)) -
+                                    DURATION{ 330 },
+                                  std::chrono::days{ 1 }) };
       auto stops = route["halt_centers"];
 
       if (!stops.is_array()) {
