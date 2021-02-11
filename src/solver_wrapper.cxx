@@ -101,7 +101,9 @@ SolverWrapper::init_nodes(int16_t page)
   std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
     std::string facility_code =
       facility["facility_code"].template get<std::string>();
-    std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings;
+    std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
+      0, 0, 0, 0
+    };
     if (facility_timings_map.contains(facility_code)) {
       facility_timings = facility_timings_map[facility_code];
     }
@@ -228,8 +230,6 @@ SolverWrapper::find_paths(
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
   CLOCK bag_pdd = CLOCK::max();
   CLOCK bag_earliest_pdd = CLOCK::max();
-  to_lower(bag_source);
-  to_lower(bag_target);
   const auto [source, has_source] = solver.add_node(bag_source);
   const auto [target, has_target] = solver.add_node(bag_target);
 
@@ -248,7 +248,6 @@ SolverWrapper::find_paths(
 
     for (auto const& package : packages) {
       std::string package_target_string = std::get<0>(package);
-      to_lower(package_target_string);
       const auto [package_target, has_package_target] =
         solver.add_node(package_target_string);
 

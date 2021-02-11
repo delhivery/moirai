@@ -46,16 +46,6 @@ TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
   TIME_OF_DAY actual_departure{ datemod(departure - offset_source,
                                         std::chrono::days{ 1 }) };
-  /*
-  std::cout << fmt::format("Actual departure for edge {}: {}, {}. Departure: "
-                           "{} Offset source: {}",
-                           code,
-                           actual_departure.count(),
-                           (offset_source + duration).count(),
-                           departure.count(),
-                           offset_source.count())
-            << std::endl;
-  */
   return { actual_departure, offset_source + duration + offset_target };
 }
 
