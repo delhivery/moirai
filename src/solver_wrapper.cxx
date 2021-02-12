@@ -442,6 +442,8 @@ SolverWrapper::run()
         [&app, this](const std::string& payload) {
           try {
             nlohmann::json data = nlohmann::json::parse(payload);
+            app.logger().information(
+              std::format("Recieved data: {}", data.dump()));
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {

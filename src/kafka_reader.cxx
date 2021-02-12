@@ -130,14 +130,14 @@ KafkaReader::run()
     Poco::Thread::sleep(200);
     auto messages = consume_batch(consumer, batch_size, timeout);
     if (messages.size() > 0)
-      app.logger().information(
+      app.logger().debug(
         std::format("Accumulated {} messages", messages.size()));
 
     for (auto& message : messages) {
-      app.logger().information(std::format("Message in {} [{}] at offset {}",
-                                           message->topic_name(),
-                                           message->partition(),
-                                           message->offset()));
+      app.logger().debug(std::format("Message in {} [{}] at offset {}",
+                                     message->topic_name(),
+                                     message->partition(),
+                                     message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
       std::string topic_name = topic_map.right.at(message->topic_name());
       if (topic_name == "load") {
