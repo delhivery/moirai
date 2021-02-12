@@ -40,7 +40,7 @@ SearchWriter::run()
     std::string results[500];
     if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
         num_records > 0) {
-      nlohmann::json dataset = {};
+      std::vector<nlohmann::json> dataset = {};
       std::for_each(
         results,
         results + num_records,
@@ -61,7 +61,14 @@ SearchWriter::run()
         request.setCredentials("Basic",
                                getEncodedCredentials(username, password));
         request.setContentType("application/json");
-        std::string stringified = dataset.dump();
+        std::string stringified = std::accumulate(
+          dataset.begin(),
+          dataset.end(),
+          std::string{},
+          [](const std::string& acc, const nlohmann::json& row) {
+            return acc.empty() ? row.dump()
+                               : std::format("{}/n{}", acc, row.dump());
+          });
         request.setContentLength((int)stringified.length());
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
