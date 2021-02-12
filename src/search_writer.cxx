@@ -37,23 +37,31 @@ SearchWriter::run()
 
   while (true) {
     Poco::Thread::sleep(200);
-    std::string results;
-    if (solution_queue->try_dequeue(results)) {
-      nlohmann::json data = nlohmann::json::parse(results);
+    std::string results[500];
+    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
+        num_records > 0) {
+      nlohmann::json dataset = {};
+      std::for_each(
+        results,
+        results + num_records,
+        [this, &dataset](const std::string& result) {
+          auto package = nlohmann::json::parse(result);
+          dataset.push_back(nlohmann::json{
+            { "index",
+              { { "_index", search_index },
+                { "_id", package["_id"].template get<std::string>() } } } });
+          package.erase("_id");
+          dataset.push_back(package);
+        });
 
-      app.logger().debug(
-        std::format("Sending payload for indexing {}", results));
       try {
-        Poco::Net::HTTPRequest request(
-          Poco::Net::HTTPRequest::HTTP_POST,
-          indexAndTypeToPath(
-            search_index, "doc", data["_id"].template get<std::string>()),
-          Poco::Net::HTTPMessage::HTTP_1_1);
-        data.erase("_id");
+        Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
+                                       "/_bulk",
+                                       Poco::Net::HTTPMessage::HTTP_1_1);
         request.setCredentials("Basic",
                                getEncodedCredentials(username, password));
         request.setContentType("application/json");
-        std::string stringified = data.dump();
+        std::string stringified = dataset.dump();
         request.setContentLength((int)stringified.length());
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
@@ -71,8 +79,8 @@ SearchWriter::run()
                                          response_raw.str()));
           app.logger().error(std::format("Raw data: {}", stringified));
         }
-      } catch (const std::exception& err) {
-        app.logger().error(std::format("Error pushing data: {}", err.what()));
+      } catch (const std::exception& exc) {
+        app.logger().error(std::format("Error pushing data: {}", exc.what()));
       }
     }
   }

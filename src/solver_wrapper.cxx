@@ -8,6 +8,7 @@
 #include <Poco/URI.h>
 #include <Poco/Util/ServerApplication.h>
 #include <algorithm>
+#include <execution>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -427,50 +428,56 @@ SolverWrapper::run()
 
   while (true) {
     Poco::Thread::sleep(200);
-    std::string payload;
+    std::string payloads[8];
     app.logger().debug(
       std::format("C: Queue size: {}", load_queue->size_approx()));
 
-    if (load_queue->try_dequeue(payload)) {
-      try {
-        app.logger().debug(std::format("Dequeued: {}", payload));
-        nlohmann::json data = nlohmann::json::parse(payload);
+    if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 8);
+        num_packages > 0) {
+      std::for_each(
+        std::execution::par,
+        payloads,
+        payloads + num_packages,
+        [&app, this](const std::string& payload) {
+          try {
+            nlohmann::json data = nlohmann::json::parse(payload);
+            std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
-        std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+            for (auto& waybill : data["items"]) {
+              if (!waybill["cpdd_destination"].is_null())
+                packages.emplace_back(
+                  "",
+                  iso_to_date(
+                    waybill["cpdd_destination"].template get<std::string>())
+                    .time_since_epoch()
+                    .count(),
+                  waybill["id"].template get<std::string>());
+            }
 
-        for (auto& waybill : data["items"]) {
-          if (!waybill["cpdd_destination"].is_null())
-            packages.emplace_back(
-              "",
-              iso_to_date(
-                waybill["cpdd_destination"].template get<std::string>())
-                .time_since_epoch()
-                .count(),
-              waybill["id"].template get<std::string>());
-        }
+            nlohmann::json solution =
+              find_paths(data["id"].template get<std::string>(),
+                         data["location"].template get<std::string>(),
+                         data["destination"].template get<std::string>(),
+                         iso_to_date(data["time"].template get<std::string>())
+                           .time_since_epoch()
+                           .count(),
+                         packages);
+            solution["cs_slid"] =
+              data["cs_slid"].is_null()
+                ? ""
+                : data["cs_slid"].template get<std::string>();
 
-        nlohmann::json solution =
-          find_paths(data["id"].template get<std::string>(),
-                     data["location"].template get<std::string>(),
-                     data["destination"].template get<std::string>(),
-                     iso_to_date(data["time"].template get<std::string>())
-                       .time_since_epoch()
-                       .count(),
-                     packages);
-
-        solution["cs_slid"] = data["cs_slid"].is_null()
+            solution["cs_act"] = data["cs_act"].is_null()
+                                   ? ""
+                                   : data["cs_act"].template get<std::string>();
+            solution["pid"] = data["pid"].is_null()
                                 ? ""
-                                : data["cs_slid"].template get<std::string>();
-
-        solution["cs_act"] = data["cs_act"].is_null()
-                               ? ""
-                               : data["cs_act"].template get<std::string>();
-        solution["pid"] =
-          data["pid"].is_null() ? "" : data["pid"].template get<std::string>();
-        solution_queue->enqueue(solution.dump());
-      } catch (const std::exception& exc) {
-        app.logger().error(std::format("Solver Error: {}", exc.what()));
-      }
+                                : data["pid"].template get<std::string>();
+            solution_queue->enqueue(solution.dump());
+          } catch (const std::exception& exc) {
+            app.logger().error(std::format("Solver Error: {}", exc.what()));
+          }
+        });
     }
   }
 }
