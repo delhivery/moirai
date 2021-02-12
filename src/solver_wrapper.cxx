@@ -445,9 +445,10 @@ SolverWrapper::run()
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
-              if (!waybill["cpdd_destination"].is_null())
+              if (!waybill["cpdd_destination"].is_null() and
+                  !waybill["cn"].is_null())
                 packages.emplace_back(
-                  "",
+                  waybill["cn"].template get<std::string>(),
                   iso_to_date(
                     waybill["cpdd_destination"].template get<std::string>())
                     .time_since_epoch()
