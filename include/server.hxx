@@ -38,6 +38,7 @@ private:
 
 protected:
   void initialize(Poco::Util::Application&);
+
   void uninitialize();
 
   void reinitialize();

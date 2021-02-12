@@ -159,7 +159,7 @@ public:
 
     auto w_map = boost::make_transform_value_property_map(
       [](std::shared_ptr<TransportEdge> edge) {
-        return edge->weight<PathTraversalMode::FORWARD>();
+        return edge->weight<PathTraversalMode::REVERSE>();
       },
       get(boost::edge_bundle, filtered_graph));
 
