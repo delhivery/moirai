@@ -170,7 +170,8 @@ SolverWrapper::init_edges()
       std::string uuid =
         route["route_schedule_uuid"].template get<std::string>();
       std::string name = route["name"].template get<std::string>();
-      std::string route_type = route["route_type"].template get<std::string>();
+      std::string route_type =
+        to_lower(route["route_type"].template get<std::string>());
       std::string reporting_time =
         route["reporting_time"].template get<std::string>();
       TIME_OF_DAY offset{ datemod(std::chrono::duration_cast<TIME_OF_DAY>(
