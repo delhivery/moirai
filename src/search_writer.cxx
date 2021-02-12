@@ -69,6 +69,7 @@ SearchWriter::run()
             return acc.empty() ? row.dump()
                                : std::format("{}/n{}", acc, row.dump());
           });
+        stringified += "\n";
         request.setContentLength((int)stringified.length());
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;

@@ -254,7 +254,7 @@ SolverWrapper::find_paths(
   std::string bag_source,
   std::string bag_target,
   int32_t bag_start,
-  std::vector<std::tuple<std::string, int32_t, std::string>>& packages)
+  std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
