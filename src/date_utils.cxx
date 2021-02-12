@@ -34,17 +34,6 @@ CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(CLOCK start,
                              std::chrono::floor<std::chrono::days>(start) };
   DURATION wait_time{ datemod(cost.first - minutes_start,
                               std::chrono::days{ 1 }) };
-  /*
-  std::cout << std::format(
-                 "Departing using edge starting {} arrives at target on {}. "
-                 "Cost: {}, {}",
-                 start.time_since_epoch().count() * 60,
-                 (start + wait_time + cost.second).time_since_epoch().count() *
-                   60,
-                 cost.first.count(),
-                 cost.second.count())
-            << std::endl;
-  */
   return start + wait_time + cost.second;
 }
 
@@ -80,15 +69,36 @@ now_as_int64()
 std::chrono::minutes
 time_string_to_time(const std::string& time_string)
 {
+  std::regex split_day_regex("day");
+  const std::vector<std::string> day_parts(
+    std::sregex_token_iterator(
+      time_string.begin(), time_string.end(), split_day_regex, -1),
+    std::sregex_token_iterator());
+
+  uint16_t time_days = 0;
+
+  if (day_parts.size() > 1)
+    time_days = std::atoi(day_parts[0].c_str()) * 24 * 60;
+
+  std::regex split_nonday_regex(",");
+  std::string nonday_time{ time_string };
+  const std::vector<std::string> time_parts(
+    std::sregex_token_iterator(
+      time_string.begin(), time_string.end(), split_nonday_regex, -1),
+    std::sregex_token_iterator());
+
+  if (time_parts.size() > 1)
+    nonday_time = time_parts[1];
+
   std::regex split_time_regex(":");
   const std::vector<std::string> parts(
     std::sregex_token_iterator(
-      time_string.begin(), time_string.end(), split_time_regex, -1),
+      nonday_time.begin(), nonday_time.end(), split_time_regex, -1),
     std::sregex_token_iterator());
   std::uint16_t time =
     std::atoi(parts[0].c_str()) * 60 + std::atoi(parts[1].c_str());
 
-  return std::chrono::minutes(time);
+  return std::chrono::minutes(time + time_days);
 }
 
 CLOCK
