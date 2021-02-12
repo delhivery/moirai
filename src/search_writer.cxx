@@ -67,9 +67,9 @@ SearchWriter::run()
           std::string{},
           [](const std::string& acc, const nlohmann::json& row) {
             return acc.empty() ? row.dump()
-                               : std::format("{}/n{}", acc, row.dump());
+                               : std::format("{}\n{}", acc, row.dump());
           });
-        stringified += "\n";
+        // stringified += "\n";
         request.setContentLength((int)stringified.length());
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
