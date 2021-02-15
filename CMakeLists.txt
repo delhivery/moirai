@@ -35,7 +35,6 @@ add_executable(
   src/solver.cxx
   src/utils.cxx
   src/kafka_reader.cxx
-  src/file_reader.cxx
   src/search_writer.cxx
   src/solver_wrapper.cxx
   src/server.cxx

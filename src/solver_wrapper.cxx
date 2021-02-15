@@ -355,8 +355,6 @@ SolverWrapper::find_paths(
       }
     }
   } else {
-    app.logger().error(moirai::format(
-      "{}: No legitimate path from {} to {}", bag, bag_source, bag_target));
     return nlohmann::json({});
   }
 
@@ -491,7 +489,7 @@ SolverWrapper::run()
           payloads + num_packages,
           [&app, this](const std::string& payload) {
             nlohmann::json data = nlohmann::json::parse(payload);
-            app.logger().information(
+            app.logger().debug(
               moirai::format("Recieved data: {}", data.dump()));
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
@@ -515,6 +513,12 @@ SolverWrapper::run()
                            .time_since_epoch()
                            .count(),
                          packages);
+
+            if (solution.empty()) {
+              app.logger().information(
+                moirai::format("No legitimate paths for payload: {}", payload));
+              return;
+            }
             solution["cs_slid"] =
               data["cs_slid"].is_null()
                 ? ""
