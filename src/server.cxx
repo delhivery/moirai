@@ -1,6 +1,7 @@
 #include "server.hxx"
 #include "concurrentqueue.h"
 #include "date_utils.hxx"
+#include "format.hxx"
 #include "graph_helpers.hxx"
 #include "kafka_reader.hxx"
 #include "search_writer.hxx"
@@ -8,15 +9,6 @@
 #include "transportation.hxx"
 #include <Poco/Util/HelpFormatter.h>
 #include <numeric>
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
 
 void
 Moirai::display_help()

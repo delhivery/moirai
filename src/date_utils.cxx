@@ -7,15 +7,6 @@
 #include <regex>
 #include <vector>
 
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-}
-#endif
-
 std::uint16_t
 datemod(DURATION lhs, DURATION rhs)
 {
@@ -30,6 +21,8 @@ CLOCK
 CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(CLOCK start,
                                                                 COST cost) const
 {
+  if (cost.first == TIME_OF_DAY::min() and cost.second == DURATION::max())
+    return start;
   TIME_OF_DAY minutes_start{ start -
                              std::chrono::floor<std::chrono::days>(start) };
   DURATION wait_time{ datemod(cost.first - minutes_start,
@@ -42,7 +35,8 @@ CLOCK
 CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
                                                                 COST cost) const
 {
-
+  if (cost.first == TIME_OF_DAY::min() and cost.second == DURATION::max())
+    return start;
   TIME_OF_DAY minutes_start{ start -
                              std::chrono::floor<std::chrono::days>(start) };
   DURATION wait_time{ datemod(minutes_start - cost.first,

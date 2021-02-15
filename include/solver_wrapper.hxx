@@ -27,6 +27,8 @@ private:
                      std::tuple<int16_t, int16_t, int16_t, int16_t>>
     facility_timings_map;
 
+  std::unordered_map<std::string, std::vector<std::string>> facility_groups;
+
   moodycamel::ConcurrentQueue<std::string>* node_queue;
   moodycamel::ConcurrentQueue<std::string>* edge_queue;
   moodycamel::ConcurrentQueue<std::string>* load_queue;
@@ -47,16 +49,19 @@ public:
 
   void init_nodes(int16_t = 1);
 
+  void init_custody();
+
   void init_edges();
 
   std::vector<std::shared_ptr<TransportCenter>> read_vertices(
     const std::filesystem::path&);
 
-  auto find_paths(std::string bag,
-                  std::string bag_source,
-                  std::string bag_target,
-                  int32_t bag_start,
-                  std::vector<std::tuple<std::string, int32_t, std::string>>&) const;
+  auto find_paths(
+    std::string bag,
+    std::string bag_source,
+    std::string bag_target,
+    int32_t bag_start,
+    std::vector<std::tuple<std::string, int32_t, std::string>>&) const;
 
   virtual void run();
 };

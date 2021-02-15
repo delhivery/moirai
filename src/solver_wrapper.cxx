@@ -1,5 +1,6 @@
 #include "solver_wrapper.hxx"
 #include "date_utils.hxx"
+#include "format.hxx"
 #include "transportation.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
@@ -8,24 +9,17 @@
 #include <Poco/URI.h>
 #include <Poco/Util/ServerApplication.h>
 #include <algorithm>
+#include <cstddef>
 #include <execution>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
 
 SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* node_queue,
@@ -66,6 +60,9 @@ SolverWrapper::init_timings(
 
   auto facility_timings_json = nlohmann::json::parse(facility_timings_stream);
 
+  std::ranges::for_each(facility_timings_json,
+                        [this](auto const& facility_timing_entry) {});
+
   std::for_each(
     facility_timings_json.begin(),
     facility_timings_json.end(),
@@ -104,31 +101,46 @@ SolverWrapper::init_nodes(int16_t page)
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["result"]["data"];
 
-    std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
-      std::string facility_code =
-        facility["facility_code"].template get<std::string>();
-      std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
-        0, 0, 0, 0
-      };
-      if (facility_timings_map.contains(facility_code)) {
-        facility_timings = facility_timings_map[facility_code];
-      }
+    std::for_each(
+      std::execution::seq,
+      data.begin(),
+      data.end(),
+      [&app, this](auto const& facility) {
+        std::string facility_code =
+          facility["facility_code"].template get<std::string>();
+        std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
+          0, 0, 0, 0
+        };
+        if (facility_timings_map.contains(facility_code)) {
+          facility_timings = facility_timings_map[facility_code];
+        }
 
-      auto transport_center = std::make_shared<TransportCenter>(facility_code);
-      transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
-          DURATION(std::get<0>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
-          DURATION(std::get<1>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
-          DURATION(std::get<2>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-          DURATION(std::get<3>(facility_timings)));
-      solver.add_node(transport_center);
-    });
+        auto transport_center =
+          std::make_shared<TransportCenter>(facility_code);
+        transport_center
+          ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+            DURATION(std::get<0>(facility_timings)));
+        transport_center
+          ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+            DURATION(std::get<1>(facility_timings)));
+        transport_center
+          ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+            DURATION(std::get<2>(facility_timings)));
+        transport_center
+          ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+            DURATION(std::get<3>(facility_timings)));
+        solver.add_node(transport_center);
+
+        std::string group_id = facility["group_id"].template get<std::string>();
+
+        if (!group_id.empty()) {
+          if (!facility_groups.contains(group_id)) {
+            facility_groups[group_id] = std::vector<std::string>{};
+          }
+
+          facility_groups[group_id].push_back(facility_code);
+        }
+      });
 
     auto pages =
       response_json["result"]["total_page_count"].template get<int16_t>();
@@ -140,6 +152,39 @@ SolverWrapper::init_nodes(int16_t page)
     app.logger().error(std::format("Unable to fetch facility data: <{}>: {}",
                                    response.getStatus(),
                                    response_raw.str()));
+  }
+}
+
+void
+SolverWrapper::init_custody()
+{
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+
+  for (auto const& [key, value] : facility_groups) {
+    for (size_t i = 0; i < value.size(); ++i) {
+      for (size_t j = 0; j < value.size(); ++j) {
+        if (i != j) {
+          auto [vertex_primary, has_vertex_primary] = solver.add_node(value[i]);
+          auto [vertex_secondary, has_vertex_seconday] =
+            solver.add_node(value[j]);
+
+          if (has_vertex_primary and has_vertex_seconday) {
+            std::string name = std::format("CUSTODY-{}-{}", value[i], value[j]);
+            solver.add_edge(vertex_primary,
+                            vertex_secondary,
+                            std::make_shared<TransportEdge>(name, name));
+            app.logger().debug(std::format("Added custody edge: {}", name));
+          } else {
+            app.logger().error(
+              std::format("Colocated facilities {}:{} or {}:{} missing",
+                          value[i],
+                          has_vertex_primary,
+                          value[j],
+                          has_vertex_seconday));
+          }
+        }
+      }
+    }
   }
 }
 

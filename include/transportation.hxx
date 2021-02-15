@@ -4,9 +4,9 @@
 #include "date_utils.hxx" // for DURATION, COST, TIME_OF_DAY
 #include <cstdint>        // for uint8_t
 #include <map>            // for map, map<>::mapped_type
+#include <memory>         // for shared_ptr
 #include <string>         // for string
 #include <utility>        // for pair, make_pair
-#include <memory>         // for shared_ptr
 
 enum VehicleType : std::uint8_t
 {
@@ -73,7 +73,13 @@ struct TransportEdge
   VehicleType vehicle;
   MovementType movement;
 
-  TransportEdge() = default;
+  bool transient;
+
+  TransportEdge()
+    : transient(false)
+  {}
+
+  TransportEdge(std::string, std::string);
 
   TransportEdge(std::string,
                 std::string,

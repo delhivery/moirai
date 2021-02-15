@@ -1,4 +1,5 @@
 #include "search_writer.hxx"
+#include "format.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
@@ -6,15 +7,6 @@
 #include <Poco/Thread.h>
 #include <Poco/Util/ServerApplication.h>
 #include <nlohmann/json.hpp>
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
 
 SearchWriter::SearchWriter(
   const Poco::URI& uri,

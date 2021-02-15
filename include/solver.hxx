@@ -1,4 +1,5 @@
-#include "date_utils.hxx"                                      // for CLOCK
+#include "date_utils.hxx" // for CLOCK
+#include "format.hxx"
 #include "transportation.hxx"                                  // for Trans...
 #include <boost/graph/adjacency_list.hpp>                      // for source
 #include <boost/graph/dijkstra_shortest_paths.hpp>             // for dijks...
@@ -14,7 +15,6 @@
 #include <chrono>                                              // for opera...
 #include <compare>                                             // for opera...
 #include <date/date.h>                                         // for date...
-#include <fmt/core.h>                                          // for format...
 #include <iostream>                                            // for cout
 #include <map>                                                 // for map
 #include <sstream>                                             // for strings...
@@ -65,6 +65,8 @@ public:
 
   std::string show() const;
 
+  std::string show_all() const;
+
   template<typename FilteredGraph>
   Path path_forward(const Node<FilteredGraph>& source,
                     const Node<FilteredGraph>& target,
@@ -103,7 +105,7 @@ public:
             calculator.template operator()<PathTraversalMode::FORWARD>(initial,
                                                                        cost);
           if (computed < initial) {
-            std::cout << fmt::format(
+            std::cout << std::format(
                            "Found a lower cost {} from initial {}. Cost: {},{}",
                            date::format("%D %T", computed),
                            date::format("%D %T", initial),

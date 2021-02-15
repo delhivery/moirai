@@ -1,14 +1,6 @@
 #include "utils.hxx"
+#include "format.hxx"
 #include <Poco/Base64Encoder.h>
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
 
 std::string
 indexAndTypeToPath(const std::string& search_index, const std::string& doc_type)

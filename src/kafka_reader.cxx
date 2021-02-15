@@ -1,15 +1,7 @@
 #include "kafka_reader.hxx"
 #include "date_utils.hxx"
+#include "format.hxx"
 #include <Poco/Util/ServerApplication.h>
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
 
 const std::string KafkaReader::consumer_group = "MOIRAI";
 

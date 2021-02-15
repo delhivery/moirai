@@ -1,5 +1,6 @@
 #include "solver.hxx"
-#include "date_utils.hxx"                        // for CLOCK
+#include "date_utils.hxx" // for CLOCK
+#include "format.hxx"
 #include "graph_helpers.hxx"                     // for FilterByVehicleType
 #include "transportation.hxx"                    // for VehicleType, AIR
 #include <boost/graph/detail/adjacency_list.hpp> // for get, num_vertices
@@ -7,16 +8,8 @@
 #include <boost/graph/filtered_graph.hpp>        // for filtered_graph
 #include <boost/graph/reverse_graph.hpp>         // for get, make_reverse_g...
 #include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
-#include <string>                                // for string
-
-#ifdef __cpp_lib_format
-#include <format>
-#else
-#include <fmt/core.h>
-namespace std {
-using fmt::format;
-};
-#endif
+#include <numeric>
+#include <string> // for string
 
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::string node_code_or_name) const
@@ -128,4 +121,30 @@ Solver::show() const
 {
   return std::format(
     "Graph<{}, {}>", boost::num_vertices(graph), boost::num_edges(graph));
+}
+
+std::string
+Solver::show_all() const
+{
+  std::vector<std::string> output;
+
+  for (auto vertex : boost::make_iterator_range(boost::vertices(graph))) {
+    auto node = graph[vertex];
+    output.push_back(node->code);
+  }
+
+  for (auto edge : boost::make_iterator_range(boost::edges(graph))) {
+    auto route = graph[edge];
+    auto source = boost::source(edge, graph);
+    auto target = boost::target(edge, graph);
+    output.push_back(std::format(
+      "{}: {} TO {}", route->code, graph[source]->code, graph[target]->code));
+  }
+
+  return std::accumulate(output.begin(),
+                         output.end(),
+                         std::string{},
+                         [](const std::string& acc, const std::string& arg) {
+                           return std::format("{}\n{}", acc, arg);
+                         });
 }

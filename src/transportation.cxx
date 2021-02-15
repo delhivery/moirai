@@ -1,4 +1,5 @@
 #include "transportation.hxx"
+#include <cassert>
 #include <chrono> // for operator+, __duration_common_type<>::type, days
 #include <fmt/core.h>
 #include <iostream>
@@ -6,6 +7,16 @@
 
 TransportCenter::TransportCenter(std::string code)
   : code(code)
+{}
+
+TransportEdge::TransportEdge(std::string code, std::string name)
+  : code(code)
+  , name(name)
+  , transient(true)
+  , vehicle(VehicleType::SURFACE)
+  , movement(MovementType::CARTING)
+  , offset_source(0)
+  , offset_target(0)
 {}
 
 TransportEdge::TransportEdge(std::string code,
@@ -20,6 +31,7 @@ TransportEdge::TransportEdge(std::string code,
   , duration(duration)
   , vehicle(vehicle)
   , movement(movement)
+  , transient(false)
 {}
 
 void
@@ -44,6 +56,8 @@ template<>
 COST
 TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
+  if (transient)
+    return { TIME_OF_DAY::min(), DURATION::max() };
   TIME_OF_DAY actual_departure{ datemod(departure - offset_source,
                                         std::chrono::days{ 1 }) };
   return { actual_departure, offset_source + duration + offset_target };
