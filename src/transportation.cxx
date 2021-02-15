@@ -57,7 +57,7 @@ COST
 TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
   if (transient)
-    return { TIME_OF_DAY::min(), DURATION::max() };
+    return { TIME_OF_DAY::max(), DURATION::max() };
   TIME_OF_DAY actual_departure{ datemod(departure - offset_source,
                                         std::chrono::days{ 1 }) };
   return { actual_departure, offset_source + duration + offset_target };
@@ -67,6 +67,8 @@ template<>
 COST
 TransportEdge::weight<PathTraversalMode::REVERSE>() const
 {
+  if (transient)
+    return { TIME_OF_DAY::max(), DURATION::max() };
   TIME_OF_DAY actual_departure{ datemod(departure + duration + offset_target,
                                         std::chrono::days{ 1 }) };
   return { actual_departure, duration + offset_source + offset_target };

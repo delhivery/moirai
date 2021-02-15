@@ -21,7 +21,7 @@ CLOCK
 CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(CLOCK start,
                                                                 COST cost) const
 {
-  if (cost.first == TIME_OF_DAY::min() and cost.second == DURATION::max())
+  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
     return start;
   TIME_OF_DAY minutes_start{ start -
                              std::chrono::floor<std::chrono::days>(start) };
@@ -35,7 +35,7 @@ CLOCK
 CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
                                                                 COST cost) const
 {
-  if (cost.first == TIME_OF_DAY::min() and cost.second == DURATION::max())
+  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
     return start;
   TIME_OF_DAY minutes_start{ start -
                              std::chrono::floor<std::chrono::days>(start) };

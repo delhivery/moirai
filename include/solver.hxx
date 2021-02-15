@@ -105,7 +105,7 @@ public:
             calculator.template operator()<PathTraversalMode::FORWARD>(initial,
                                                                        cost);
           if (computed < initial) {
-            std::cout << std::format(
+            std::cout << moirai::format(
                            "Found a lower cost {} from initial {}. Cost: {},{}",
                            date::format("%D %T", computed),
                            date::format("%D %T", initial),

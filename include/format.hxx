@@ -5,7 +5,7 @@
 #include <format>
 #else
 #include <fmt/core.h>
-namespace std {
+namespace moirai {
 using fmt::format;
 };
 #endif

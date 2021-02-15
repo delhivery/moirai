@@ -5,7 +5,7 @@
 std::string
 indexAndTypeToPath(const std::string& search_index, const std::string& doc_type)
 {
-  return std::format("/{}/{}/", search_index, doc_type);
+  return moirai::format("/{}/{}/", search_index, doc_type);
 }
 
 std::string
@@ -13,7 +13,7 @@ indexAndTypeToPath(const std::string& search_index,
                    const std::string& doc_type,
                    const std::string& doc_id)
 {
-  return std::format("/{}/{}/{}/", search_index, doc_type, doc_id);
+  return moirai::format("/{}/{}/{}/", search_index, doc_type, doc_id);
 }
 
 std::string

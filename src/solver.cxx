@@ -119,7 +119,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
 std::string
 Solver::show() const
 {
-  return std::format(
+  return moirai::format(
     "Graph<{}, {}>", boost::num_vertices(graph), boost::num_edges(graph));
 }
 
@@ -137,7 +137,7 @@ Solver::show_all() const
     auto route = graph[edge];
     auto source = boost::source(edge, graph);
     auto target = boost::target(edge, graph);
-    output.push_back(std::format(
+    output.push_back(moirai::format(
       "{}: {} TO {}", route->code, graph[source]->code, graph[target]->code));
   }
 
@@ -145,6 +145,6 @@ Solver::show_all() const
                          output.end(),
                          std::string{},
                          [](const std::string& acc, const std::string& arg) {
-                           return std::format("{}\n{}", acc, arg);
+                           return moirai::format("{}\n{}", acc, arg);
                          });
 }

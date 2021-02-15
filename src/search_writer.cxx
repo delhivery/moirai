@@ -28,25 +28,26 @@ SearchWriter::run()
   Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
 
   while (true) {
+    // app.logger().information("SearchWriter polling....");
     Poco::Thread::sleep(200);
     std::string results[500];
-    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
-        num_records > 0) {
-      std::vector<nlohmann::json> dataset = {};
-      std::for_each(
-        results,
-        results + num_records,
-        [this, &dataset](const std::string& result) {
-          auto package = nlohmann::json::parse(result);
-          dataset.push_back(nlohmann::json{
-            { "index",
-              { { "_index", search_index },
-                { "_id", package["_id"].template get<std::string>() } } } });
-          package.erase("_id");
-          dataset.push_back(package);
-        });
+    try {
+      if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
+          num_records > 0) {
+        std::vector<nlohmann::json> dataset = {};
+        std::for_each(
+          results,
+          results + num_records,
+          [this, &dataset](const std::string& result) {
+            auto package = nlohmann::json::parse(result);
+            dataset.push_back(nlohmann::json{
+              { "index",
+                { { "_index", search_index },
+                  { "_id", package["_id"].template get<std::string>() } } } });
+            package.erase("_id");
+            dataset.push_back(package);
+          });
 
-      try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        "/_bulk",
                                        Poco::Net::HTTPMessage::HTTP_1_1);
@@ -59,7 +60,7 @@ SearchWriter::run()
           std::string{},
           [](const std::string& acc, const nlohmann::json& row) {
             return acc.empty() ? row.dump()
-                               : std::format("{}\n{}", acc, row.dump());
+                               : moirai::format("{}\n{}", acc, row.dump());
           });
         stringified += "\n";
         request.setContentLength((int)stringified.length());
@@ -71,17 +72,17 @@ SearchWriter::run()
 
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK or
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
-          app.logger().debug(std::format(
+          app.logger().debug(moirai::format(
             "Got successful response from ES Host: {}", response_raw.str()));
         } else {
-          app.logger().error(std::format("Error uploading data: <{}>: {}",
-                                         response.getStatus(),
-                                         response_raw.str()));
-          app.logger().error(std::format("Raw data: {}", stringified));
+          app.logger().error(moirai::format("Error uploading data: <{}>: {}",
+                                            response.getStatus(),
+                                            response_raw.str()));
+          app.logger().error(moirai::format("Raw data: {}", stringified));
         }
-      } catch (const std::exception& exc) {
-        app.logger().error(std::format("Error pushing data: {}", exc.what()));
       }
+    } catch (const std::exception& exc) {
+      app.logger().error(moirai::format("Error pushing data: {}", exc.what()));
     }
   }
 }

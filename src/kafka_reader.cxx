@@ -30,27 +30,28 @@ KafkaReader::KafkaReader(const std::string& broker_url,
   if (config->set("enable.partition.eof", "false", error_string) !=
       RdKafka::Conf::CONF_OK) {
     app.logger().error(
-      std::format("Error enabling partition eof: {}", error_string));
+      moirai::format("Error enabling partition eof: {}", error_string));
     throw Poco::ApplicationException(error_string);
   }
 
   if (config->set("group.id", consumer_group, error_string) !=
       RdKafka::Conf ::CONF_OK) {
-    app.logger().error(std::format("Error setting group id: {}", error_string));
+    app.logger().error(
+      moirai::format("Error setting group id: {}", error_string));
     throw Poco::ApplicationException(error_string);
   }
 
   if (config->set("bootstrap.servers", broker_url, error_string) !=
       RdKafka::Conf::CONF_OK) {
     app.logger().error(
-      std::format("Error bootstrapping servers. {}", error_string));
+      moirai::format("Error bootstrapping servers. {}", error_string));
     throw Poco::ApplicationException(error_string);
   }
 
   if (consumer = RdKafka::KafkaConsumer::create(config, error_string);
       !consumer) {
     app.logger().error(
-      std::format("Error creating consumer. {}", error_string));
+      moirai::format("Error creating consumer. {}", error_string));
     throw Poco::ApplicationException(error_string);
   }
 
@@ -61,9 +62,9 @@ KafkaReader::KafkaReader(const std::string& broker_url,
   }
 
   if (RdKafka::ErrorCode error_code = consumer->subscribe(topics); error_code) {
-    app.logger().error(std::format("Error subscribing to {} topics: {}",
-                                   topics.size(),
-                                   RdKafka::err2str(error_code)));
+    app.logger().error(moirai::format("Error subscribing to {} topics: {}",
+                                      topics.size(),
+                                      RdKafka::err2str(error_code)));
     throw Poco::ApplicationException(RdKafka::err2str(error_code));
   }
   running = true;
@@ -98,7 +99,7 @@ KafkaReader::consume_batch(RdKafka::KafkaConsumer* consumer,
         break;
       default:
         app.logger().error(
-          std::format("%% Consumer error: {}", message->errstr()));
+          moirai::format("%% Consumer error: {}", message->errstr()));
         running = false;
         delete message;
         return messages;
@@ -123,13 +124,13 @@ KafkaReader::run()
     auto messages = consume_batch(consumer, batch_size, timeout);
     if (messages.size() > 0)
       app.logger().debug(
-        std::format("Accumulated {} messages", messages.size()));
+        moirai::format("Accumulated {} messages", messages.size()));
 
     for (auto& message : messages) {
-      app.logger().debug(std::format("Message in {} [{}] at offset {}",
-                                     message->topic_name(),
-                                     message->partition(),
-                                     message->offset()));
+      app.logger().debug(moirai::format("Message in {} [{}] at offset {}",
+                                        message->topic_name(),
+                                        message->partition(),
+                                        message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
       std::string topic_name = topic_map.right.at(message->topic_name());
       if (topic_name == "load") {
@@ -139,7 +140,7 @@ KafkaReader::run()
       } else if (topic_name == "node") {
         node_queue->enqueue(data);
       } else {
-        app.logger().error(std::format(
+        app.logger().error(moirai::format(
           "Unsupported topic: {}", topic_map.right.at(message->topic_name())));
       }
       delete message;

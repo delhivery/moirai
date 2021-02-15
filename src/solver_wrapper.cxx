@@ -43,8 +43,11 @@ SolverWrapper::SolverWrapper(
   Poco::Util::Application& app = Poco::Util::Application::instance();
   init_timings(center_timings_filename);
   init_nodes();
+  init_custody();
   init_edges();
-  app.logger().information(std::format("Initialized graph: {}", solver.show()));
+  app.logger().information(
+    moirai::format("Initialized graph: {}", solver.show()));
+  // app.logger().information(solver.show_all());
 }
 
 void
@@ -101,36 +104,33 @@ SolverWrapper::init_nodes(int16_t page)
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["result"]["data"];
 
-    std::for_each(
-      std::execution::seq,
-      data.begin(),
-      data.end(),
-      [&app, this](auto const& facility) {
-        std::string facility_code =
-          facility["facility_code"].template get<std::string>();
-        std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
-          0, 0, 0, 0
-        };
-        if (facility_timings_map.contains(facility_code)) {
-          facility_timings = facility_timings_map[facility_code];
-        }
+    std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
+      std::string facility_code =
+        facility["facility_code"].template get<std::string>();
+      std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
+        0, 0, 0, 0
+      };
 
-        auto transport_center =
-          std::make_shared<TransportCenter>(facility_code);
-        transport_center
-          ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
-            DURATION(std::get<0>(facility_timings)));
-        transport_center
-          ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
-            DURATION(std::get<1>(facility_timings)));
-        transport_center
-          ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
-            DURATION(std::get<2>(facility_timings)));
-        transport_center
-          ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-            DURATION(std::get<3>(facility_timings)));
-        solver.add_node(transport_center);
+      if (facility_timings_map.contains(facility_code)) {
+        facility_timings = facility_timings_map[facility_code];
+      }
 
+      auto transport_center = std::make_shared<TransportCenter>(facility_code);
+      transport_center
+        ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+          DURATION(std::get<0>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+          DURATION(std::get<1>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+          DURATION(std::get<2>(facility_timings)));
+      transport_center
+        ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+          DURATION(std::get<3>(facility_timings)));
+      solver.add_node(transport_center);
+
+      if (!facility["group_id"].is_null()) {
         std::string group_id = facility["group_id"].template get<std::string>();
 
         if (!group_id.empty()) {
@@ -140,7 +140,8 @@ SolverWrapper::init_nodes(int16_t page)
 
           facility_groups[group_id].push_back(facility_code);
         }
-      });
+      }
+    });
 
     auto pages =
       response_json["result"]["total_page_count"].template get<int16_t>();
@@ -149,9 +150,9 @@ SolverWrapper::init_nodes(int16_t page)
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(std::format("Unable to fetch facility data: <{}>: {}",
-                                   response.getStatus(),
-                                   response_raw.str()));
+    app.logger().error(moirai::format("Unable to fetch facility data: <{}>: {}",
+                                      response.getStatus(),
+                                      response_raw.str()));
   }
 }
 
@@ -169,18 +170,19 @@ SolverWrapper::init_custody()
             solver.add_node(value[j]);
 
           if (has_vertex_primary and has_vertex_seconday) {
-            std::string name = std::format("CUSTODY-{}-{}", value[i], value[j]);
+            std::string name =
+              moirai::format("CUSTODY-{}-{}", value[i], value[j]);
             solver.add_edge(vertex_primary,
                             vertex_secondary,
                             std::make_shared<TransportEdge>(name, name));
-            app.logger().debug(std::format("Added custody edge: {}", name));
+            app.logger().debug(moirai::format("Added custody edge: {}", name));
           } else {
             app.logger().error(
-              std::format("Colocated facilities {}:{} or {}:{} missing",
-                          value[i],
-                          has_vertex_primary,
-                          value[j],
-                          has_vertex_seconday));
+              moirai::format("Colocated facilities {}:{} or {}:{} missing",
+                             value[i],
+                             has_vertex_primary,
+                             value[j],
+                             has_vertex_seconday));
           }
         }
       }
@@ -209,7 +211,7 @@ SolverWrapper::init_edges()
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["data"];
 
-    app.logger().information(std::format("Got {} edges", data.size()));
+    app.logger().information(moirai::format("Got {} edges", data.size()));
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
       std::string uuid =
@@ -226,7 +228,8 @@ SolverWrapper::init_edges()
       auto stops = route["halt_centers"];
 
       if (!stops.is_array()) {
-        app.logger().error(std::format("Edge<{}> stops is not an array", uuid));
+        app.logger().error(
+          moirai::format("Edge<{}> stops is not an array", uuid));
         return;
       }
       for (int i = 0; i < stops.size(); ++i) {
@@ -247,10 +250,10 @@ SolverWrapper::init_edges()
 
           if (departure_as_time.count() < 0 or duration.count() < 0) {
             app.logger().error(
-              std::format("Edge<{}>: Departure<{}> or duration<{}> negative",
-                          uuid,
-                          departure_as_time.count(),
-                          duration.count()));
+              moirai::format("Edge<{}>: Departure<{}> or duration<{}> negative",
+                             uuid,
+                             departure_as_time.count(),
+                             duration.count()));
             return;
           }
 
@@ -264,7 +267,7 @@ SolverWrapper::init_edges()
           auto [target_vertex, has_target_vertex] =
             solver.add_node(target_center_code);
           auto edge = std::make_shared<TransportEdge>(
-            std::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
+            moirai::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
             name,
             departure_as_time,
             duration,
@@ -274,7 +277,7 @@ SolverWrapper::init_edges()
           if (has_source_vertex and has_target_vertex) {
             solver.add_edge(source_vertex, target_vertex, edge);
           } else {
-            app.logger().error(std::format(
+            app.logger().error(moirai::format(
               "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
               uuid,
               source_center_code,
@@ -288,9 +291,9 @@ SolverWrapper::init_edges()
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(std::format("Unable to fetch route data: <{}>: {}",
-                                   response.getStatus(),
-                                   response_raw.str()));
+    app.logger().error(moirai::format("Unable to fetch route data: <{}>: {}",
+                                      response.getStatus(),
+                                      response_raw.str()));
   }
 }
 
@@ -352,7 +355,7 @@ SolverWrapper::find_paths(
       }
     }
   } else {
-    app.logger().error(std::format(
+    app.logger().error(moirai::format(
       "{}: No legitimate path from {} to {}", bag, bag_source, bag_target));
     return nlohmann::json({});
   }
@@ -473,22 +476,23 @@ SolverWrapper::run()
   app.logger().debug("Processing loads");
 
   while (true) {
-    Poco::Thread::sleep(200);
-    std::string payloads[8];
-    app.logger().debug(
-      std::format("C: Queue size: {}", load_queue->size_approx()));
+    // app.logger().information("SolverWrapper polling....");
+    try {
+      Poco::Thread::sleep(200);
+      std::string payloads[8];
+      app.logger().debug(
 
-    if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 8);
-        num_packages > 0) {
-      std::for_each(
-        std::execution::par,
-        payloads,
-        payloads + num_packages,
-        [&app, this](const std::string& payload) {
-          try {
+        moirai::format("C: Queue size: {}", load_queue->size_approx()));
+      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 8);
+          num_packages > 0) {
+        std::for_each(
+          std::execution::par,
+          payloads,
+          payloads + num_packages,
+          [&app, this](const std::string& payload) {
             nlohmann::json data = nlohmann::json::parse(payload);
             app.logger().information(
-              std::format("Recieved data: {}", data.dump()));
+              moirai::format("Recieved data: {}", data.dump()));
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
@@ -523,10 +527,10 @@ SolverWrapper::run()
                                 ? ""
                                 : data["pid"].template get<std::string>();
             solution_queue->enqueue(solution.dump());
-          } catch (const std::exception& exc) {
-            app.logger().error(std::format("Solver Error: {}", exc.what()));
-          }
-        });
+          });
+      }
+    } catch (const std::exception& exc) {
+      app.logger().error(moirai::format("Exception occurred: {}", exc.what()));
     }
   }
 }

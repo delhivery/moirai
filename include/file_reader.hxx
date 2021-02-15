@@ -16,10 +16,6 @@ private:
 public:
   FileReader(const std::string&, moodycamel::ConcurrentQueue<std::string>*);
 
-  ~FileReader();
-
-  std::vector<std::string> consume_batch(size_t, int);
-
   virtual void run();
 };
 #endif
