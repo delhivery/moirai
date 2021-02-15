@@ -1,5 +1,6 @@
 #include "concurrentqueue.h"
 #include "date_utils.hxx"
+#include "file_reader.hxx"
 #include "format.hxx"
 #include "graph_helpers.hxx"
 #include "kafka_reader.hxx"
@@ -289,20 +290,7 @@ Moirai::main(const ArgVec& arg)
                           route_uri,
                           route_token,
                           facility_timings_filename);
-    KafkaReader reader(
-      std::accumulate(broker_url.begin(),
-                      broker_url.end(),
-                      std::string{},
-                      [](const std::string& acc, const std::string& arg) {
-                        return acc.empty() ? arg
-                                           : moirai::format("{},{}", acc, arg);
-                      }),
-      batch_size,
-      timeout,
-      topic_map,
-      node_queue,
-      edge_queue,
-      load_queue);
+    FileReader reader("/home/amitprakash/tests/load.json", load_queue);
     SearchWriter writer(Poco::URI(search_uri),
                         search_user,
                         search_pass,
