@@ -31,38 +31,40 @@ SearchWriter::run()
     // app.logger().information("SearchWriter polling....");
     Poco::Thread::sleep(200);
     std::string results[500];
-    try {
-      if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
-          num_records > 0) {
-        std::vector<nlohmann::json> dataset = {};
-        std::for_each(
-          results,
-          results + num_records,
-          [this, &dataset](const std::string& result) {
-            auto package = nlohmann::json::parse(result);
-            dataset.push_back(nlohmann::json{
-              { "index",
-                { { "_index", search_index },
-                  { "_id", package["_id"].template get<std::string>() } } } });
-            package.erase("_id");
-            dataset.push_back(package);
-          });
+    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
+        num_records > 0) {
+      std::vector<nlohmann::json> dataset = {};
+      std::for_each(
+        results,
+        results + num_records,
+        [this, &dataset](const std::string& result) {
+          auto package = nlohmann::json::parse(result);
+          dataset.push_back(nlohmann::json{
+            { "index",
+              { { "_index", search_index },
+                { "_id", package["_id"].template get<std::string>() } } } });
+          package.erase("_id");
+          dataset.push_back(package);
+        });
 
+      std::string stringified =
+        std::accumulate(dataset.begin(),
+                        dataset.end(),
+                        std::string{},
+                        [](const std::string& acc, const nlohmann::json& row) {
+                          return acc.empty()
+                                   ? row.dump()
+                                   : moirai::format("{}\n{}", acc, row.dump());
+                        });
+      stringified += "\n";
+      try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        "/_bulk",
                                        Poco::Net::HTTPMessage::HTTP_1_1);
         request.setCredentials("Basic",
                                getEncodedCredentials(username, password));
         request.setContentType("application/json");
-        std::string stringified = std::accumulate(
-          dataset.begin(),
-          dataset.end(),
-          std::string{},
-          [](const std::string& acc, const nlohmann::json& row) {
-            return acc.empty() ? row.dump()
-                               : moirai::format("{}\n{}", acc, row.dump());
-          });
-        stringified += "\n";
+
         request.setContentLength((int)stringified.length());
         session.sendRequest(request) << stringified;
         Poco::Net::HTTPResponse response;
@@ -80,9 +82,10 @@ SearchWriter::run()
                                             response_raw.str()));
           app.logger().error(moirai::format("Raw data: {}", stringified));
         }
+      } catch (const std::exception& exc) {
+        app.logger().error(moirai::format(
+          "Error pushing data: {}. Data: {}", exc.what(), stringified));
       }
-    } catch (const std::exception& exc) {
-      app.logger().error(moirai::format("Error pushing data: {}", exc.what()));
     }
   }
 }
