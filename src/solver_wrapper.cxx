@@ -130,7 +130,7 @@ SolverWrapper::init_nodes(int16_t page)
           DURATION(std::get<3>(facility_timings)));
       solver.add_node(transport_center);
 
-      if (!facility["group_id"].is_null()) {
+      if (!facility["property_id"].is_null()) {
         std::string property_id =
           facility["property_id"].template get<std::string>();
 
@@ -163,6 +163,12 @@ SolverWrapper::init_custody()
   Poco::Util::Application& app = Poco::Util::Application::instance();
 
   for (auto const& [key, value] : facility_groups) {
+
+    if (value.size() > 1) {
+      app.logger().information(
+        moirai::format("Expecting custody scans for property: {}", key));
+    }
+
     for (size_t i = 0; i < value.size(); ++i) {
       for (size_t j = 0; j < value.size(); ++j) {
         if (i != j) {
