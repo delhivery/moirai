@@ -34,7 +34,6 @@ FileReader::run()
 
       if (load_file_stream.peek() != std::ifstream::traits_type::eof()) {
         auto payload = nlohmann::json::parse(load_file_stream);
-        app.logger().information(moirai::format("Read data: ", payload.dump()));
 
         if (!payload.is_array()) {
           app.logger().error("Payload is not an array");
@@ -45,9 +44,6 @@ FileReader::run()
           payload.begin(), payload.end(), [this](auto const& record) {
             load_queue->enqueue(record.dump());
           });
-      } else {
-        app.logger().information(
-          moirai::format("File is empty: {}", load_file.c_str()));
       }
       load_file_stream.close();
       clear_file_stream.open(load_file, std::ios::out | std::ios::trunc);

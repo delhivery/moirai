@@ -131,14 +131,15 @@ SolverWrapper::init_nodes(int16_t page)
       solver.add_node(transport_center);
 
       if (!facility["group_id"].is_null()) {
-        std::string group_id = facility["group_id"].template get<std::string>();
+        std::string property_id =
+          facility["property_id"].template get<std::string>();
 
-        if (!group_id.empty()) {
-          if (!facility_groups.contains(group_id)) {
-            facility_groups[group_id] = std::vector<std::string>{};
+        if (!property_id.empty()) {
+          if (!facility_groups.contains(property_id)) {
+            facility_groups[property_id] = std::vector<std::string>{};
           }
 
-          facility_groups[group_id].push_back(facility_code);
+          facility_groups[property_id].push_back(facility_code);
         }
       }
     });
