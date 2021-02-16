@@ -164,11 +164,6 @@ SolverWrapper::init_custody()
 
   for (auto const& [key, value] : facility_groups) {
 
-    if (value.size() > 1) {
-      app.logger().information(
-        moirai::format("Expecting custody scans for property: {}", key));
-    }
-
     for (size_t i = 0; i < value.size(); ++i) {
       for (size_t j = 0; j < value.size(); ++j) {
         if (i != j) {
