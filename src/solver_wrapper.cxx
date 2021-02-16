@@ -512,10 +512,19 @@ SolverWrapper::run()
                   waybill["id"].template get<std::string>());
             }
 
+            std::string current_location =
+              data["location"].template get<std::string>();
+            std::string item_destination =
+              data["destination"].template get<std::string>();
+
+            if (current_location.empty() or item_destination.empty() or
+                current_location == item_destination)
+              return;
+
             nlohmann::json solution =
               find_paths(data["id"].template get<std::string>(),
-                         data["location"].template get<std::string>(),
-                         data["destination"].template get<std::string>(),
+                         current_location,
+                         item_destination,
                          iso_to_date(data["time"].template get<std::string>())
                            .time_since_epoch()
                            .count(),
