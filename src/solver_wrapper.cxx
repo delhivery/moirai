@@ -479,11 +479,11 @@ SolverWrapper::run()
     // app.logger().information("SolverWrapper polling....");
     try {
       Poco::Thread::sleep(200);
-      std::string payloads[8];
+      std::string payloads[100];
       app.logger().debug(
 
         moirai::format("C: Queue size: {}", load_queue->size_approx()));
-      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 8);
+      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 100);
           num_packages > 0) {
         std::for_each(
           std::execution::par,
