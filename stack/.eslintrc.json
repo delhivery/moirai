@@ -1,0 +1,21 @@
+{
+  "env": { "node": true },
+  "extends": [
+    "airbnb-typescript/base",
+    "prettier",
+    "prettier/@typescript-eslint"
+  ],
+  "plugins": ["@typescript-eslint"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 12,
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "root": true,
+  "rules": {
+    "quotes": "off",
+    "@typescript-eslint/quotes": ["error", "double"],
+    "no-new": "off"
+  }
+}
