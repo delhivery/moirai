@@ -1,22 +1,28 @@
 {
-  "name": "@delhivery/moirai.atropos",
+  "name": "@delhivery/utilities",
+  "description": "Common utilities for typescript/cdk applications",
   "version": "0.1.0",
-  "bin": "bin/atropos.js",
+  "license": "MIT",
+  "directories": {
+    "source": "./src",
+    "test": "./test"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rimraf dist && rimraf cdk.out",
-    "build": "tsc -p tsconfig.build.json && npx cdk synth",
+    "build": "tsc -p tsconfig.build.json",
+    "eslint": "yarn eslint src",
+    "prettier": "yarn run prettier:src",
+    "prettier:src": "yarn prettier src --loglevel=warn",
     "watch": "tsc -w -p tsconfig.build.json",
-    "synth": "npx cdk synth",
-    "cdk": "cdk",
     "clean:light": "rimraf dist tsconfig.build.tsbuildinfo",
     "clean:full": "yarn run clean:light && rimraf ./cdk.out"
   },
   "devDependencies": {
-    "@aws-cdk/assert": "1.90.1",
     "@types/node": "10.17.27",
     "@typescript-eslint/eslint-plugin": "^4.15.1",
     "@typescript-eslint/parser": "^4.15.1",
-    "aws-cdk": "1.90.1",
     "eslint": "^7.20.0",
     "eslint-config-airbnb-typescript": "^12.3.1",
     "eslint-import-resolver-node": "^0.3.4",
@@ -27,15 +33,6 @@
     "typescript": "~3.9.7"
   },
   "dependencies": {
-    "@aws-cdk/aws-codebuild": "^1.90.1",
-    "@aws-cdk/aws-codepipeline": "^1.90.1",
-    "@aws-cdk/aws-codepipeline-actions": "^1.90.1",
-    "@aws-cdk/aws-ecr": "^1.90.1",
-    "@aws-cdk/aws-s3": "^1.90.1",
-    "@aws-cdk/aws-ssm": "^1.90.1",
-    "@aws-cdk/core": "1.90.1",
-    "@aws-cdk/pipelines": "^1.90.1",
-    "@delhivery/utilities": "workspace:packages/utils",
-    "source-map-support": "^0.5.16"
+    "@aws-cdk/core": "^1.90.1"
   }
 }
