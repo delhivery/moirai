@@ -1,4 +1,4 @@
-import { Construct, Stack, StackProps } from "@aws-cdk/core";
+import { Construct } from "@aws-cdk/core";
 import { Artifact, Pipeline } from "@aws-cdk/aws-codepipeline";
 import {
   CodeBuildAction,
@@ -7,21 +7,21 @@ import {
 } from "@aws-cdk/aws-codepipeline-actions";
 import { PipelineProject } from "@aws-cdk/aws-codebuild";
 import { Bucket } from "@aws-cdk/aws-s3";
-import { StringParameter } from "@aws-cdk/aws-ssm";
+import { Application, StackProps } from "@delhivery/utilities";
 
 export interface DeploymentStackProps extends StackProps {
-  bucket: Bucket;
-  build: PipelineProject;
+  pipelineStorage: Bucket;
+  searchDockerImagePipeline: PipelineProject;
 }
 
-export default class DeploymentPipelineStack extends Stack {
+export default class BuildImagePipeline extends Application {
   constructor(scope: Construct, id: string, props: DeploymentStackProps) {
     super(scope, id, props);
 
     const s3Artifact = new Artifact("source");
 
     const s3Action = new S3SourceAction({
-      bucket: props.bucket,
+      bucket: props.pipelineStorage,
       bucketKey: "source.zip",
       actionName: "S3Source",
       runOrder: 1,
@@ -31,7 +31,7 @@ export default class DeploymentPipelineStack extends Stack {
 
     const pipeline = new Pipeline(this, "pipeline", {
       pipelineName: "pipeline",
-      artifactBucket: props.bucket,
+      artifactBucket: props.pipelineStorage,
       stages: [
         {
           stageName: "Source",
@@ -41,9 +41,9 @@ export default class DeploymentPipelineStack extends Stack {
           stageName: "Build",
           actions: [
             new CodeBuildAction({
-              actionName: "BuildDockerImage",
+              actionName: "BuildSearchDockerImage",
               input: s3Artifact,
-              project: props.build,
+              project: props.searchDockerImagePipeline,
               runOrder: 1,
             }),
           ],
@@ -51,12 +51,6 @@ export default class DeploymentPipelineStack extends Stack {
       ],
     });
 
-    props.bucket.grantReadWrite(pipeline.role);
-
-    const pipeline_params = new StringParameter(this, "pipline_params", {
-      parameterName: "pipeline",
-      stringValue: pipeline.pipelineName,
-      description: "cdk pipeline name",
-    });
+    props.pipelineStorage.grantReadWrite(pipeline.role);
   }
 }

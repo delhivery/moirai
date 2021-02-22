@@ -3,17 +3,14 @@ import {
   GitHubSourceAction,
   GitHubTrigger,
 } from "@aws-cdk/aws-codepipeline-actions";
-import { Construct, Stack } from "@aws-cdk/core";
+import { Construct as CdkConstruct } from "@aws-cdk/core";
 import { CdkPipeline, SimpleSynthAction } from "@aws-cdk/pipelines";
-import {
-  getBranch,
-  IBaseProps,
-  getConstructId,
-  resolveGithubRepository,
-} from "@delhivery/utilities";
+import { getBranch, getConstructId, resolveGithubRepository } from "./shared";
+import { StackProps } from "./typedefs";
+import Application from "./application";
 
-export default class Pipeline extends Stack {
-  constructor(scope: Construct, id: string, props: IBaseProps) {
+export default class Pipeline extends Application {
+  constructor(scope: CdkConstruct, id: string, props: StackProps) {
     super(scope, id, props);
 
     const sourceArtifact = new Artifact();
@@ -21,9 +18,9 @@ export default class Pipeline extends Stack {
 
     const stackDeploymentPipeline = new CdkPipeline(
       this,
-      getConstructId("githubAutoDeploy", CdkPipeline, {}),
+      getConstructId("githubAutoDeploy", props),
       {
-        pipelineName: getConstructId("githubAutoDeploy", CdkPipeline, props),
+        pipelineName: getConstructId("githubAutoDeploy", props),
         cloudAssemblyArtifact,
         crossAccountKeys: false,
         sourceAction: new GitHubSourceAction({
@@ -41,7 +38,10 @@ export default class Pipeline extends Stack {
         }),
       }
     );
+    this.output.stackDeploymentPipeline = stackDeploymentPipeline;
 
-    stackDeploymentPipeline.addApplicationStage();
+    /* stackDeploymentPipeline.addApplicationStage(
+      new Stage(this, getConstructId("applicationStage", props), props)
+    ); */
   }
 }
