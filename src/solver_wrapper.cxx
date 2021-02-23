@@ -508,7 +508,7 @@ SolverWrapper::run()
               packages.emplace_back(
                 waybill["cn"].template get<std::string>(),
                 iso_to_date(
-                  waybill["cpdd_destination"].template get<std::string>())
+                  waybill["cpdd_destination"].template get<std::string>(), true)
                   .time_since_epoch()
                   .count(),
                 waybill["id"].template get<std::string>());

@@ -25,7 +25,7 @@ struct CalcualateTraversalCost
 
 uint16_t datemod(DURATION, DURATION);
 
-CLOCK iso_to_date(std::string);
+CLOCK iso_to_date(const std::string, const bool=false);
 
 int64_t
 now_as_int64();

@@ -1,4 +1,5 @@
 #include "date_utils.hxx"
+#include "format.hxx"
 #include "transportation.hxx"
 #include <cstdint>
 #include <cstdlib>
@@ -45,9 +46,14 @@ CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
 }
 
 CLOCK
-iso_to_date(std::string date_string)
+iso_to_date(const std::string& date_string, const bool is_offset)
 {
-  std::stringstream date_stream{ date_string };
+  std::string formatted_string{ date_string };
+
+  if (is_offset)
+    formatted_string =
+      moirai::format("{} {}", date_string.substr(0, 10), "04:00:00");
+  std::stringstream date_stream{ formatted_string };
   CLOCK clock;
   date_stream >> date::parse("%F %T", clock);
   return clock;
