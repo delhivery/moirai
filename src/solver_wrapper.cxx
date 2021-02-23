@@ -213,7 +213,7 @@ SolverWrapper::init_edges()
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["data"];
 
-    app.logger().information(moirai::format("Got {} edges", data.size()));
+    app.logger().debug(moirai::format("Got {} edges", data.size()));
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
       std::string uuid =
@@ -476,7 +476,6 @@ SolverWrapper::run()
   app.logger().debug("Processing loads");
 
   while (true) {
-    // app.logger().information("SolverWrapper polling....");
     try {
       Poco::Thread::sleep(200);
       std::string payloads[100];
@@ -491,20 +490,28 @@ SolverWrapper::run()
           payloads + num_packages,
           [&app, this](const std::string& payload) {
             nlohmann::json data = nlohmann::json::parse(payload);
+
+            if (data["id"].is_null() or data["location"].is_null() or
+                data["destination"].is_null() or data["time"].is_null()) {
+              app.logger().debug(moirai::format(
+                "Null data against mandatory fields. {}", data.dump()));
+              return;
+            }
             app.logger().debug(
               moirai::format("Recieved data: {}", data.dump()));
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
-              if (!waybill["cpdd_destination"].is_null() and
-                  !waybill["cn"].is_null())
-                packages.emplace_back(
-                  waybill["cn"].template get<std::string>(),
-                  iso_to_date(
-                    waybill["cpdd_destination"].template get<std::string>())
-                    .time_since_epoch()
-                    .count(),
-                  waybill["id"].template get<std::string>());
+              if (waybill["cpdd_destination"].is_null() or
+                  waybill["cn"].is_null() or waybill["id"].is_null())
+                return;
+              packages.emplace_back(
+                waybill["cn"].template get<std::string>(),
+                iso_to_date(
+                  waybill["cpdd_destination"].template get<std::string>())
+                  .time_since_epoch()
+                  .count(),
+                waybill["id"].template get<std::string>());
             }
 
             std::string bag_identifier = data["id"].template get<std::string>();
@@ -514,8 +521,7 @@ SolverWrapper::run()
               data["destination"].template get<std::string>();
 
             if (current_location.empty() or item_destination.empty() or
-                current_location == item_destination or
-                bag_identifier[0] != 'B')
+                current_location == item_destination)
               return;
 
             nlohmann::json solution =
@@ -528,7 +534,7 @@ SolverWrapper::run()
                          packages);
 
             if (solution.empty()) {
-              app.logger().information(
+              app.logger().debug(
                 moirai::format("No legitimate paths for payload: {}", payload));
               return;
             }

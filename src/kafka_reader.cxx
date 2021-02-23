@@ -48,6 +48,12 @@ KafkaReader::KafkaReader(const std::string& broker_url,
     throw Poco::ApplicationException(error_string);
   }
 
+  if (config->set("auto.offset.reset", "smallest", error_string) !=
+      RdKafka::Conf::CONF_OK) {
+    app.logger().error(
+      moirai::format("Error setting offset: {}", error_string));
+  }
+
   if (consumer = RdKafka::KafkaConsumer::create(config, error_string);
       !consumer) {
     app.logger().error(

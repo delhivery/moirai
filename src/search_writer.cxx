@@ -39,6 +39,8 @@ SearchWriter::run()
         results + num_records,
         [this, &dataset](const std::string& result) {
           auto package = nlohmann::json::parse(result);
+          if (package["_id"].is_null())
+            return;
           dataset.push_back(nlohmann::json{
             { "index",
               { { "_index", search_index },
@@ -76,6 +78,8 @@ SearchWriter::run()
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
           app.logger().debug(moirai::format(
             "Got successful response from ES Host: {}", response_raw.str()));
+          app.logger().information(
+            moirai::format("Pushed {} records", num_records));
         } else {
           app.logger().error(moirai::format("Error uploading data: <{}>: {}",
                                             response.getStatus(),
