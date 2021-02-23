@@ -46,6 +46,15 @@ CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
 }
 
 CLOCK
+iso_to_date(const std::string& date_string)
+{
+  std::stringstream date_stream{ date_string };
+  CLOCK clock;
+  date_stream >> date::parse("%F %T", clock);
+  return clock;
+}
+
+CLOCK
 iso_to_date(const std::string& date_string, const bool is_offset)
 {
   std::string formatted_string{ date_string };
