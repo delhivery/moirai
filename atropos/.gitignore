@@ -4,3 +4,4 @@
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+.env*

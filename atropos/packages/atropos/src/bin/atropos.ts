@@ -1,26 +1,38 @@
 #!/usr/bin/env node
-import { App, Tag, Tags } from "@aws-cdk/core";
+import { App, Tags } from "@aws-cdk/core";
 import { getConstructId, Pipeline, Stage } from "@delhivery/utilities";
 import {
   EnvironmentType,
   StackProps,
 } from "@delhivery/utilities/dist/cdk/typedefs";
 import { URL } from "url";
+import { config } from "dotenv";
+import { resolve } from "path";
+
 import ImageRepository from "../stacks/imageRepository";
 import SearchDockerImage from "../stacks/searchDockerImage";
 
-const app = new App();
 const props: StackProps = {
   project: "moirai",
   component: "atropos",
   technologyUnit: "core",
   environment: EnvironmentType.PRODUCTION,
   uri: new URL("https://github.com/delhivery/moirai"),
+  env: {},
 };
-const pipeline = new Pipeline(app, "atropos", props);
+config({ path: resolve(__dirname, `../../.env.${props.environment}`) });
+
+const awsEnv = {
+  account: process.env.AWS_ACCOUNT_ID,
+  region: process.env.AWS_REGION || "ap-south-1",
+};
+
+const app = new App();
+const pipeline = new Pipeline(app, "atropos", { ...props, ...awsEnv });
 pipeline.output.stackDeploymentPipeline.addApplicationStage(
-  new Stage(pipeline, getConstructId("stageAtropos", props), {
+  new Stage(pipeline, getConstructId("stageAtropos", { ...props, ...awsEnv }), {
     ...props,
+    ...awsEnv,
     stacks: [ImageRepository, SearchDockerImage],
   })
 );

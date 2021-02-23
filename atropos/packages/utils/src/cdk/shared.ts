@@ -5,11 +5,8 @@ import { EnvironmentType, StackProps, IGitHubRepository } from "./typedefs";
 export const getConstructId = (
   constructId: string,
   deployment: StackProps
-): string => {
-  const cId = `${deployment.environment}-${deployment.project}-${deployment.component}-${constructId}`;
-  console.log("ConstructId: ", cId);
-  return cId;
-};
+): string =>
+  `${deployment.environment}-${deployment.project}-${deployment.component}-${constructId}`.toLowerCase();
 
 const getStagingBranchOrFail = (props: StackProps): string =>
   props.environment === EnvironmentType.STAGING ? "devel" : "";

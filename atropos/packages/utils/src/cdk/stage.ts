@@ -35,7 +35,7 @@ export default class Stage extends CdkStage {
         const stack = new ApplicationStack(
           this,
           ApplicationStack.prototype.constructor.name,
-          props
+          accumulated
         );
         return {
           ...accumulated,
