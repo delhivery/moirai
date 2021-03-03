@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(moirai)
+project(clotho)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -13,7 +13,6 @@ endif(NOT CMAKE_BUILD_TYPE)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 option(ANALYZE "Analyze codebase for improvements" OFF)
-option(LOCAL "Run EP locally with production dataset" OFF)
 
 if(ANALYZE)
   message(STATUS "Analysis on")
@@ -28,34 +27,10 @@ find_package(Poco REQUIRED Util Foundation Net NetSSL)
 find_package(OpenSSL REQUIRED)
 find_package(RdKafkaCPP REQUIRED)
 
-if(NOT LOCAL)
-  add_executable(
-    ${PROJECT_NAME}
-    src/date_utils.cxx
-    src/graph_helpers.cxx
-    src/transportation.cxx
-    src/solver.cxx
-    src/utils.cxx
-    src/kafka_reader.cxx
-    src/search_writer.cxx
-    src/solver_wrapper.cxx
-    src/server.cxx
-  )
-else(NOT LOCAL)
-  add_executable(
-    ${PROJECT_NAME}
-    src/date_utils.cxx
-    src/graph_helpers.cxx
-    src/transportation.cxx
-    src/solver.cxx
-    src/utils.cxx
-    src/file_reader.cxx
-    src/kafka_reader.cxx
-    src/search_writer.cxx
-    src/solver_wrapper.cxx
-    src/server_local.cxx
-  )
-endif(NOT LOCAL)
+add_executable(
+  ${PROJECT_NAME}
+  src/${PROJECT_NAME}.cxx
+)
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 
