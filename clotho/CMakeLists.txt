@@ -21,18 +21,33 @@ if(ANALYZE)
 endif(ANALYZE)
 
 find_package(Boost COMPONENTS graph)
+find_package(CLI11 REQUIRED)
 find_package(fmt REQUIRED)
-find_package(TBB REQUIRED)
-find_package(Poco REQUIRED Util Foundation Net NetSSL)
-find_package(OpenSSL REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_package(RdKafkaCPP REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(TBB REQUIRED)
+
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)
+
+configure_file(
+  ${CMAKE_SOURCE_DIR}/include/config.hxx.in
+  ${CMAKE_BINARY_DIR}/include/config.hxx @ONLY
+)
 
 add_executable(
   ${PROJECT_NAME}
   src/${PROJECT_NAME}.cxx
+  src/utils/component.cxx
+  src/utils/application.cxx
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(
+  ${PROJECT_NAME} PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_BINARY_DIR}/include
+)
 
 if(ANALYZE)
   set_property(
@@ -45,11 +60,11 @@ endif(ANALYZE)
 target_link_libraries(
   ${PROJECT_NAME}
   Boost::graph
+  CLI11::CLI11
   fmt::fmt
-  tbb
-  Poco::Foundation
-  Poco::Util
-  Poco::Net
-  Poco::NetSSL
   RdKafkaCPP::RdKafkaCPP
+  PkgConfig::GLIB
+  PkgConfig::SYSTEMD
+  spdlog::spdlog
+  tbb
 )

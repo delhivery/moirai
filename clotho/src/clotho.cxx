@@ -1,31 +1,49 @@
-namespace ambasta {
-class ConfigurableComponent
+#include "utils/application.hxx"
+#include "utils/component.hxx"
+
+class Reader : public ambasta::utils::Component
 {
+private:
+  std::string some_input;
+
 public:
-  virtual void defineOptions() = 0;
-};
+  Reader(std::shared_ptr<CLI::App> app)
+    : ambasta::utils::Component(app)
+  {}
 
-class Application : public ConfigurableComponent
-{
-public:
-  void addComponent(ConfigurableComponent&);
+  void initialize() {}
 
-  virtual int run(int argc, char* argv[]) = 0;
-};
-}
-
-class Clotho : public ambasta::Application
-{
-public:
-  void defineOptions() {}
-  int run(int argc, char* argv[]) { return 0; }
-};
-
-#define MAIN(App)                                                              \
-  int main(int argc, char* argv[])                                             \
-  {                                                                            \
-    App app;                                                                   \
-    return app.run(argc, argv);                                                \
+  void define_options()
+  {
+    auto option_group = m_app->add_option_group("reader");
+    option_group->add_option("-s, --some_input", some_input, "Read some input");
   }
+
+  int main()
+  {
+    std::cout << "Some input set to: " << some_input << std::endl;
+    return EX_OK;
+  }
+};
+
+class Clotho : public ambasta::utils::Application
+{
+private:
+  std::filesystem::path config_file;
+
+public:
+  void initialize() { add_component<Reader>("filereader"); }
+
+  void define_options()
+  {
+    m_app->add_option("-c,--config", config_file, "Configuration file");
+  }
+
+  int main()
+  {
+    std::cout << "config file: " << config_file << std::endl;
+    return 0;
+  }
+};
 
 MAIN(Clotho);

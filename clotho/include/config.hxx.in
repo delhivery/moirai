@@ -1,0 +1,20 @@
+#ifndef CONFIG_HXX
+#define CONFIG_HXX
+
+namespace moirai {
+namespace clotho {
+
+#define PROJECT_NAME "@PROJECT_NAME@"
+#define PROJECT_VERSION_MAJOR "@PROJECT_VERSION_MAJOR@"
+#define PROJECT_VERSION_MINOR "@PROJECT_VERSION_MINOR@"
+#define PROJECT_VERSION_PATCH "@PROJECT_VERSION_PATCH@"
+#define PROJECT_VERSION                                                        \
+  PROJECT_VERSION_MAJOR "." PROJECT_VERSION_MINOR "." PROJECT_VERSION_PATCH
+
+#define GLOBAL_CONF_DIR "@CMAKE_INSTALL_SYSCONFDIR@"
+#define PROJECT_CONFIG_SUBPATH                                                 \
+  "@CMAKE_PROJECT_NAME@.config.d/"                                             \
+  "@PROJECT_NAME@.config"
+}
+}
+#endif

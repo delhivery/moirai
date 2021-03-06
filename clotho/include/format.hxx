@@ -1,11 +1,11 @@
-#ifndef MOIRAI_FORMAT
-#define MOIRAI_FORMAT
+#ifndef FORMAT_HXX
+#define FORMAT_HXX
 
-#ifdef __cpp_lib_format
+#if __cpp_lib_format >= 201907L
 #include <format>
 #else
 #include <fmt/core.h>
-namespace moirai {
+namespace std {
 using fmt::format;
 };
 #endif
