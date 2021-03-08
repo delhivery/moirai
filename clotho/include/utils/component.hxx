@@ -3,6 +3,7 @@
 
 #include <CLI/CLI.hpp>
 #include <memory>
+#include <stop_token>
 
 namespace ambasta {
 namespace utils {
@@ -18,7 +19,7 @@ public:
 
   virtual void define_options() = 0;
 
-  virtual int main() = 0;
+  virtual int main(std::stop_token) = 0;
 };
 }
 }

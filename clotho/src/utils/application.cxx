@@ -1,9 +1,11 @@
 #include "utils/application.hxx"
 #include <CLI/CLI.hpp>
+#include <algorithm>
 #include <memory>
 #include <signal.h>
 #include <spdlog/spdlog.h>
 #include <sysexits.h>
+#include <thread>
 
 namespace ambasta {
 namespace utils {
@@ -15,7 +17,7 @@ Application::Application()
 }
 
 int
-Application::main()
+Application::main(std::stop_token token)
 {
   return EX_OK;
 }
@@ -55,9 +57,16 @@ Application::init(int argc, char** argv)
     for (auto& component : m_components) {
       component->initialize();
     }
-    // TODO: Either call all subprocess threaded here and accumulate exit_code
-    // Or let main get access to subsystems
-    return main();
+
+    std::for_each(
+      m_components.begin(), m_components.end(), [this](auto& component) {
+        m_threads.emplace_back([&component](std::stop_token stop_token) {
+          component->main(stop_token);
+        });
+      });
+    m_threads.push_back(
+      std::jthread{ [this](std::stop_token stop_token) { main(stop_token); } });
+    return EX_OK;
   } catch (const CLI::ParseError& exc) {
     m_app->exit(exc);
     return EX_USAGE;
@@ -76,8 +85,11 @@ Application::run(int argc, char** argv)
   try {
     sigset_t l_waited_signals;
     sigemptyset(&l_waited_signals);
+    sigaddset(&l_waited_signals, SIGINT);
+    sigaddset(&l_waited_signals, SIGQUIT);
     sigaddset(&l_waited_signals, SIGTERM);
     sigprocmask(SIG_BLOCK, &l_waited_signals, nullptr);
+    // Initialize application
     l_result_status = init(argc, argv);
 
     if (l_result_status == EX_OK) {
@@ -87,6 +99,12 @@ Application::run(int argc, char** argv)
       int l_signal;
       sigwait(&l_waited_signals, &l_signal);
       sd_notify(0, "STOPPING=1");
+
+      // Deinitialize application
+      std::for_each(m_threads.begin(), m_threads.end(), [](auto& thread) {
+        thread.request_stop();
+        thread.join();
+      });
       spdlog::info("Successfully terminated");
     }
   } catch (std::exception& exc) {

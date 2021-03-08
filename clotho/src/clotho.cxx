@@ -1,5 +1,8 @@
 #include "utils/application.hxx"
 #include "utils/component.hxx"
+#include <thread>
+
+using namespace std::literals;
 
 class Reader : public ambasta::utils::Component
 {
@@ -19,9 +22,17 @@ public:
     option_group->add_option("-s, --some_input", some_input, "Read some input");
   }
 
-  int main()
+  int main(std::stop_token stop_token)
   {
-    std::cout << "Some input set to: " << some_input << std::endl;
+    while (true) {
+      std::this_thread::sleep_for(0.2s);
+      std::cout << "Component thread" << std::endl;
+
+      if (stop_token.stop_requested()) {
+        std::cout << "Component stopping" << std::endl;
+        break;
+      }
+    }
     return EX_OK;
   }
 };
@@ -39,10 +50,20 @@ public:
     m_app->add_option("-c,--config", config_file, "Configuration file");
   }
 
-  int main()
+  int main(std::stop_token stop_token)
   {
     std::cout << "config file: " << config_file << std::endl;
-    return 0;
+
+    while (true) {
+      std::this_thread::sleep_for(0.5s);
+      std::cout << "Main thread" << std::endl;
+
+      if (stop_token.stop_requested()) {
+        std::cout << "Application stopping" << std::endl;
+        break;
+      }
+    }
+    return EX_OK;
   }
 };
 
