@@ -47,7 +47,7 @@ public:
 
   void define_options()
   {
-    m_app->add_option("-c,--config", config_file, "Configuration file");
+    m_app->add_option("-x,--xonfig", config_file, "Configuration file");
   }
 
   int main(std::stop_token stop_token)

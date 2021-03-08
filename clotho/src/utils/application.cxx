@@ -38,6 +38,7 @@ Application::init()
   if (std::filesystem::exists(user_config_path)) {
     m_config_files.push_back(user_config_path);
   }
+  m_app->set_config("-c,--config")->expected(1, 3);
 }
 
 int
