@@ -17,10 +17,6 @@ namespace utils {
 class Application : public Component
 {
 private:
-  std::vector<std::filesystem::path> m_config_files;
-
-  std::filesystem::path m_config_file;
-
   std::vector<std::unique_ptr<Component>> m_components;
 
   std::vector<std::jthread> m_threads;

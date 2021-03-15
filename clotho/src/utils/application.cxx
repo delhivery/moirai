@@ -25,19 +25,7 @@ Application::main(std::stop_token token)
 void
 Application::init()
 {
-  std::filesystem::path global_config_path{ std::format(
-    "{}/{}", GLOBAL_CONF_DIR, PROJECT_CONFIG_SUBPATH) };
-
-  std::filesystem::path user_config_path{ std::format(
-    "{}/{}", std::getenv("XDG_CONFIG_HOME"), PROJECT_CONFIG_SUBPATH) };
-
-  if (std::filesystem::exists(global_config_path)) {
-    m_config_files.push_back(global_config_path);
-  }
-
-  if (std::filesystem::exists(user_config_path)) {
-    m_config_files.push_back(user_config_path);
-  }
+  // Accept global config, user xdg config and user specific config file
   m_app->set_config("-c,--config")->expected(1, 3);
 }
 
