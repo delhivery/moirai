@@ -44,6 +44,7 @@ add_executable(
   src/${PROJECT_NAME}.cxx
   src/utils/component.cxx
   src/utils/application.cxx
+  src/graph/structures.cxx
 )
 
 target_include_directories(

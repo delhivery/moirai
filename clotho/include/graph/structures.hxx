@@ -26,12 +26,15 @@ enum Direction
   R = 1,
 };
 
-struct NodeOrEdgeProperties
+struct Construct
 {
-private:
+protected:
+  std::string m_label;
   std::unordered_map<Process, MINUTES> m_latencies;
 
 public:
+  Construct(const std::string&);
+
   template<Process P>
   MINUTES latency() const
   {
@@ -39,74 +42,48 @@ public:
   }
 
   template<Process P>
-  void latency(const MINUTES& minutes) const
+  void latency(const MINUTES& minutes)
   {
     m_latencies[P] = minutes;
   }
+
+  std::string label() const;
 };
 
-struct Node : public NodeOrEdgeProperties
+struct Node : public Construct
 {
-private:
-  std::vector<std::string> labels;
-
 public:
-  Node() = default;
-
   Node(const std::string&);
-
-  Node(const std::vector<std::string>&);
-
-  std::vector<std::string> label() const;
 };
 
-struct Edge : public NodeOrEdgeProperties
+struct Route : public Construct
 {
-private:
-  std::vector<std::string> m_labels;
+protected:
   LEVY m_cost;
-  bool restricted;
-
-public:
-  Edge();
-
-  Edge(const std::vector<std::string>&);
-};
-
-struct ContinuousEdge : public Edge
-{
-public:
-  ContinuousEdge(const std::vector<std::string>&);
-};
-
-struct DiscreteEdge : public Edge
-{
-private:
+  bool m_restricted;
+  bool m_discrete;
   MINUTES m_departure;
   MINUTES m_duration;
 
 public:
-  DiscreteEdge(const std::vector<std::string>&, MINUTES, MINUTES, bool);
+  Route(const std::string&, const MINUTES, const MINUTES, const bool = false);
+
+  Route(const std::string&);
+
+  MINUTES departure() const;
+
+  template<Direction D>
+  MINUTES departure(std::shared_ptr<Node>) const;
+
+  /*template<>
+  MINUTES departure<Direction::F>(std::shared_ptr<Node>) const;
+
+  template<>
+  MINUTES departure<Direction::R>(std::shared_ptr<Node>) const;*/
+
+  MINUTES duration() const;
+
+  MINUTES duration(std::shared_ptr<Node>, std::shared_ptr<Node>) const;
 };
-
-template<Direction D>
-void weight(std::shared_ptr<Edge>,
-            std::shared_ptr<Node>,
-            std::shared_ptr<Node>);
-
-template<>
-void
-weight<Direction::F>(std::shared_ptr<Edge> edge,
-                     std::shared_ptr<Node> source,
-                     std::shared_ptr<Node> target)
-{
-}
-
-template<>
-void
-weight<Direction::R>(std::shared_ptr<Edge> edge,
-                     std::shared_ptr<Node> target,
-                     std::shared_ptr<Node> source)
-{}
 }
 #endif
