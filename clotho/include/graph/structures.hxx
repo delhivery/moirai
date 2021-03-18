@@ -18,14 +18,6 @@ enum Process
   X = 2,
 };
 
-enum Direction
-{
-  // Forward
-  F = 0,
-  // Reverse
-  R = 1,
-};
-
 struct Construct
 {
 protected:
@@ -60,26 +52,29 @@ struct Route : public Construct
 {
 protected:
   LEVY m_cost;
-  bool m_restricted;
+  bool m_unrestricted;
   bool m_discrete;
-  MINUTES m_departure;
+  TIME_OF_DAY m_departure;
   MINUTES m_duration;
 
 public:
-  Route(const std::string&, const MINUTES, const MINUTES, const bool = false);
+  Route(const std::string&,
+        const TIME_OF_DAY&,
+        const MINUTES&,
+        const bool = false);
 
   Route(const std::string&);
 
-  MINUTES departure() const;
+  TIME_OF_DAY departure() const;
 
-  template<Direction D>
-  MINUTES departure(std::shared_ptr<Node>) const;
+  template<Algorithm A>
+  TIME_OF_DAY departure(std::shared_ptr<Node>) const;
 
   /*template<>
-  MINUTES departure<Direction::F>(std::shared_ptr<Node>) const;
+  MINUTES departure<Algorithm::F>(std::shared_ptr<Node>) const;
 
   template<>
-  MINUTES departure<Direction::R>(std::shared_ptr<Node>) const;*/
+  MINUTES departure<Algorithm::R>(std::shared_ptr<Node>) const;*/
 
   MINUTES duration() const;
 

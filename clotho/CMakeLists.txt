@@ -45,6 +45,8 @@ add_executable(
   src/utils/component.cxx
   src/utils/application.cxx
   src/graph/structures.cxx
+  src/graph/solver.cxx
+  src/graph/earliest.cxx
 )
 
 target_include_directories(

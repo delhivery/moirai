@@ -1,4 +1,5 @@
 #include "graph/structures.hxx"
+#include "typedefs.hxx"
 
 namespace ambasta {
 
@@ -17,13 +18,13 @@ Node::Node(const std::string& label)
 {}
 
 Route::Route(const std::string& label,
-             const MINUTES departure,
-             const MINUTES duration,
-             const bool restricted)
+             const TIME_OF_DAY& departure,
+             const MINUTES& duration,
+             const bool unrestricted)
   : Construct(label)
   , m_departure(departure)
   , m_duration(duration)
-  , m_restricted(restricted)
+  , m_unrestricted(unrestricted)
   , m_discrete(true)
 {}
 
@@ -31,29 +32,34 @@ Route::Route(const std::string& label)
   : Construct(label)
   , m_departure(0)
   , m_duration(0)
-  , m_restricted(false)
+  , m_unrestricted(true)
   , m_discrete(false)
 {}
 
-MINUTES
+TIME_OF_DAY
 Route::departure() const
 {
   return m_departure;
 }
 
 template<>
-MINUTES
-Route::departure<Direction::F>(std::shared_ptr<Node> source) const
+TIME_OF_DAY
+Route::departure<Algorithm::SHORTEST>(std::shared_ptr<Node> source) const
 {
 
-  return m_departure - source->latency<Process::O>() - latency<Process::I>();
+  return static_cast<TIME_OF_DAY>(static_cast<MINUTES>(m_departure) -
+                                  source->latency<Process::O>() -
+                                  latency<Process::I>());
 }
 
 template<>
-MINUTES
-Route::departure<Direction::R>(std::shared_ptr<Node> target) const
+TIME_OF_DAY
+Route::departure<Algorithm::INVERSE_SHORTEST>(
+  std::shared_ptr<Node> target) const
 {
-  return m_departure + latency<Process::O>() + target->latency<Process::I>();
+  return static_cast<TIME_OF_DAY>(static_cast<MINUTES>(m_departure) +
+                                  latency<Process::O>() +
+                                  target->latency<Process::I>());
 }
 
 MINUTES
