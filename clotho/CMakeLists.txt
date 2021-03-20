@@ -44,8 +44,8 @@ add_executable(
   src/${PROJECT_NAME}.cxx
   src/utils/component.cxx
   src/utils/application.cxx
-  src/graph/structures.cxx
-  src/graph/solver.cxx
+  src/graph/typedefs.cxx
+  src/graph/strategy.cxx
   src/graph/earliest.cxx
 )
 

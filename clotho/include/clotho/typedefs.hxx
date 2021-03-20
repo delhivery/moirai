@@ -121,6 +121,8 @@ public:
 
   TIMESTAMP_MINUTES operator-(const MINUTES&) const;
 
+  auto operator<=>(const TIMESTAMP_MINUTES&) const = default;
+
   friend std::ostream& operator<<(std::ostream&, const TIMESTAMP_MINUTES&);
 };
 

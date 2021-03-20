@@ -1,5 +1,4 @@
-#include "graph/structures.hxx"
-#include "typedefs.hxx"
+#include <clotho/graph/typedefs.hxx>
 
 namespace ambasta {
 

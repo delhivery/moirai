@@ -1,11 +1,10 @@
-#ifndef GRAPH_STRUCTURES
-#define GRAPH_STRUCTURES
+#ifndef GRAPH_TYPEDEFS_HXX
+#define GRAPH_TYPEDEFS_HXX
 
-#include "typedefs.hxx"
+#include <clotho/typedefs.hxx>
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 namespace ambasta {
 enum Process
@@ -70,11 +69,9 @@ public:
   template<Algorithm A>
   TIME_OF_DAY departure(std::shared_ptr<Node>) const;
 
-  /*template<>
-  MINUTES departure<Algorithm::F>(std::shared_ptr<Node>) const;
+  bool unrestricted() const { return m_unrestricted; }
 
-  template<>
-  MINUTES departure<Algorithm::R>(std::shared_ptr<Node>) const;*/
+  void unrestricted(bool restricted) { m_unrestricted = restricted; }
 
   MINUTES duration() const;
 
