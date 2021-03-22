@@ -11,25 +11,13 @@ private:
   Strategy* m_strategy;
 
 public:
-  SolverContext(Strategy* strategy = nullptr)
-    : m_strategy(strategy)
-  {}
+  SolverContext(Strategy* = nullptr);
 
-  ~SolverContext() { delete this->m_strategy; }
+  ~SolverContext();
 
-  void set_strategy(Strategy* strategy)
-  {
-    delete this->m_strategy;
-    this->m_strategy = strategy;
-  }
+  void set_strategy(Strategy*);
 
-  void business_logic() const
-  {
-    // business logic here
-    // call solve
-    // parse solved path
-    // emit json?
-  }
+  void business_logic() const;
 };
 
 void

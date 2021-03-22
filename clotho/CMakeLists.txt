@@ -46,6 +46,7 @@ add_executable(
   src/utils/application.cxx
   src/graph/typedefs.cxx
   src/graph/strategy.cxx
+  src/graph/context.cxx
   src/graph/earliest.cxx
 )
 

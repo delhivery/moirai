@@ -32,10 +32,6 @@ ShortestPathSolver::solve(std::string_view u_label,
         edge->duration((*m_graph)[source], (*m_graph)[target]));
     });
 
-  /*boost::filtered_graph<Graph, decltype(filter_edges)> filtered_graph{
-    *m_graph, filter_edges
-  };*/
-
   std::vector<TIMESTAMP_MINUTES> distances(boost::num_vertices(*m_graph));
   std::vector<EdgeDescriptor> predecessors(boost::num_vertices(*m_graph));
 
