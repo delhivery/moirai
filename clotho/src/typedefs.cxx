@@ -157,6 +157,12 @@ TIMESTAMP::operator MINUTES() const
   return MINUTES{ static_cast<int16_t>(m_value / 60) };
 }
 
+int32_t
+TIMESTAMP::value() const
+{
+  return m_value;
+}
+
 std::ostream&
 operator<<(std::ostream& os, const TIMESTAMP& other)
 {

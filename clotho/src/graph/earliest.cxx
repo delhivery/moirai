@@ -4,6 +4,15 @@
 #include <clotho/graph/earliest.hxx>
 
 namespace ambasta {
+
+void
+ShortestPathSolver::solve(std::string_view,
+                          std::string_view,
+                          const TIMESTAMP&,
+                          const bool,
+                          const std::pair<TIMESTAMP, LEVY>&) const
+{}
+
 void
 ShortestPathSolver::solve(std::string_view u_label,
                           std::string_view v_label,
@@ -32,7 +41,7 @@ ShortestPathSolver::solve(std::string_view u_label,
         edge->duration((*m_graph)[source], (*m_graph)[target]));
     });
 
-  std::vector<TIMESTAMP_MINUTES> distances(boost::num_vertices(*m_graph));
+  std::vector<MINUTES> distances(boost::num_vertices(*m_graph));
   std::vector<EdgeDescriptor> predecessors(boost::num_vertices(*m_graph));
 
   auto recorder =
@@ -45,13 +54,13 @@ ShortestPathSolver::solve(std::string_view u_label,
     boost::distance_map(&distances[0])
       .weight_map(weight_map)
       .distance_combine(
-        [](const TIMESTAMP_MINUTES& distance,
-           const std::pair<TIME_OF_DAY, MINUTES> cost) -> TIMESTAMP_MINUTES {
+        [](const MINUTES& distance,
+           const std::pair<TIME_OF_DAY, MINUTES> cost) -> MINUTES {
           MINUTES wait_time{ cost.first - TIME_OF_DAY(distance) };
           return distance + wait_time + cost.second;
         })
-      .distance_zero((TIMESTAMP_MINUTES)start)
-      .distance_inf(TIMESTAMP_MINUTES::max())
+      .distance_zero((MINUTES)start)
+      .distance_inf(MINUTES::max())
       .visitor(visitor));
 }
 

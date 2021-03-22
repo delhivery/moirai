@@ -108,7 +108,7 @@ public:
   // Stream operator
   friend std::ostream& operator<<(std::ostream&, const TIMESTAMP&);
 
-  int16_t value() const;
+  int32_t value() const;
 };
 
 enum Algorithm
