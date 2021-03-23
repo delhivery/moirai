@@ -19,12 +19,14 @@ Node::Node(const std::string& label)
 Route::Route(const std::string& label,
              const TIME_OF_DAY& departure,
              const MINUTES& duration,
-             const bool unrestricted)
+             const bool unrestricted,
+             const LEVY levy)
   : Construct(label)
   , m_departure(departure)
   , m_duration(duration)
   , m_unrestricted(unrestricted)
   , m_discrete(true)
+  , m_levy(levy)
 {}
 
 Route::Route(const std::string& label)
@@ -33,6 +35,7 @@ Route::Route(const std::string& label)
   , m_duration(0)
   , m_unrestricted(true)
   , m_discrete(false)
+  , m_levy(1)
 {}
 
 TIME_OF_DAY
@@ -43,7 +46,7 @@ Route::departure() const
 
 template<>
 TIME_OF_DAY
-Route::departure<Algorithm::SHORTEST>(std::shared_ptr<Node> source) const
+Route::departure<Algorithm::SHORTEST>(const Node* source) const
 {
 
   return static_cast<TIME_OF_DAY>(static_cast<MINUTES>(m_departure) -
@@ -53,8 +56,7 @@ Route::departure<Algorithm::SHORTEST>(std::shared_ptr<Node> source) const
 
 template<>
 TIME_OF_DAY
-Route::departure<Algorithm::INVERSE_SHORTEST>(
-  std::shared_ptr<Node> target) const
+Route::departure<Algorithm::INVERSE_SHORTEST>(const Node* target) const
 {
   return static_cast<TIME_OF_DAY>(static_cast<MINUTES>(m_departure) +
                                   latency<Process::O>() +
@@ -68,10 +70,15 @@ Route::duration() const
 }
 
 MINUTES
-Route::duration(std::shared_ptr<Node> source,
-                std::shared_ptr<Node> target) const
+Route::duration(const Node* source, const Node* target) const
 {
   return source->latency<Process::O>() + latency<Process::I>() + m_duration +
          latency<Process::O>() + target->latency<Process::I>();
+}
+
+LEVY
+Route::levy() const
+{
+  return m_levy;
 }
 }

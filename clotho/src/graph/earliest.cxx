@@ -2,8 +2,25 @@
 #include <boost/graph/filtered_graph.hpp>
 #include <boost/property_map/function_property_map.hpp>
 #include <clotho/graph/earliest.hxx>
+#include <functional>
 
-namespace ambasta {
+using namespace ambasta;
+
+bool
+ShortestPathSolver::compare(const COST& lhs, const COST& rhs) const
+{
+  return lhs.first <= rhs.first;
+}
+
+COST
+ShortestPathSolver::combine(
+  const COST& distance,
+  const std::tuple<TIME_OF_DAY, MINUTES, LEVY>& cost) const
+{
+  MINUTES wait_time{ std::get<0>(cost) - TIME_OF_DAY(distance.first) };
+  return std::make_pair(distance.first + wait_time + std::get<1>(cost),
+                        distance.second + std::get<2>(cost));
+}
 
 void
 ShortestPathSolver::solve(std::string_view,
@@ -12,6 +29,29 @@ ShortestPathSolver::solve(std::string_view,
                           const bool,
                           const std::pair<TIMESTAMP, LEVY>&) const
 {}
+
+const std::tuple<TIME_OF_DAY, MINUTES, LEVY>&
+ShortestPathSolver::weight(const EdgeDescriptor&) const
+{
+
+  const Route* route = (*m_graph)[ed].get();
+  const Node* source = (*m_graph)[boost::source(ed, *m_graph)].get();
+  const Node* target = (*m_graph)[boost::target(ed, *m_graph)].get();
+
+  return std::make_tuple(route->departure<Algorithm::SHORTEST>(source),
+                         route->duration(source, target),
+                         route->levy());
+  /*return boost::make_function_property_map<EdgeDescriptor>(
+    [this](const EdgeDescriptor& ed) {
+      const Route* route = (*m_graph)[ed].get();
+      const Node* source = (*m_graph)[boost::source(ed, *m_graph)].get();
+      const Node* target = (*m_graph)[boost::target(ed, *m_graph)].get();
+
+      return std::make_tuple(route->departure<Algorithm::SHORTEST>(source),
+                             route->duration(source, target),
+                             route->levy());
+    });*/
+}
 
 void
 ShortestPathSolver::solve(std::string_view u_label,
@@ -32,16 +72,9 @@ ShortestPathSolver::solve(std::string_view u_label,
     return;
 
   auto weight_map = boost::make_function_property_map<EdgeDescriptor>(
-    [this](const EdgeDescriptor& ed) {
-      auto source = boost::source(ed, *m_graph);
-      auto target = boost::target(ed, *m_graph);
-      auto edge = (*m_graph)[ed];
-      return std::make_pair(
-        edge->departure<Algorithm::SHORTEST>((*m_graph)[source]),
-        edge->duration((*m_graph)[source], (*m_graph)[target]));
-    });
+    std::bind(&ShortestPathSolver::weight, this));
 
-  std::vector<MINUTES> distances(boost::num_vertices(*m_graph));
+  std::vector<COST> distances(boost::num_vertices(*m_graph));
   std::vector<EdgeDescriptor> predecessors(boost::num_vertices(*m_graph));
 
   auto recorder =
@@ -53,15 +86,18 @@ ShortestPathSolver::solve(std::string_view u_label,
     u,
     boost::distance_map(&distances[0])
       .weight_map(weight_map)
+      .distance_compare([](const COST& lhs, const COST& rhs) -> bool {
+        return lhs.first <= rhs.first;
+      })
       .distance_combine(
-        [](const MINUTES& distance,
-           const std::pair<TIME_OF_DAY, MINUTES> cost) -> MINUTES {
-          MINUTES wait_time{ cost.first - TIME_OF_DAY(distance) };
-          return distance + wait_time + cost.second;
+        [](const COST& distance,
+           const std::tuple<TIME_OF_DAY, MINUTES, LEVY> cost) -> COST {
+          MINUTES wait_time{ std::get<0>(cost) - TIME_OF_DAY(distance.first) };
+          return std::make_pair(distance.first + wait_time + std::get<1>(cost),
+                                distance.second + std::get<2>(cost));
         })
-      .distance_zero((MINUTES)start)
-      .distance_inf(MINUTES::max())
+      .distance_zero(std::make_pair((MINUTES)start, 0))
+      .distance_inf(
+        std::make_pair(MINUTES::max(), std::numeric_limits<LEVY>::max()))
       .visitor(visitor));
 }
-
-};

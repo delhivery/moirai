@@ -17,6 +17,8 @@ enum Process
   X = 2,
 };
 
+typedef typename std::pair<MINUTES, LEVY> COST;
+
 struct Construct
 {
 protected:
@@ -50,7 +52,7 @@ public:
 struct Route : public Construct
 {
 protected:
-  LEVY m_cost;
+  LEVY m_levy;
   bool m_unrestricted;
   bool m_discrete;
   TIME_OF_DAY m_departure;
@@ -60,14 +62,15 @@ public:
   Route(const std::string&,
         const TIME_OF_DAY&,
         const MINUTES&,
-        const bool = false);
+        const bool = false,
+        const LEVY = 1);
 
   Route(const std::string&);
 
   TIME_OF_DAY departure() const;
 
   template<Algorithm A>
-  TIME_OF_DAY departure(std::shared_ptr<Node>) const;
+  TIME_OF_DAY departure(const Node*) const;
 
   bool unrestricted() const { return m_unrestricted; }
 
@@ -75,7 +78,9 @@ public:
 
   MINUTES duration() const;
 
-  MINUTES duration(std::shared_ptr<Node>, std::shared_ptr<Node>) const;
+  MINUTES duration(const Node*, const Node*) const;
+
+  LEVY levy() const;
 };
 }
 #endif

@@ -65,6 +65,11 @@ public:
 
   virtual ~Strategy();
 
+  virtual bool compare(const COST&, const COST&) const = 0;
+
+  virtual COST combine(const COST&,
+                       const std::tuple<TIME_OF_DAY, MINUTES, LEVY>&) const = 0;
+
   virtual void solve(std::string_view,
                      std::string_view,
                      const TIMESTAMP&,

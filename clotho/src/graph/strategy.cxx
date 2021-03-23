@@ -1,7 +1,8 @@
 #include <clotho/graph/strategy.hxx>
 #include <memory>
 
-namespace ambasta {
+using namespace ambasta;
+
 std::pair<const std::shared_ptr<Node>, bool>
 Strategy::vertex(std::string_view label) const
 {
@@ -64,4 +65,54 @@ Strategy::~Strategy()
 {
   m_graph.reset();
 }
+
+/*
+template<>
+bool
+Strategy::compare<Algorithm::SHORTEST>(const COST& lhs, const COST& rhs)
+{
+  return lhs.first <= rhs.first;
 }
+
+template<>
+bool
+Strategy::compare<Algorithm::SHORTEST_CONSTRAINED>(const COST& lhs,
+                                                   const COST& rhs)
+{
+  return (lhs.second <= rhs.second and lhs.first <= rhs.first) or false;
+}
+
+template<>
+bool
+Strategy::compare<Algorithm::INVERSE_SHORTEST>(const COST& lhs, const COST& rhs)
+{
+  return lhs.first >= rhs.first;
+}
+
+template<>
+COST
+Strategy::combine<Algorithm::SHORTEST>(
+  const COST& distance,
+  const std::tuple<TIME_OF_DAY, MINUTES, LEVY>& cost)
+{
+  MINUTES wait_time{ std::get<0>(cost) - TIME_OF_DAY(distance.first) };
+  return std::make_pair(distance.first + wait_time + std::get<1>(cost),
+                        distance.second + std::get<2>(cost));
+}
+
+template<>
+COST
+Strategy::combine<Algorithm::SHORTEST_CONSTRAINED>(
+  const COST& distance,
+  const std::tuple<TIME_OF_DAY, MINUTES, LEVY>& cost)
+{
+  return combine<Algorithm::SHORTEST>(distance, cost);
+}
+
+template<>
+COST
+Strategy::combine<Algorithm::INVERSE_SHORTEST>(
+  const COST& distance,
+  const std::tuple<TIME_OF_DAY, MINUTES, LEVY>& cost)
+{}
+*/
