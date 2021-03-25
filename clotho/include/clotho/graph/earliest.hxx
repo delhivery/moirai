@@ -6,24 +6,19 @@ namespace ambasta {
 class ShortestPathSolver : public Strategy
 {
 public:
+  COST zero(const TIMESTAMP = TIMESTAMP::min(),
+            const LEVY = std::numeric_limits<LEVY>::min()) const override;
+
+  COST inf(const TIMESTAMP = TIMESTAMP::max(),
+           const LEVY = std::numeric_limits<LEVY>::max()) const override;
+
   bool compare(const COST&, const COST&) const override;
 
   COST combine(const COST&,
                const std::tuple<TIME_OF_DAY, MINUTES, LEVY>&) const override;
 
-  const std::tuple<TIME_OF_DAY, MINUTES, LEVY>& weight(
-    const EdgeDescriptor&) const;
-
-  void solve(std::string_view,
-             std::string_view,
-             const TIMESTAMP&,
-             const bool) const override;
-
-  void solve(std::string_view,
-             std::string_view,
-             const TIMESTAMP&,
-             const bool,
-             const std::pair<TIMESTAMP, LEVY>&) const override;
+  const std::tuple<TIME_OF_DAY, MINUTES, LEVY> weight(
+    const EdgeDescriptor&) const override;
 };
 
 /*template<>

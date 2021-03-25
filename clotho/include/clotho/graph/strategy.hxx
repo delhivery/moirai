@@ -15,7 +15,7 @@
 #include <type_traits>
 */
 
-#include <clotho/graph/labeled_graph.hxx>
+#include <clotho/boost/graph/labeled_graph.hxx>
 #include <clotho/graph/typedefs.hxx>
 #include <memory>
 #include <string_view>
@@ -65,21 +65,32 @@ public:
 
   virtual ~Strategy();
 
+  virtual const std::tuple<TIME_OF_DAY, MINUTES, LEVY> weight(
+    const EdgeDescriptor&) const = 0;
+
+  virtual COST zero(const TIMESTAMP = TIMESTAMP::min(),
+                    const LEVY = std::numeric_limits<LEVY>::min()) const = 0;
+
+  virtual COST inf(const TIMESTAMP = TIMESTAMP::max(),
+                   const LEVY = std::numeric_limits<LEVY>::max()) const = 0;
+
   virtual bool compare(const COST&, const COST&) const = 0;
 
   virtual COST combine(const COST&,
                        const std::tuple<TIME_OF_DAY, MINUTES, LEVY>&) const = 0;
 
-  virtual void solve(std::string_view,
-                     std::string_view,
-                     const TIMESTAMP&,
-                     const bool) const = 0;
+  void solve(std::string_view,
+             std::string_view,
+             const TIMESTAMP&,
+             const bool) const;
 
-  virtual void solve(std::string_view,
-                     std::string_view,
-                     const TIMESTAMP&,
-                     const bool,
-                     const std::pair<TIMESTAMP, LEVY>&) const = 0;
+  /*
+  void solve(std::string_view,
+             std::string_view,
+             const TIMESTAMP&,
+             const bool,
+             const std::pair<TIMESTAMP, LEVY>&) const;
+  */
 };
 
 }
