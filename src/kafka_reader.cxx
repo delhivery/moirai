@@ -1,10 +1,12 @@
 #include "kafka_reader.hxx"
 #include "date_utils.hxx"
 #include "format.hxx"
+#include <nlohmann/json.hpp>
+#include "solver_wrapper.hxx"
 #include <Poco/Util/ServerApplication.h>
 
 const std::string KafkaReader::consumer_group = "MOIRAI";
-
+SolverWrapper *wrapper = new SolverWrapper();
 KafkaReader::KafkaReader(const std::string& broker_url,
                          const uint16_t batch_size,
                          const uint16_t timeout,
@@ -142,9 +144,18 @@ KafkaReader::run()
       if (topic_name == "load") {
         load_queue->enqueue(data);
       } else if (topic_name == "edge") {
-        edge_queue->enqueue(data);
+        app.logger().information(data);
+        auto node_json = nlohmann::json::parse(data);
+        wrapper->stream_edge(node_json);
+        // edge_queue->enqueue(data);
       } else if (topic_name == "node") {
-        node_queue->enqueue(data);
+        auto node_json = nlohmann::json::parse(data);
+        std::string status = node_json["property"]["facility"]["status"].template get<std::string>();
+        std::string facility_code = node_json["property"]["facility"]["facility_code"].template get<std::string>();
+        std::string property_id = node_json["property"]["id"].template get<std::string>();
+        wrapper->stream_node(facility_code, property_id);
+        app.logger().information(data);
+        // node_queue->enqueue(data);
       } else {
         app.logger().error(moirai::format(
           "Unsupported topic: {}", topic_map.right.at(message->topic_name())));

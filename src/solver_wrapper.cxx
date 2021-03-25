@@ -50,6 +50,8 @@ SolverWrapper::SolverWrapper(
   // app.logger().information(solver.show_all());
 }
 
+SolverWrapper:: SolverWrapper(){};
+
 void
 SolverWrapper::init_timings(
   const std::filesystem::path& facility_timings_filename)
@@ -80,6 +82,106 @@ SolverWrapper::init_timings(
     });
 }
 
+void 
+SolverWrapper::stream_node(std::string code, std::string id){
+  std::string facility_code = code;
+  std:: string property_id = id;
+  std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
+    0, 0, 0, 0
+  };
+
+  if (facility_timings_map.contains(facility_code)) {
+    facility_timings = facility_timings_map[facility_code];
+  }
+
+  auto transport_center = std::make_shared<TransportCenter>(facility_code);
+  transport_center->set_latency<MovementType::CARTING, ProcessType::INBOUND>(DURATION(std::get<0>(facility_timings)));
+  transport_center->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(DURATION(std::get<1>(facility_timings)));
+  transport_center->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(DURATION(std::get<2>(facility_timings)));
+  transport_center->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(DURATION(std::get<3>(facility_timings)));
+  solver.add_node(transport_center);
+
+  if (!property_id.empty()) {
+    if (!facility_groups.contains(property_id)) {
+      facility_groups[property_id] = std::vector<std::string>{};
+    }
+  facility_groups[property_id].push_back(facility_code);
+  }
+}
+
+void 
+SolverWrapper:: stream_edge(nlohmann::json route){
+Poco::Util::Application& app = Poco::Util::Application::instance();
+std::string uuid = route["route_schedule_uuid"].template get<std::string>();
+std::string name = route["name"].template get<std::string>();
+std::string route_type = route["route_type"].template get<std::string>();
+to_lower(route_type);
+std::string reporting_time =route["reporting_time"].template get<std::string>();
+TIME_OF_DAY offset{ datemod(std::chrono::duration_cast<TIME_OF_DAY>(time_string_to_time(reporting_time)) -
+                            DURATION{ 330 },std::chrono::days{ 1 }) };
+auto stops = route["halt_centers"];
+
+if (!stops.is_array()) {
+  app.logger().error(moirai::format("Edge<{}> stops is not an array", uuid));
+  return;
+}
+for (int i = 0; i < stops.size(); ++i) {
+  for (int j = i + 1; j < stops.size(); ++j) {
+    auto source = stops[i];
+    auto target = stops[j];
+
+    std::string departure = source["rel_etd"].template get<std::string>();
+    std::string arrival = target["rel_eta"].template get<std::string>();
+
+    TIME_OF_DAY departure_as_time(offset +
+                                  std::chrono::duration_cast<TIME_OF_DAY>(
+                                    time_string_to_time(departure)));
+    DURATION duration(std::chrono::duration_cast<TIME_OF_DAY>(
+      time_string_to_time(arrival) -
+      std::chrono::duration_cast<TIME_OF_DAY>(
+        time_string_to_time(departure))));
+
+    if (departure_as_time.count() < 0 or duration.count() < 0) {
+      app.logger().error(
+        moirai::format("Edge<{}>: Departure<{}> or duration<{}> negative",
+                        uuid,
+                        departure_as_time.count(),
+                        duration.count()));
+      return;
+    }
+
+  std::string source_center_code =
+    source["center_code"].template get<std::string>();
+  std::string target_center_code =
+    target["center_code"].template get<std::string>();
+
+  auto [source_vertex, has_source_vertex] =
+    solver.add_node(source_center_code);
+  auto [target_vertex, has_target_vertex] =
+    solver.add_node(target_center_code);
+  auto edge = std::make_shared<TransportEdge>(
+    moirai::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
+    name,
+    departure_as_time,
+    duration,
+    route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
+    route_type == "carting" ? MovementType::CARTING
+                            : MovementType::LINEHAUL);
+  if (has_source_vertex and has_target_vertex) {
+    solver.add_edge(source_vertex, target_vertex, edge);
+  } else {
+    app.logger().error(moirai::format(
+      "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
+      uuid,
+      source_center_code,
+      has_source_vertex,
+      target_center_code,
+      has_target_vertex));
+  }
+}
+}
+}
+
 void
 SolverWrapper::init_nodes(int16_t page)
 {
@@ -105,43 +207,12 @@ SolverWrapper::init_nodes(int16_t page)
     auto data = response_json["result"]["data"];
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
-      std::string facility_code =
-        facility["facility_code"].template get<std::string>();
-      std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
-        0, 0, 0, 0
-      };
-
-      if (facility_timings_map.contains(facility_code)) {
-        facility_timings = facility_timings_map[facility_code];
-      }
-
-      auto transport_center = std::make_shared<TransportCenter>(facility_code);
-      transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
-          DURATION(std::get<0>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
-          DURATION(std::get<1>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
-          DURATION(std::get<2>(facility_timings)));
-      transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-          DURATION(std::get<3>(facility_timings)));
-      solver.add_node(transport_center);
-
+      std::string facility_code = facility["facility_code"].template get<std::string>();
+      std::string property_id = "";
       if (!facility["property_id"].is_null()) {
-        std::string property_id =
-          facility["property_id"].template get<std::string>();
-
-        if (!property_id.empty()) {
-          if (!facility_groups.contains(property_id)) {
-            facility_groups[property_id] = std::vector<std::string>{};
-          }
-
-          facility_groups[property_id].push_back(facility_code);
-        }
+       property_id = facility["property_id"].template get<std::string>();
       }
+      stream_node(facility_code, property_id);
     });
 
     auto pages =
@@ -216,79 +287,7 @@ SolverWrapper::init_edges()
     app.logger().debug(moirai::format("Got {} edges", data.size()));
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
-      std::string uuid =
-        route["route_schedule_uuid"].template get<std::string>();
-      std::string name = route["name"].template get<std::string>();
-      std::string route_type = route["route_type"].template get<std::string>();
-      to_lower(route_type);
-      std::string reporting_time =
-        route["reporting_time"].template get<std::string>();
-      TIME_OF_DAY offset{ datemod(std::chrono::duration_cast<TIME_OF_DAY>(
-                                    time_string_to_time(reporting_time)) -
-                                    DURATION{ 330 },
-                                  std::chrono::days{ 1 }) };
-      auto stops = route["halt_centers"];
-
-      if (!stops.is_array()) {
-        app.logger().error(
-          moirai::format("Edge<{}> stops is not an array", uuid));
-        return;
-      }
-      for (int i = 0; i < stops.size(); ++i) {
-        for (int j = i + 1; j < stops.size(); ++j) {
-          auto source = stops[i];
-          auto target = stops[j];
-
-          std::string departure = source["rel_etd"].template get<std::string>();
-          std::string arrival = target["rel_eta"].template get<std::string>();
-
-          TIME_OF_DAY departure_as_time(offset +
-                                        std::chrono::duration_cast<TIME_OF_DAY>(
-                                          time_string_to_time(departure)));
-          DURATION duration(std::chrono::duration_cast<TIME_OF_DAY>(
-            time_string_to_time(arrival) -
-            std::chrono::duration_cast<TIME_OF_DAY>(
-              time_string_to_time(departure))));
-
-          if (departure_as_time.count() < 0 or duration.count() < 0) {
-            app.logger().error(
-              moirai::format("Edge<{}>: Departure<{}> or duration<{}> negative",
-                             uuid,
-                             departure_as_time.count(),
-                             duration.count()));
-            return;
-          }
-
-          std::string source_center_code =
-            source["center_code"].template get<std::string>();
-          std::string target_center_code =
-            target["center_code"].template get<std::string>();
-
-          auto [source_vertex, has_source_vertex] =
-            solver.add_node(source_center_code);
-          auto [target_vertex, has_target_vertex] =
-            solver.add_node(target_center_code);
-          auto edge = std::make_shared<TransportEdge>(
-            moirai::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
-            name,
-            departure_as_time,
-            duration,
-            route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
-            route_type == "carting" ? MovementType::CARTING
-                                    : MovementType::LINEHAUL);
-          if (has_source_vertex and has_target_vertex) {
-            solver.add_edge(source_vertex, target_vertex, edge);
-          } else {
-            app.logger().error(moirai::format(
-              "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
-              uuid,
-              source_center_code,
-              has_source_vertex,
-              target_center_code,
-              has_target_vertex));
-          }
-        }
-      }
+      stream_edge(route);
     });
   } else {
     std::stringstream response_raw;

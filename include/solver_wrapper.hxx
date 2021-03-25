@@ -11,6 +11,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 class SolverWrapper : public Poco::Runnable
 {
@@ -44,10 +45,16 @@ public:
                 const std::string&,
                 const std::string&,
                 const std::filesystem::path&);
+  
+  SolverWrapper();
 
   void init_timings(const std::filesystem::path&);
 
   void init_nodes(int16_t = 1);
+
+  void stream_node(const std::string, const std::string);
+
+  void stream_edge(const nlohmann::json);
 
   void init_custody();
 

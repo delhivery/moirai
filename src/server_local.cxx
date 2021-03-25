@@ -290,17 +290,34 @@ Moirai::main(const ArgVec& arg)
                           route_uri,
                           route_token,
                           facility_timings_filename);
-    FileReader reader("/home/amitprakash/tests/load.json", load_queue);
+    FileReader reader("/home/delhivery/WorkSpace/new_ep/moirai/fixtures/inputs.json", load_queue);
     SearchWriter writer(Poco::URI(search_uri),
                         search_user,
                         search_pass,
                         search_index,
                         solution_queue);
-    std::vector<Poco::Thread> threads(3);
+    
+    KafkaReader kreader(
+      std::accumulate(broker_url.begin(),
+                      broker_url.end(),
+                      std::string{},
+                      [](const std::string& acc, const std::string& arg) {
+                        return acc.empty() ? arg
+                                           : moirai::format("{},{}", acc, arg);
+                      }),
+      batch_size,
+      timeout,
+      topic_map,
+      node_queue,
+      edge_queue,
+      load_queue);
+
+    std::vector<Poco::Thread> threads(4);
     try {
       threads[0].start(reader);
       threads[1].start(writer);
       threads[2].start(wrapper);
+      threads[3].start(kreader);
     } catch (const std::exception& exc) {
       logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
     }
