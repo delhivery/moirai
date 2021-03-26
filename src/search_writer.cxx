@@ -39,11 +39,16 @@ SearchWriter::run()
         results + num_records,
         [this, &dataset](const std::string& result) {
           auto package = nlohmann::json::parse(result);
-          if (package["_id"].is_null())
+          if (package["_id"].is_null() || package["cd"].is_null())
             return;
+          
+          std::string create_date = package["cd"].template get<std::string>().substr(0, 10);
+          std::string es_index = "";
+          es_index = search_index +  "." + create_date;
+
           dataset.push_back(nlohmann::json{
             { "index",
-              { { "_index", search_index },
+              { { "_index", es_index },
                 { "_id", package["_id"].template get<std::string>() } } } });
           package.erase("_id");
           dataset.push_back(package);

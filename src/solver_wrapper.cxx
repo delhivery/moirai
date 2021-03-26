@@ -549,6 +549,7 @@ SolverWrapper::run()
             solution["pid"] = data["pid"].is_null()
                                 ? ""
                                 : data["pid"].template get<std::string>();
+            solution["cd"] = data["cd"];
             solution_queue->enqueue(solution.dump());
           });
       }
