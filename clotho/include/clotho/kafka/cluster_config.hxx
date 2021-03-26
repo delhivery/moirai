@@ -38,7 +38,7 @@ class ClusterConfig
 private:
   uint64_t m_flags;
   const std::string m_consumer_group;
-  std::string m_brokers;
+  std::vector<std::string> m_brokers;
   std::filesystem::path m_ca_cert_path;
   std::filesystem::path m_client_cert_path;
   std::filesystem::path m_private_key_path;
@@ -66,7 +66,7 @@ public:
 
   void set_brokers(std::string);
 
-  std::string get_brokers() const;
+  std::vector<std::string> get_brokers() const;
 
   std::string get_consumer_group() const;
 
