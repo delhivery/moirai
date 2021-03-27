@@ -2,8 +2,9 @@
 #define CLOTHO_KAFKA_CLUSTER_CONFIG_HXX
 
 #include <chrono>
+// #include <cppkafka/utils/buffered_producer.h>
+#include <cppkafka/producer.h>
 #include <filesystem>
-#include <librdkafka/rdkafkacpp.h>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -48,9 +49,10 @@ private:
   std::chrono::milliseconds m_producer_message_timeout;
   std::chrono::milliseconds m_consumer_buffering;
   std::chrono::milliseconds m_schema_registry_timeout;
+  std::chrono::seconds m_cluster_state_timeout;
   size_t m_max_pending_sink_messages;
-  std::string m_root_path;
-  std::string m_schema_registry_uri;
+  std::filesystem::path m_root_path;
+  std::vector<std::string> m_schema_registry_uri;
   std::string m_push_gateway_uri;
 
   bool m_fail_fast;
@@ -76,7 +78,7 @@ public:
 
   void set_producer_buffering_time(std::chrono::milliseconds);
 
-  std::chrono::milliseconds set_consumer_buffering_time() const;
+  std::chrono::milliseconds get_producer_buffering_time() const;
 
   void set_producer_message_timeout(std::chrono::milliseconds);
 
@@ -104,9 +106,9 @@ public:
 
   std::string get_private_key_passphrase() const;
 
-  void set_schema_registry_uri(std::string);
+  void set_schema_registry_uri(std::vector<std::string>);
 
-  std::string get_schema_registry_uri() const;
+  std::vector<std::string> get_schema_registry_uri() const;
 
   void set_push_gateway_uri(std::string);
 
@@ -116,9 +118,9 @@ public:
 
   std::chrono::milliseconds get_schema_registry_timeout() const;
 
-  void set_storage_root(std::string);
+  void set_storage_root(std::filesystem::path);
 
-  std::string get_storage_root() const;
+  std::filesystem::path get_storage_root() const;
 
   void set_fail_fast(bool);
 
@@ -141,7 +143,7 @@ class ClusterMetadata
 {
 private:
   mutable std::mutex m_mutex;
-  std::unique_ptr<RdKafka::Producer> m_rd_handler;
+  std::unique_ptr<cppkafka::Producer> m_rd_producer;
   mutable std::set<std::string> m_available_consumer_groups;
   mutable std::set<std::string> m_missing_consumer_groups;
   mutable std::unordered_map<std::string, detail::TopicData> m_topic_data;
@@ -160,7 +162,7 @@ public:
   bool consumer_group_exists(std::string, std::chrono::seconds) const;
 
   bool wait_for_topic_partition(std::string,
-                                int32_t,
+                                uint32_t,
                                 std::chrono::seconds) const;
 
   bool wait_for_topic_leaders(std::string, std::chrono::seconds) const;

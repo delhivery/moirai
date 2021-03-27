@@ -1,15 +1,16 @@
 #ifndef CLOTHO_CONSUMER_KAFKA_HXX
 #define CLOTHO_CONSUMER_KAFKA_HXX
 #include <clotho/consumer/consumer.hxx>
-#include <librdkafka/rdkafkacpp.h>
+#include <cppkafka/configuration.h>
+#include <string>
 
 namespace ambasta {
 class KafkaConsumer : public Consumer
 {
 private:
   std::string broker;
-  RdKafka::Conf* config;
-  RdKafka::KafkaConsumer* consumer;
+  cppkafka::Configuration* m_config;
+  cppkafka::Consumer* consumer;
   std::string topic;
 
 public:

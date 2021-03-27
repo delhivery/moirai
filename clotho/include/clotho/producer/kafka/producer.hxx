@@ -3,7 +3,6 @@
 #include "clotho/common/event.hxx"
 #include <clotho/kafka/cluster_config.hxx>
 #include <clotho/producer/producer.hxx>
-#include <librdkafka/rdkafkacpp.h>
 #include <memory>
 
 namespace clotho {

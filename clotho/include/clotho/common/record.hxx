@@ -2,12 +2,10 @@
 #define CLOTHO_RECORD_HXX
 
 #include <chrono>
+#include <clotho/common/utils.hxx>
 #include <memory>
 
 namespace clotho {
-inline int64_t
-millis_since_epoch();
-
 template<class K, class V>
 class Record
 {

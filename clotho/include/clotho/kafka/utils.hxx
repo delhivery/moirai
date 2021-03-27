@@ -1,20 +1,14 @@
-#include <librdkafka/rdkafkacpp.h>
+
+#include <cppkafka/configuration.h>
+#include <cppkafka/message.h>
+#include <cppkafka/utils/buffered_producer.h>
 
 namespace clotho {
 namespace kafka {
-void
-set_config(RdKafka::Conf*, std::string, std::string);
 
 void
-set_config(RdKafka::Conf*, std::string, RdKafka::Conf*);
+set_config(cppkafka::Configuration*, std::string, std::string);
 
 void
-set_config(RdKafka::Conf*, std::string, RdKafka::DeliveryReportCb*);
-
-void
-set_config(RdKafka::Conf*, std::string, RdKafka::PartitionerCb*);
-
-void
-set_config(RdKafka::Conf*, std::string, RdKafka::EventCb*);
-}
+set_config(cppkafka::Configuration*, std::string, cppkafka::Configuration*);
 }
