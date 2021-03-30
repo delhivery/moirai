@@ -3,12 +3,15 @@
 #include "clotho/common/event.hxx"
 #include <clotho/kafka/cluster_config.hxx>
 #include <clotho/producer/producer.hxx>
+#include <cppkafka/cppkafka.h>
+#include <cppkafka/topic_partition_list.h>
 #include <memory>
 
 namespace clotho {
 namespace kafka {
 namespace detail {
-class PartitionerCb : public RdKafka::PartitionerCb
+
+/*class PartitionerCb : public RdKafka::PartitionerCb
 {
 public:
   int32_t partitioner_cb(const RdKafka::Topic*,
@@ -34,7 +37,7 @@ class EventCb : public RdKafka::EventCb
 {
 public:
   void event_cb(RdKafka::Event&);
-};
+};*/
 
 enum MemoryManagementMode
 {
@@ -47,16 +50,14 @@ class Producer : public ::clotho::Producer<std::string, std::string>
 {
 private:
   const std::string m_topic;
-  std::unique_ptr<RdKafka::Topic> m_rd_topic;
-  std::unique_ptr<RdKafka::Producer> m_rd_producer;
+  std::unique_ptr<cppkafka::Producer> m_rd_producer;
   bool m_closed;
   size_t m_partition_count;
   uint64_t m_message_count;
   uint64_t m_message_bytes;
+  cppkafka::Error m_error;
 
-  detail::HashPartitionCb m_default_partitioner;
-  detail::DeliveryReportCb m_delivery_report_callback;
-  detail::EventCb m_event_callback;
+  std::function<void(cppkafka::TopicPartitionList&)> m_default_partitioner;
 
 public:
   Producer(std::shared_ptr<ClusterConfig>, std::string);
@@ -67,14 +68,7 @@ public:
 
   void close() override;
 
-  int produce(uint32_t,
-              detail::MemoryManagementMode,
-              void*,
-              size_t,
-              void*,
-              size_t,
-              int64_t,
-              std::shared_ptr<EventCompletedMarker>);
+  int produce(uint32_t, const std::string&, const std::string&, int64_t);
 
   inline std::string topic() const override;
 
@@ -84,13 +78,13 @@ public:
 
   void poll() override;
 
-  inline void poll(int);
+  inline void poll(std::chrono::milliseconds);
 
   inline bool good() const override;
 
   inline size_t partition_count() const;
 
-  inline int32_t flush(int);
+  inline int32_t flush(std::chrono::milliseconds);
 };
 }
 }
