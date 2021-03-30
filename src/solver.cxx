@@ -10,6 +10,7 @@
 #include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
 #include <numeric>
 #include <string> // for string
+#include <mutex>  // For std::unique_lock
 
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::string node_code_or_name) const
@@ -22,8 +23,8 @@ Solver::add_node(std::string node_code_or_name) const
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::shared_ptr<TransportCenter> center)
 {
+  std::unique_lock lock(mutex_);
   auto created = add_node(center->code);
-
   if (created.second)
     return created;
   Node<Graph> node = boost::add_vertex(center, graph);
@@ -34,6 +35,7 @@ Solver::add_node(std::shared_ptr<TransportCenter> center)
 std::shared_ptr<TransportCenter>
 Solver::get_node(const Node<Graph> node) const
 {
+  std::shared_lock lock(mutex_);
   return graph[node];
 }
 
@@ -50,6 +52,7 @@ Solver::add_edge(const Node<Graph>& source,
                  const Node<Graph>& target,
                  std::shared_ptr<TransportEdge> route)
 {
+  std::unique_lock lock(mutex_);
   if (edge_by_name.contains(route->code))
     return { edge_by_name.at(route->code), true };
   route->update(graph[source], graph[target]);
