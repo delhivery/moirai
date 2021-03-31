@@ -15,6 +15,7 @@
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::string node_code_or_name) const
 {
+  std::shared_lock lock(mutex_);
   if (vertex_by_name.contains(node_code_or_name))
     return { vertex_by_name.at(node_code_or_name), true };
   return { Graph::null_vertex(), false };
@@ -23,10 +24,10 @@ Solver::add_node(std::string node_code_or_name) const
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::shared_ptr<TransportCenter> center)
 {
-  std::unique_lock lock(mutex_);
   auto created = add_node(center->code);
   if (created.second)
     return created;
+  std::unique_lock lock(mutex_);
   Node<Graph> node = boost::add_vertex(center, graph);
   vertex_by_name[center->code] = node;
   return { node, true };
@@ -42,6 +43,7 @@ Solver::get_node(const Node<Graph> node) const
 std::pair<Edge<Graph>, bool>
 Solver::add_edge(std::string edge_code) const
 {
+  std::shared_lock lock(mutex_);
   if (edge_by_name.contains(edge_code))
     return { edge_by_name.at(edge_code), true };
   return { null_edge<Edge<Graph>>(), false };
@@ -52,9 +54,9 @@ Solver::add_edge(const Node<Graph>& source,
                  const Node<Graph>& target,
                  std::shared_ptr<TransportEdge> route)
 {
-  std::unique_lock lock(mutex_);
   if (edge_by_name.contains(route->code))
     return { edge_by_name.at(route->code), true };
+  std::unique_lock lock(mutex_);
   route->update(graph[source], graph[target]);
   return boost::add_edge(source, target, route, graph);
 }
@@ -66,6 +68,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& target,
   CLOCK start) const
 {
+  std::shared_lock lock(mutex_);
   typedef FilterByVehicleType<Graph, VehicleType::AIR> FilterType;
   typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
   FilterType filter{ &graph };
@@ -80,6 +83,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& target,
   CLOCK start) const
 {
+  std::shared_lock lock(mutex_);
   typedef FilterByVehicleType<Graph, VehicleType::SURFACE> FilterType;
   typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
   FilterType filter{ &graph };
@@ -94,6 +98,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   const Node<Graph>& target,
   CLOCK start) const
 {
+  std::shared_lock lock(mutex_);
   typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
   typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::AIR> FilterType;
   typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;
@@ -110,6 +115,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   const Node<Graph>& target,
   CLOCK start) const
 {
+  std::shared_lock lock(mutex_);
   typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
   typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::SURFACE> FilterType;
   typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;

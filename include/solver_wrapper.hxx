@@ -52,7 +52,7 @@ public:
 
   void init_nodes(int16_t = 1);
 
-  void stream_node(const std::string, const std::string);
+  void stream_node(const nlohmann::json);
 
   void stream_edge(const nlohmann::json);
 

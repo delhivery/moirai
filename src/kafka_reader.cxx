@@ -144,17 +144,15 @@ KafkaReader::run()
       if (topic_name == "load") {
         load_queue->enqueue(data);
       } else if (topic_name == "edge") {
-        app.logger().information(data);
-        auto node_json = nlohmann::json::parse(data);
-        wrapper->stream_edge(node_json);
+        auto edge_json = nlohmann::json::parse(data);
+        wrapper->stream_edge(edge_json);
         // edge_queue->enqueue(data);
       } else if (topic_name == "node") {
         auto node_json = nlohmann::json::parse(data);
         std::string status = node_json["property"]["facility"]["status"].template get<std::string>();
-        std::string facility_code = node_json["property"]["facility"]["facility_code"].template get<std::string>();
-        std::string property_id = node_json["property"]["id"].template get<std::string>();
-        wrapper->stream_node(facility_code, property_id);
-        app.logger().information(data);
+        if( status == "Active"){
+          wrapper->stream_node(node_json);
+        }
         // node_queue->enqueue(data);
       } else {
         app.logger().error(moirai::format(

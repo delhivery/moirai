@@ -83,9 +83,14 @@ SolverWrapper::init_timings(
 }
 
 void 
-SolverWrapper::stream_node(std::string code, std::string id){
-  std::string facility_code = code;
-  std:: string property_id = id;
+SolverWrapper::stream_node(nlohmann::json facility){
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+  std::string facility_code = facility["facility_code"].template get<std::string>();
+  std::string property_id = "";
+  if (!facility["property_id"].is_null()) {
+    property_id = facility["property_id"].template get<std::string>();
+  }
+  
   std::tuple<int32_t, int32_t, int32_t, int32_t> facility_timings{
     0, 0, 0, 0
   };
@@ -207,12 +212,7 @@ SolverWrapper::init_nodes(int16_t page)
     auto data = response_json["result"]["data"];
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& facility) {
-      std::string facility_code = facility["facility_code"].template get<std::string>();
-      std::string property_id = "";
-      if (!facility["property_id"].is_null()) {
-       property_id = facility["property_id"].template get<std::string>();
-      }
-      stream_node(facility_code, property_id);
+      stream_node(facility);
     });
 
     auto pages =
