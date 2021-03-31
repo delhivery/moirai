@@ -22,6 +22,7 @@
 #include <tuple>                                               // for tuple...
 #include <utility>                                             // for pair
 #include <vector>                                              // for vector
+#include <shared_mutex>
 
 typedef boost::adjacency_list<boost::vecS,
                               boost::vecS,
@@ -49,6 +50,7 @@ private:
   Graph graph;
   std::map<std::string, Node<Graph>> vertex_by_name;
   std::map<std::string, Edge<Graph>> edge_by_name;
+  mutable std::shared_mutex mutex_;
 
 public:
   std::pair<Node<Graph>, bool> add_node(std::string) const;
