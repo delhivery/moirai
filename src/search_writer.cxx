@@ -19,6 +19,7 @@ SearchWriter::SearchWriter(
   , password(search_pass)
   , search_index(search_index)
   , solution_queue(solution_queue)
+  , running(true)
 {}
 
 void
@@ -27,13 +28,14 @@ SearchWriter::run()
   Poco::Util::Application& app = Poco::Util::Application::instance();
   Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
 
-  while (true) {
+  while (running) {
     // app.logger().information("SearchWriter polling....");
-    Poco::Thread::sleep(200);
+    Poco::Thread::sleep(2000);
     std::string results[500];
     if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
         num_records > 0) {
       std::vector<nlohmann::json> dataset = {};
+
       std::for_each(
         results,
         results + num_records,
@@ -59,6 +61,7 @@ SearchWriter::run()
                                    : moirai::format("{}\n{}", acc, row.dump());
                         });
       stringified += "\n";
+      app.logger().information(stringified);
       try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        "/_bulk",
@@ -78,7 +81,7 @@ SearchWriter::run()
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
           app.logger().debug(moirai::format(
             "Got successful response from ES Host: {}", response_raw.str()));
-          app.logger().information(
+          app.logger().debug(
             moirai::format("Pushed {} records", num_records));
         } else {
           app.logger().error(moirai::format("Error uploading data: <{}>: {}",

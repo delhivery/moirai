@@ -57,7 +57,7 @@ Solver::add_edge(const Node<Graph>& source,
 }
 
 template<>
-Path
+Segment*
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -71,7 +71,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
 }
 
 template<>
-Path
+Segment*
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -85,7 +85,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
 }
 
 template<>
-Path
+Segment*
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -101,7 +101,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
 }
 
 template<>
-Path
+Segment*
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,

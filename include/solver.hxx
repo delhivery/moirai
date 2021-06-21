@@ -1,3 +1,6 @@
+#ifndef MOIRAI_SOLVER_HXX
+#define MOIRAI_SOLVER_HXX
+
 #include "date_utils.hxx" // for CLOCK
 #include "format.hxx"
 #include "transportation.hxx"                                  // for Trans...
@@ -21,7 +24,8 @@
 #include <string>                                              // for strin...
 #include <tuple>                                               // for tuple...
 #include <utility>                                             // for pair
-#include <vector>                                              // for vector
+#include <variant>
+#include <vector> // for vector
 
 typedef boost::adjacency_list<boost::vecS,
                               boost::vecS,
@@ -36,11 +40,20 @@ using Node = typename boost::graph_traits<G>::vertex_descriptor;
 template<class G>
 using Edge = typename boost::graph_traits<G>::edge_descriptor;
 
-typedef std::vector<std::tuple<std::shared_ptr<TransportCenter>,
-                               std::shared_ptr<TransportCenter>,
-                               std::shared_ptr<TransportEdge>,
-                               CLOCK>>
-  Path;
+// typedef std::vector<std::tuple<std::shared_ptr<TransportCenter>,
+//                               std::shared_ptr<TransportCenter>,
+//                               std::shared_ptr<TransportEdge>,
+//                               CLOCK>>
+//  Path;
+
+struct Segment
+{
+  std::shared_ptr<TransportCenter> node = nullptr;
+  std::shared_ptr<TransportEdge> outbound = nullptr;
+  Segment* prev = nullptr;
+  Segment* next = nullptr;
+  CLOCK distance;
+};
 
 class Solver
 {
@@ -68,10 +81,10 @@ public:
   std::string show_all() const;
 
   template<typename FilteredGraph>
-  Path path_forward(const Node<FilteredGraph>& source,
-                    const Node<FilteredGraph>& target,
-                    CLOCK start,
-                    const FilteredGraph& filtered_graph) const
+  Segment* path_forward(const Node<FilteredGraph>& source,
+                        const Node<FilteredGraph>& target,
+                        CLOCK start,
+                        const FilteredGraph& filtered_graph) const
   {
     typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
       predecessor_edge_map_t;
@@ -119,31 +132,56 @@ public:
         .distance_inf(CLOCK::max())
         .visitor(visitor));
 
-    Path path;
+    Segment* segment = new Segment{};
+    segment->next = nullptr;
+    segment->outbound = nullptr;
 
     for (Node<FilteredGraph> current = target; current != source;
          current =
            boost::source(predecessors_property_map[current], filtered_graph)) {
+
       auto edge_descriptor = predecessors_property_map[current];
       auto sour_descriptor = boost::source(edge_descriptor, filtered_graph);
       CLOCK distance = distances[current];
 
       if (distance == CLOCK::max())
-        break;
-      path.push_back(std::make_tuple(filtered_graph[current],
+        return nullptr;
+
+      // We are at current center
+      // Set node
+      segment->node = filtered_graph[current];
+      // Set current center distance
+      segment->distance = distances[current];
+
+      // Create predecessor segment
+      segment->prev = new Segment{};
+      // Set predecessor's successor as self
+      segment->prev->next = segment;
+
+      // Set outbound edge on predecessor
+      segment->prev->outbound = filtered_graph[edge_descriptor];
+
+      // Move self to predecessor
+      segment = segment->prev;
+
+      /*path.push_back(std::make_tuple(filtered_graph[current],
                                      filtered_graph[sour_descriptor],
                                      filtered_graph[edge_descriptor],
-                                     distance));
+                                     distance));*/
     }
+    segment->node = filtered_graph[source];
+    segment->distance = distances[source];
+    segment->prev = nullptr;
 
-    return path;
+    // We are at path origin
+    return segment;
   }
 
   template<typename FilteredGraph>
-  Path path_reverse(const Node<FilteredGraph>& source,
-                    const Node<FilteredGraph>& target,
-                    CLOCK start,
-                    const FilteredGraph& filtered_graph) const
+  Segment* path_reverse(const Node<FilteredGraph>& source,
+                        const Node<FilteredGraph>& target,
+                        CLOCK start,
+                        const FilteredGraph& filtered_graph) const
   {
     typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
       predecessor_edge_map_t;
@@ -180,7 +218,8 @@ public:
         .distance_inf(CLOCK::min())
         .visitor(visitor));
 
-    Path path;
+    Segment* segment = new Segment{};
+    segment->prev = nullptr;
 
     for (Node<FilteredGraph> current = target; current != source;
          current =
@@ -190,15 +229,41 @@ public:
       CLOCK distance = distances[current];
 
       if (distance == CLOCK::min())
-        break;
-      path.push_back(std::make_tuple(filtered_graph[current],
+        return nullptr;
+
+      // We are at current center
+      // Set node as current center
+      segment->node = filtered_graph[current];
+      // Set current center distance
+      segment->distance = distances[current];
+
+      // Set successor edge node
+      segment->outbound = filtered_graph[edge_descriptor];
+      // Create a successor center
+      segment->next = new Segment{};
+      // Set self as successor's predecessor
+      segment->next->prev = segment;
+
+      // Move self to successor edge
+      segment = segment->next;
+
+      /*path.push_back(std::make_tuple(filtered_graph[current],
                                      filtered_graph[sour_descriptor],
                                      filtered_graph[edge_descriptor],
-                                     distance));
+                                     distance));*/
     }
-    return path;
+    segment->node = filtered_graph[source];
+    segment->distance = distances[source];
+    segment->next = nullptr;
+
+    while (segment->prev != nullptr)
+      segment = segment->prev;
+    // We are at path origin center
+    return segment;
   }
 
   template<PathTraversalMode P, VehicleType V = VehicleType::AIR>
-  Path find_path(const Node<Graph>&, const Node<Graph>&, CLOCK) const;
+  Segment* find_path(const Node<Graph>&, const Node<Graph>&, CLOCK) const;
 };
+
+#endif

@@ -35,6 +35,8 @@ private:
   moodycamel::ConcurrentQueue<std::string>* solution_queue;
 
 public:
+  std::atomic<bool> running;
+
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
@@ -61,6 +63,7 @@ public:
     std::string bag_source,
     std::string bag_target,
     int32_t bag_start,
+    CLOCK bag_end,
     std::vector<std::tuple<std::string, int32_t, std::string>>&) const;
 
   virtual void run();

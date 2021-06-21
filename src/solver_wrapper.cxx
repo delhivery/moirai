@@ -1,6 +1,7 @@
 #include "solver_wrapper.hxx"
 #include "date_utils.hxx"
 #include "format.hxx"
+#include "processor.hxx"
 #include "transportation.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
@@ -45,8 +46,8 @@ SolverWrapper::SolverWrapper(
   init_nodes();
   init_custody();
   init_edges();
-  app.logger().information(
-    moirai::format("Initialized graph: {}", solver.show()));
+  app.logger().debug(moirai::format("Initialized graph: {}", solver.show()));
+  running = true;
   // app.logger().information(solver.show_all());
 }
 
@@ -305,18 +306,20 @@ SolverWrapper::find_paths(
   std::string bag_source,
   std::string bag_target,
   int32_t bag_start,
+  CLOCK bag_end,
   std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
-  CLOCK bag_pdd = CLOCK::max();
+  CLOCK bag_pdd = bag_end;
+  // bag_pdd = CLOCK::max();
   CLOCK bag_earliest_pdd = CLOCK::max();
   const auto [source, has_source] = solver.add_node(bag_source);
   const auto [target, has_target] = solver.add_node(bag_target);
 
   if (!has_source || !has_target) {
-    app.logger().error(
+    app.logger().debug(
       "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
       bag,
       bag_source,
@@ -326,32 +329,44 @@ SolverWrapper::find_paths(
     return nlohmann::json({});
   }
 
-  Path solution_earliest =
+  auto solution_earliest_start_segment =
     solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       source, target, start);
-  Path solution_ultimate;
+  Segment* solution_ultimate_start_segment = nullptr;
 
-  if (solution_earliest.size() > 0) {
+  bool critical = false;
 
-    bag_earliest_pdd = std::get<3>(solution_earliest[0]);
+  if (solution_earliest_start_segment != nullptr) {
 
-    for (auto const& package : packages) {
-      std::string package_target_string = std::get<0>(package);
-      const auto [package_target, has_package_target] =
-        solver.add_node(package_target_string);
+    Segment* segment = solution_earliest_start_segment;
+    while (segment->next != nullptr)
+      segment = segment->next;
+    bag_earliest_pdd = segment->distance;
 
-      if (has_package_target) {
-        Path pkg_reverse_path =
+    if (bag_pdd < bag_earliest_pdd)
+      critical = true;
+    else {
+      auto child_earliest = *std::min_element(
+        packages.begin(), packages.end(), [](auto const& lhs, auto const& rhs) {
+          return std::get<1>(lhs) < std::get<1>(rhs);
+        });
+
+      const auto [child_target, has_child_target] =
+        solver.add_node(std::get<0>(child_earliest));
+
+      if (child_target != target and has_child_target) {
+        auto child_pdd =
+          ZERO + std::chrono::minutes(std::get<1>(child_earliest));
+        auto child_critical_start_segment =
           solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-            package_target,
-            target,
-            ZERO + std::chrono::minutes(std::get<1>(package)));
+            child_target, target, child_pdd);
 
-        if (pkg_reverse_path.size() > 0) {
-          CLOCK package_pdd = std::get<3>(pkg_reverse_path[0]);
+        if (child_critical_start_segment != nullptr) {
+          auto child_pdd_at_parent_target =
+            child_critical_start_segment->distance;
 
-          if (package_pdd < bag_pdd and package_pdd >= bag_earliest_pdd) {
-            bag_pdd = package_pdd;
+          if (child_pdd_at_parent_target < bag_earliest_pdd) {
+            critical = true;
           }
         }
       }
@@ -364,9 +379,11 @@ SolverWrapper::find_paths(
     bag_pdd = bag_earliest_pdd;
   }
 
-  solution_ultimate =
-    solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-      target, source, bag_pdd);
+  if (not critical) {
+    solution_ultimate_start_segment =
+      solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+        target, source, bag_pdd);
+  }
 
   nlohmann::json response;
   response["_id"] = bag;
@@ -377,94 +394,15 @@ SolverWrapper::find_paths(
     response["package"] = std::get<2>(packages[0]);
   }
 
-  response["earliest"]["locations"] = {};
-  response["ultimate"]["locations"] = {};
+  if (solution_earliest_start_segment != nullptr and
+      solution_earliest_start_segment->next != nullptr)
+    response["earliest"]["locations"] =
+      parse_path(solution_earliest_start_segment);
 
-  std::shared_ptr<TransportEdge> outbound_edge = nullptr;
-
-  for (auto idx = 0; idx < solution_earliest.size(); ++idx) {
-    auto [current_node, previous_node, inbound_edge, distance_current] =
-      solution_earliest[idx];
-
-    std::string current_node_code = current_node->code;
-    DURATION latency =
-      current_node->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
-
-    if (inbound_edge->movement == MovementType::CARTING)
-      latency = current_node
-                  ->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
-    std::string current_node_arrival =
-      date::format("%D %T", distance_current - latency);
-
-    nlohmann::json location_entry = { { "code", current_node_code },
-                                      { "arrival", current_node_arrival } };
-
-    if (outbound_edge != nullptr) {
-      location_entry["departure"] = date::format(
-        "%D %T", get_departure(distance_current, outbound_edge->departure));
-      location_entry["route"] =
-        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
-    }
-    response["earliest"]["locations"].push_back(location_entry);
-    outbound_edge = inbound_edge;
-  }
-  {
-    auto current_node = solver.get_node(source);
-    nlohmann::json location_entry = { { "code", solver.get_node(source)->code },
-                                      { "arrival",
-                                        date::format("%D %T", start) } };
-
-    if (outbound_edge != nullptr) {
-      location_entry["departure"] =
-        date::format("%D %T", get_departure(start, outbound_edge->departure));
-      location_entry["route"] =
-        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
-    }
-    response["earliest"]["locations"].push_back(location_entry);
-    std::reverse(response["earliest"]["locations"].begin(),
-                 response["earliest"]["locations"].end());
-    response["earliest"]["first"] = location_entry;
-  }
-  std::shared_ptr<TransportEdge> inbound_edge = nullptr;
-
-  for (auto idx = 0; idx < solution_ultimate.size(); ++idx) {
-    auto [current_node, previous_node, outbound_edge, distance_current] =
-      solution_ultimate[idx];
-
-    std::string current_node_code = current_node->code;
-
-    DURATION latency =
-      current_node
-        ->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
-
-    if (outbound_edge->movement == MovementType::CARTING)
-      latency = current_node
-                  ->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
-
-    std::string current_node_arrival = date::format("%D %T", distance_current);
-    nlohmann::json location_entry = {
-      { "code", current_node_code },
-      { "arrival", current_node_arrival },
-      { "departure",
-        date::format("%D %T",
-                     get_departure(distance_current, outbound_edge->departure) +
-                       latency) },
-      { "route", outbound_edge->code.substr(0, outbound_edge->code.find('.')) }
-    };
-    response["ultimate"]["locations"].push_back(location_entry);
-
-    if (idx == 0)
-      response["ultimate"]["first"] = location_entry;
-  }
-  {
-    auto start_location = solver.get_node(target);
-    nlohmann::json location_entry = { { "code", solver.get_node(target)->code },
-                                      { "arrival",
-                                        date::format("%D %T", bag_pdd) } };
-    response["ultimate"]["locations"].push_back(location_entry);
-  }
-
-  response["pdd"] = date::format("%D %T", bag_pdd);
+  if (solution_ultimate_start_segment != nullptr and
+      solution_ultimate_start_segment->next != nullptr)
+    response["ultimate"]["locations"] =
+      parse_path(solution_ultimate_start_segment);
   return response;
 }
 
@@ -475,7 +413,7 @@ SolverWrapper::run()
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
 
-  while (true) {
+  while (running) {
     try {
       Poco::Thread::sleep(200);
       std::string payloads[100];
@@ -502,13 +440,13 @@ SolverWrapper::run()
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
-              if (waybill["cpdd_destination"].is_null() or
+              if (waybill["ipdd_destination"].is_null() or
                   waybill["cn"].is_null() or waybill["id"].is_null())
                 return;
               packages.emplace_back(
                 waybill["cn"].template get<std::string>(),
                 iso_to_date(
-                  waybill["cpdd_destination"].template get<std::string>(), true)
+                  waybill["ipdd_destination"].template get<std::string>(), true)
                   .time_since_epoch()
                   .count(),
                 waybill["id"].template get<std::string>());
@@ -524,6 +462,18 @@ SolverWrapper::run()
                 current_location == item_destination)
               return;
 
+            CLOCK tmax = CLOCK::max();
+
+            if (!data["ipdd_destination"].is_null() and
+                !data["ipdd_destination"].empty()) {
+              std::string ipdd =
+                data["ipdd_destination"].template get<std::string>();
+
+              if (ipdd.length() > 11) {
+                tmax = iso_to_date(ipdd);
+              }
+            }
+
             nlohmann::json solution =
               find_paths(bag_identifier,
                          current_location,
@@ -531,6 +481,7 @@ SolverWrapper::run()
                          iso_to_date(data["time"].template get<std::string>())
                            .time_since_epoch()
                            .count(),
+                         tmax,
                          packages);
 
             if (solution.empty()) {

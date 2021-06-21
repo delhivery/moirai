@@ -38,6 +38,7 @@ if(NOT LOCAL)
     src/utils.cxx
     src/kafka_reader.cxx
     src/search_writer.cxx
+    src/processor.cxx
     src/solver_wrapper.cxx
     src/server.cxx
   )

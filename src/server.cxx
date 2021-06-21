@@ -317,6 +317,11 @@ Moirai::main(const ArgVec& arg)
       logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
     }
     waitForTerminationRequest();
+    logger().information("Termination requested");
+    reader.running = false;
+    writer.running = false;
+    wrapper.running = false;
+
     for (auto& thread : threads)
       thread.join();
   }

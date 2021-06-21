@@ -3,7 +3,7 @@
 #include "format.hxx"
 #include <Poco/Util/ServerApplication.h>
 
-const std::string KafkaReader::consumer_group = "MOIRAI";
+const std::string KafkaReader::consumer_group = "CLOTHO";
 
 KafkaReader::KafkaReader(const std::string& broker_url,
                          const uint16_t batch_size,
