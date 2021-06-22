@@ -397,12 +397,12 @@ SolverWrapper::find_paths(
   if (solution_earliest_start_segment != nullptr and
       solution_earliest_start_segment->next != nullptr)
     response["earliest"]["locations"] =
-      parse_path(solution_earliest_start_segment);
+      parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
 
   if (solution_ultimate_start_segment != nullptr and
       solution_ultimate_start_segment->next != nullptr)
     response["ultimate"]["locations"] =
-      parse_path(solution_ultimate_start_segment);
+      parse_path<PathTraversalMode::REVERSE>(solution_ultimate_start_segment);
   return response;
 }
 
