@@ -394,11 +394,9 @@ SolverWrapper::find_paths(
     response["package"] = std::get<2>(packages[0]);
   }
 
-  if (solution_earliest_start_segment != nullptr) {
-    response["earliest"]["locations"] =
-      parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
-    response["earliest"]["first"] = response["earliest"]["locations"][0];
-  }
+  response["earliest"]["locations"] =
+    parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
+  response["earliest"]["first"] = response["earliest"]["locations"][0];
 
   if (solution_ultimate_start_segment != nullptr) {
     response["ultimate"]["locations"] =
