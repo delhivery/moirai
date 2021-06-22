@@ -23,9 +23,9 @@ jobs:
     
     - name: Update repository metadata
       run: |
-        apt update -y
-        apt upgrade -y
-        apt dist-upgrade -y
+        sudo apt update -y
+        sudo apt upgrade -y
+        sudo apt dist-upgrade -y
 
     - name: Install dependencies
       run: |
