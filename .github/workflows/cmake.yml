@@ -28,7 +28,7 @@ jobs:
         sudo apt dist-upgrade -y
 
     - name: Install dependencies
-      run: |
+      run: sudo apt install -y \
         libbost-all-dev \
         libfmt-dev \
         libtbb-dev \
