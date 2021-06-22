@@ -55,17 +55,7 @@ parse_path<PathTraversalMode::REVERSE>(const Segment* start)
                                { "departure",
                                  date::format("%D %T", current->distance) } };
       response.push_back(entry);
-
-      if (current->outbound->movement == MovementType::LINEHAUL)
-        arrival =
-          current->distance + current->outbound->duration +
-          current->next->node
-            ->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
-      else
-        arrival =
-          current->distance + current->outbound->duration +
-          current->next->node
-            ->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+      arrival = current->distance + current->outbound->duration;
     }
     nlohmann::json entry{ { "code", current->node->code },
                           { "arrival", date::format("%D %T", arrival) } };
