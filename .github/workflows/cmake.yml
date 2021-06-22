@@ -23,7 +23,7 @@ jobs:
     
     - name: Update repository metadata
       run: |
-        sudo add-apt-repository ppa:nschloe/waybar
+        sudo add-apt-repository -y ppa:nschloe/waybar
         sudo apt update -y
         sudo apt upgrade -y
         sudo apt dist-upgrade -y
