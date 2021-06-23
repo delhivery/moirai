@@ -56,6 +56,7 @@ parse_path<PathTraversalMode::REVERSE>(const std::shared_ptr<Segment> start)
                                  date::format("%D %T", current->distance) } };
       response.push_back(entry);
       arrival = current->distance + current->outbound->duration;
+      current = current->next;
     }
     nlohmann::json entry{ { "code", current->node->code },
                           { "arrival", date::format("%D %T", arrival) } };
