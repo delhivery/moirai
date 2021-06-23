@@ -332,13 +332,13 @@ SolverWrapper::find_paths(
   auto solution_earliest_start_segment =
     solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       source, target, start);
-  Segment* solution_ultimate_start_segment = nullptr;
+  std::shared_ptr<Segment> solution_ultimate_start_segment = nullptr;
 
   bool critical = false;
 
   if (solution_earliest_start_segment != nullptr) {
 
-    Segment* segment = solution_earliest_start_segment;
+    auto segment = solution_earliest_start_segment;
     while (segment->next != nullptr)
       segment = segment->next;
     bag_earliest_pdd = segment->distance;

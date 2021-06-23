@@ -6,6 +6,6 @@
 
 template<PathTraversalMode P>
 nlohmann::json
-parse_path(const Segment*);
+parse_path(const std::shared_ptr<Segment>);
 
 #endif

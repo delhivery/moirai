@@ -6,7 +6,7 @@
 
 template<>
 nlohmann::json
-parse_path<PathTraversalMode::FORWARD>(const Segment* start)
+parse_path<PathTraversalMode::FORWARD>(const std::shared_ptr<Segment> start)
 {
   nlohmann::json response = {};
 
@@ -38,7 +38,7 @@ parse_path<PathTraversalMode::FORWARD>(const Segment* start)
 
 template<>
 nlohmann::json
-parse_path<PathTraversalMode::REVERSE>(const Segment* start)
+parse_path<PathTraversalMode::REVERSE>(const std::shared_ptr<Segment> start)
 {
   nlohmann::json response = {};
 

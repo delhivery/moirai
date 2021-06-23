@@ -50,8 +50,8 @@ struct Segment
 {
   std::shared_ptr<TransportCenter> node = nullptr;
   std::shared_ptr<TransportEdge> outbound = nullptr;
-  Segment* prev = nullptr;
-  Segment* next = nullptr;
+  std::shared_ptr<Segment> prev = nullptr;
+  std::shared_ptr<Segment> next = nullptr;
   CLOCK distance;
 };
 
@@ -81,10 +81,11 @@ public:
   std::string show_all() const;
 
   template<typename FilteredGraph>
-  Segment* path_forward(const Node<FilteredGraph>& source,
-                        const Node<FilteredGraph>& target,
-                        CLOCK start,
-                        const FilteredGraph& filtered_graph) const
+  std::shared_ptr<Segment> path_forward(
+    const Node<FilteredGraph>& source,
+    const Node<FilteredGraph>& target,
+    CLOCK start,
+    const FilteredGraph& filtered_graph) const
   {
     typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
       predecessor_edge_map_t;
@@ -132,7 +133,7 @@ public:
         .distance_inf(CLOCK::max())
         .visitor(visitor));
 
-    Segment* segment = new Segment{};
+    auto segment = std::make_shared<Segment>();
     segment->next = nullptr;
     segment->outbound = nullptr;
 
@@ -154,7 +155,7 @@ public:
       segment->distance = distances[current];
 
       // Create predecessor segment
-      segment->prev = new Segment{};
+      segment->prev = std::make_shared<Segment>();
       // Set predecessor's successor as self
       segment->prev->next = segment;
 
@@ -178,10 +179,11 @@ public:
   }
 
   template<typename FilteredGraph>
-  Segment* path_reverse(const Node<FilteredGraph>& source,
-                        const Node<FilteredGraph>& target,
-                        CLOCK start,
-                        const FilteredGraph& filtered_graph) const
+  std::shared_ptr<Segment> path_reverse(
+    const Node<FilteredGraph>& source,
+    const Node<FilteredGraph>& target,
+    CLOCK start,
+    const FilteredGraph& filtered_graph) const
   {
     typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
       predecessor_edge_map_t;
@@ -218,7 +220,7 @@ public:
         .distance_inf(CLOCK::min())
         .visitor(visitor));
 
-    Segment* segment = new Segment{};
+    auto segment = std::make_shared<Segment>();
     segment->prev = nullptr;
 
     for (Node<FilteredGraph> current = target; current != source;
@@ -240,7 +242,7 @@ public:
       // Set successor edge node
       segment->outbound = filtered_graph[edge_descriptor];
       // Create a successor center
-      segment->next = new Segment{};
+      segment->next = std::make_shared<Segment>();
       // Set self as successor's predecessor
       segment->next->prev = segment;
 
@@ -263,7 +265,9 @@ public:
   }
 
   template<PathTraversalMode P, VehicleType V = VehicleType::AIR>
-  Segment* find_path(const Node<Graph>&, const Node<Graph>&, CLOCK) const;
+  std::shared_ptr<Segment> find_path(const Node<Graph>&,
+                                     const Node<Graph>&,
+                                     CLOCK) const;
 };
 
 #endif
