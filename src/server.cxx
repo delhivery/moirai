@@ -273,22 +273,14 @@ Moirai::main(const ArgVec& arg)
 {
 
   if (!help_requested) {
-    std::shared_ptr<moodycamel::ConcurrentQueue<std::string>> node_queue =
-      std::make_shared<moodycamel::ConcurrentQueue<std::string>>{};
-    std::shared_ptr<moodycamel::ConcurrentQueue<std::string>> edge_queue =
-      std::make_shared<moodycamel::ConcurrentQueue<std::string>>{};
-    std::shared_ptr<moodycamel::ConcurrentQueue<std::string>> load_queue =
-      std::make_shared<moodycamel::ConcurrentQueue<std::string>>{};
-    std::shared_ptr<moodycamel::ConcurrentQueue<std::string>> solution_queue =
-      std::make_shared<moodycamel::ConcurrentQueue<std::string>>{};
-    /*moodycamel::ConcurrentQueue<std::string>* node_queue =
+    moodycamel::ConcurrentQueue<std::string>* node_queue =
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* edge_queue =
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* load_queue =
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
-      new moodycamel::ConcurrentQueue<std::string>();*/
+      new moodycamel::ConcurrentQueue<std::string>();
     SolverWrapper wrapper(node_queue,
                           edge_queue,
                           load_queue,
