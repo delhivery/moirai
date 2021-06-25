@@ -31,8 +31,8 @@ SearchWriter::run()
   while (running or solution_queue->size_approx() > 0) {
     // app.logger().information("SearchWriter polling....");
     Poco::Thread::sleep(2000);
-    std::string results[500];
-    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
+    std::string results[1024];
+    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 1024);
         num_records > 0) {
       std::vector<nlohmann::json> dataset = {};
 

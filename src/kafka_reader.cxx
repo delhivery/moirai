@@ -128,7 +128,7 @@ KafkaReader::run()
   while (running) {
     Poco::Thread::sleep(200);
 
-    if (load_queue->size_approx() > 10000)
+    if (load_queue->size_approx() > 10240)
       continue;
 
     auto messages = consume_batch(consumer, batch_size, timeout);

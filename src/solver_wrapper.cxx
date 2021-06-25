@@ -14,7 +14,6 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -76,9 +75,6 @@ SolverWrapper::init_timings(
   assert(!facility_timings_stream.fail());
 
   auto facility_timings_json = nlohmann::json::parse(facility_timings_stream);
-
-  std::ranges::for_each(facility_timings_json,
-                        [this](auto const& facility_timing_entry) {});
 
   std::for_each(
     facility_timings_json.begin(),
@@ -438,13 +434,13 @@ SolverWrapper::run()
     try {
       Poco::Thread::sleep(200);
 
-      if (solution_queue->size_approx() > 1000)
+      if (solution_queue->size_approx() > 10000)
         continue;
       std::string payloads[100];
       app.logger().debug(
         moirai::format("C: Queue size: {}", load_queue->size_approx()));
 
-      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 100);
+      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 64);
           num_packages > 0) {
         std::for_each(
           payloads,
