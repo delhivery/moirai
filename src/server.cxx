@@ -340,6 +340,11 @@ Moirai::main(const ArgVec& arg)
 
     for (auto& thread : threads)
       thread.join();
+
+    delete node_queue;
+    delete edge_queue;
+    delete load_queue;
+    delete solution_queue;
   }
   return Poco::Util::Application::EXIT_OK;
 }
