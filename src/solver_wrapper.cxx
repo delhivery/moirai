@@ -11,7 +11,6 @@
 #include <Poco/Util/ServerApplication.h>
 #include <algorithm>
 #include <cstddef>
-#include <execution>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -21,6 +20,19 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+
+SolverWrapper::SolverWrapper(
+  moodycamel::ConcurrentQueue<std::string>* load_queue,
+  moodycamel::ConcurrentQueue<std::string>* solution_queue,
+  const std::shared_ptr<Solver> solver)
+  : load_queue(load_queue)
+  , solution_queue(solution_queue)
+  , solver(solver)
+{
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+  running = true;
+  // app.logger().information(solver.show_all());
+}
 
 SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* node_queue,
@@ -42,11 +54,12 @@ SolverWrapper::SolverWrapper(
   , edge_init_auth_token(edge_token)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
+  solver = std::make_shared<Solver>();
   init_timings(center_timings_filename);
   init_nodes();
   init_custody();
   init_edges();
-  app.logger().debug(moirai::format("Initialized graph: {}", solver.show()));
+  app.logger().debug(moirai::format("Initialized graph: {}", solver->show()));
   running = true;
   // app.logger().information(solver.show_all());
 }
@@ -79,6 +92,12 @@ SolverWrapper::init_timings(
           std::stoi(facility_timing_entry["li"].template get<std::string>()),
           std::stoi(facility_timing_entry["lo"].template get<std::string>()));
     });
+}
+
+const std::shared_ptr<Solver>
+SolverWrapper::get_solver() const
+{
+  return solver;
 }
 
 void
@@ -129,7 +148,7 @@ SolverWrapper::init_nodes(int16_t page)
       transport_center
         ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
           DURATION(std::get<3>(facility_timings)));
-      solver.add_node(transport_center);
+      solver->add_node(transport_center);
 
       if (!facility["property_id"].is_null()) {
         std::string property_id =
@@ -168,16 +187,17 @@ SolverWrapper::init_custody()
     for (size_t i = 0; i < value.size(); ++i) {
       for (size_t j = 0; j < value.size(); ++j) {
         if (i != j) {
-          auto [vertex_primary, has_vertex_primary] = solver.add_node(value[i]);
+          auto [vertex_primary, has_vertex_primary] =
+            solver->add_node(value[i]);
           auto [vertex_secondary, has_vertex_seconday] =
-            solver.add_node(value[j]);
+            solver->add_node(value[j]);
 
           if (has_vertex_primary and has_vertex_seconday) {
             std::string name =
               moirai::format("CUSTODY-{}-{}", value[i], value[j]);
-            solver.add_edge(vertex_primary,
-                            vertex_secondary,
-                            std::make_shared<TransportEdge>(name, name));
+            solver->add_edge(vertex_primary,
+                             vertex_secondary,
+                             std::make_shared<TransportEdge>(name, name));
             app.logger().debug(moirai::format("Added custody edge: {}", name));
           } else {
             app.logger().error(
@@ -266,9 +286,9 @@ SolverWrapper::init_edges()
             target["center_code"].template get<std::string>();
 
           auto [source_vertex, has_source_vertex] =
-            solver.add_node(source_center_code);
+            solver->add_node(source_center_code);
           auto [target_vertex, has_target_vertex] =
-            solver.add_node(target_center_code);
+            solver->add_node(target_center_code);
           auto edge = std::make_shared<TransportEdge>(
             moirai::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
             name,
@@ -278,7 +298,7 @@ SolverWrapper::init_edges()
             route_type == "carting" ? MovementType::CARTING
                                     : MovementType::LINEHAUL);
           if (has_source_vertex and has_target_vertex) {
-            solver.add_edge(source_vertex, target_vertex, edge);
+            solver->add_edge(source_vertex, target_vertex, edge);
           } else {
             app.logger().error(moirai::format(
               "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
@@ -315,8 +335,8 @@ SolverWrapper::find_paths(
   CLOCK bag_pdd = bag_end;
   // bag_pdd = CLOCK::max();
   CLOCK bag_earliest_pdd = CLOCK::max();
-  const auto [source, has_source] = solver.add_node(bag_source);
-  const auto [target, has_target] = solver.add_node(bag_target);
+  const auto [source, has_source] = solver->add_node(bag_source);
+  const auto [target, has_target] = solver->add_node(bag_target);
 
   if (!has_source || !has_target) {
     app.logger().debug(
@@ -330,7 +350,7 @@ SolverWrapper::find_paths(
   }
 
   auto solution_earliest_start_segment =
-    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+    solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       source, target, start);
   std::shared_ptr<Segment> solution_ultimate_start_segment = nullptr;
 
@@ -352,13 +372,13 @@ SolverWrapper::find_paths(
         });
 
       const auto [child_target, has_child_target] =
-        solver.add_node(std::get<0>(child_earliest));
+        solver->add_node(std::get<0>(child_earliest));
 
       if (child_target != target and has_child_target) {
         auto child_pdd =
           ZERO + std::chrono::minutes(std::get<1>(child_earliest));
         auto child_critical_start_segment =
-          solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+          solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
             child_target, target, child_pdd);
 
         if (child_critical_start_segment != nullptr) {
@@ -381,7 +401,7 @@ SolverWrapper::find_paths(
 
   if (not critical) {
     solution_ultimate_start_segment =
-      solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+      solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
         target, source, bag_pdd);
   }
 
@@ -427,7 +447,6 @@ SolverWrapper::run()
       if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 100);
           num_packages > 0) {
         std::for_each(
-          std::execution::par,
           payloads,
           payloads + num_packages,
           [&app, this](const std::string& payload) {

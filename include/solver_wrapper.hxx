@@ -15,7 +15,7 @@
 class SolverWrapper : public Poco::Runnable
 {
 private:
-  Solver solver;
+  std::shared_ptr<Solver> solver;
 
   Poco::URI node_init_uri;
   std::string node_init_auth_token;
@@ -39,6 +39,10 @@ public:
 
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
+                const std::shared_ptr<Solver>);
+
+  SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
+                moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
                 const std::string&,
@@ -57,6 +61,8 @@ public:
 
   std::vector<std::shared_ptr<TransportCenter>> read_vertices(
     const std::filesystem::path&);
+
+  const std::shared_ptr<Solver> get_solver() const;
 
   auto find_paths(
     std::string bag,

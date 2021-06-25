@@ -1,14 +1,15 @@
+#include "server.hxx"
 #include "concurrentqueue.h"
 #include "date_utils.hxx"
 #include "format.hxx"
 #include "graph_helpers.hxx"
 #include "kafka_reader.hxx"
 #include "search_writer.hxx"
-#include "server.hxx"
 #include "solver_wrapper.hxx"
 #include "transportation.hxx"
 #include <Poco/Util/HelpFormatter.h>
 #include <numeric>
+#include <thread>
 
 void
 Moirai::display_help()
@@ -308,11 +309,22 @@ Moirai::main(const ArgVec& arg)
                         search_pass,
                         search_index,
                         solution_queue);
-    std::vector<Poco::Thread> threads(3);
+    int16_t num_threads = std::thread::hardware_concurrency();
+    num_threads = num_threads < 3 ? 3 : num_threads;
+    std::vector<Poco::Thread> threads(num_threads);
+    std::vector<std::shared_ptr<SolverWrapper>> secondary;
+    secondary.reserve(num_threads - 3);
+
     try {
       threads[0].start(reader);
       threads[1].start(writer);
       threads[2].start(wrapper);
+
+      for (int idx = 3; idx < num_threads; ++idx) {
+        secondary.push_back(std::make_shared<SolverWrapper>(
+          load_queue, solution_queue, wrapper.get_solver()));
+        threads[idx].start(*secondary[idx - 3]);
+      }
     } catch (const std::exception& exc) {
       logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
     }
@@ -321,6 +333,10 @@ Moirai::main(const ArgVec& arg)
     reader.running = false;
     writer.running = false;
     wrapper.running = false;
+
+    for (auto& secondary_wrapper : secondary) {
+      secondary_wrapper->running = false;
+    }
 
     for (auto& thread : threads)
       thread.join();
