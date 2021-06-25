@@ -153,10 +153,9 @@ SolverWrapper::init_nodes(int16_t page)
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(
-      moirai::format("INIT: Unable to fetch facility data: <{}>: {}",
-                     response.getStatus(),
-                     response_raw.str()));
+    app.logger().error(moirai::format("INIT: Unable to fetch facility data: <{}>: {}",
+                                      response.getStatus(),
+                                      response_raw.str()));
   }
 }
 
@@ -183,12 +182,12 @@ SolverWrapper::init_custody()
             app.logger().information(
               moirai::format("INIT: Added custody edge: {}", name));
           } else {
-            app.logger().error(moirai::format(
-              "INIT: Colocated facilities {}:{} or {}:{} missing",
-              value[i],
-              has_vertex_primary,
-              value[j],
-              has_vertex_seconday));
+            app.logger().error(
+              moirai::format("INIT: Colocated facilities {}:{} or {}:{} missing",
+                             value[i],
+                             has_vertex_primary,
+                             value[j],
+                             has_vertex_seconday));
           }
         }
       }
@@ -255,11 +254,11 @@ SolverWrapper::init_edges()
               time_string_to_time(departure))));
 
           if (departure_as_time.count() < 0 or duration.count() < 0) {
-            app.logger().error(moirai::format(
-              "INIT: Edge<{}>: Departure<{}> or duration<{}> negative",
-              uuid,
-              departure_as_time.count(),
-              duration.count()));
+            app.logger().error(
+              moirai::format("INIT: Edge<{}>: Departure<{}> or duration<{}> negative",
+                             uuid,
+                             departure_as_time.count(),
+                             duration.count()));
             return;
           }
 
@@ -297,10 +296,9 @@ SolverWrapper::init_edges()
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(
-      moirai::format("INIT: Unable to fetch route data: <{}>: {}",
-                     response.getStatus(),
-                     response_raw.str()));
+    app.logger().error(moirai::format("INIT: Unable to fetch route data: <{}>: {}",
+                                      response.getStatus(),
+                                      response_raw.str()));
   }
 }
 
@@ -440,8 +438,7 @@ SolverWrapper::run()
             if (data["id"].is_null() or data["location"].is_null() or
                 data["destination"].is_null() or data["time"].is_null()) {
               app.logger().information(moirai::format(
-                "WRAPPER: Null data against mandatory fields. {}",
-                data.dump()));
+                "WRAPPER: Null data against mandatory fields. {}", data.dump()));
               return;
             }
             app.logger().information(
@@ -494,8 +491,8 @@ SolverWrapper::run()
                          packages);
 
             if (solution.empty()) {
-              app.logger().information(moirai::format(
-                "WRAPPER: No legitimate paths for payload: {}", payload));
+              app.logger().information(
+                moirai::format("WRAPPER: No legitimate paths for payload: {}", payload));
               return;
             }
             solution["cs_slid"] =
@@ -509,20 +506,12 @@ SolverWrapper::run()
             solution["pid"] = data["pid"].is_null()
                                 ? ""
                                 : data["pid"].template get<std::string>();
-            app.logger().information(
-              moirai::format("COMMS: Pushing solution to queue: {}",
-                             solution_queue->size_approx()));
             solution_queue->enqueue(solution.dump());
-            app.logger().information(
-              moirai::format("COMMS: Pushed solution to queue: {}",
-                             solution_queue->size_approx()));
           });
-        app.logger().information(
-          moirai::format("WRAPPER: Solved {} packages", num_packages));
+        app.logger().information(moirai::format("WRAPPER: Solved {} packages", num_packages));
       }
     } catch (const std::exception& exc) {
-      app.logger().error(
-        moirai::format("WRAPPER: Exception occurred: {}", exc.what()));
+      app.logger().error(moirai::format("WRAPPER: Exception occurred: {}", exc.what()));
     }
   }
 }
