@@ -47,7 +47,7 @@ SolverWrapper::SolverWrapper(
   init_custody();
   init_edges();
   app.logger().information(
-    moirai::format("Initialized graph: {}", solver.show()));
+    moirai::format("INIT: Initialized graph: {}", solver.show()));
   running = true;
   // app.logger().information(solver.show_all());
 }
@@ -153,7 +153,7 @@ SolverWrapper::init_nodes(int16_t page)
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(moirai::format("Unable to fetch facility data: <{}>: {}",
+    app.logger().error(moirai::format("INIT: Unable to fetch facility data: <{}>: {}",
                                       response.getStatus(),
                                       response_raw.str()));
   }
@@ -180,10 +180,10 @@ SolverWrapper::init_custody()
                             vertex_secondary,
                             std::make_shared<TransportEdge>(name, name));
             app.logger().information(
-              moirai::format("Added custody edge: {}", name));
+              moirai::format("INIT: Added custody edge: {}", name));
           } else {
             app.logger().error(
-              moirai::format("Colocated facilities {}:{} or {}:{} missing",
+              moirai::format("INIT: Colocated facilities {}:{} or {}:{} missing",
                              value[i],
                              has_vertex_primary,
                              value[j],
@@ -216,7 +216,7 @@ SolverWrapper::init_edges()
     auto response_json = nlohmann::json::parse(response_stream);
     auto data = response_json["data"];
 
-    app.logger().information(moirai::format("Got {} edges", data.size()));
+    app.logger().information(moirai::format("INIT: Got {} edges", data.size()));
 
     std::for_each(data.begin(), data.end(), [&app, this](auto const& route) {
       std::string uuid =
@@ -234,7 +234,7 @@ SolverWrapper::init_edges()
 
       if (!stops.is_array()) {
         app.logger().error(
-          moirai::format("Edge<{}> stops is not an array", uuid));
+          moirai::format("INIT: Edge<{}> stops is not an array", uuid));
         return;
       }
       for (int i = 0; i < stops.size(); ++i) {
@@ -255,7 +255,7 @@ SolverWrapper::init_edges()
 
           if (departure_as_time.count() < 0 or duration.count() < 0) {
             app.logger().error(
-              moirai::format("Edge<{}>: Departure<{}> or duration<{}> negative",
+              moirai::format("INIT: Edge<{}>: Departure<{}> or duration<{}> negative",
                              uuid,
                              departure_as_time.count(),
                              duration.count()));
@@ -283,7 +283,7 @@ SolverWrapper::init_edges()
             solver.add_edge(source_vertex, target_vertex, edge);
           } else {
             app.logger().error(moirai::format(
-              "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
+              "INIT: Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
               uuid,
               source_center_code,
               has_source_vertex,
@@ -296,7 +296,7 @@ SolverWrapper::init_edges()
   } else {
     std::stringstream response_raw;
     Poco::StreamCopier::copyStream(response_stream, response_raw);
-    app.logger().error(moirai::format("Unable to fetch route data: <{}>: {}",
+    app.logger().error(moirai::format("INIT: Unable to fetch route data: <{}>: {}",
                                       response.getStatus(),
                                       response_raw.str()));
   }
@@ -322,7 +322,7 @@ SolverWrapper::find_paths(
 
   if (!has_source || !has_target) {
     app.logger().information(
-      "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
+      "WRAPPER: {}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
       bag,
       bag_source,
       has_source,
@@ -413,21 +413,21 @@ void
 SolverWrapper::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  app.logger().information("Initializing solver");
-  app.logger().information("Processing loads");
+  app.logger().information("INIT: Initializing solver");
+  app.logger().information("INIT: Processing loads");
 
   while (running) {
     try {
       Poco::Thread::sleep(200);
       std::string payloads[100];
       app.logger().information(
-        moirai::format("C: Queue size: {}", load_queue->size_approx()));
+        moirai::format("WRAPPER: Queue size: {}", load_queue->size_approx()));
 
       if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 100);
           num_packages > 0) {
 
         app.logger().information(
-          moirai::format("Recieved {} packages.", num_packages));
+          moirai::format("WRAPPER: Recieved {} packages.", num_packages));
         std::for_each(
           std::execution::par,
           payloads,
@@ -438,11 +438,11 @@ SolverWrapper::run()
             if (data["id"].is_null() or data["location"].is_null() or
                 data["destination"].is_null() or data["time"].is_null()) {
               app.logger().information(moirai::format(
-                "Null data against mandatory fields. {}", data.dump()));
+                "WRAPPER: Null data against mandatory fields. {}", data.dump()));
               return;
             }
             app.logger().information(
-              moirai::format("Recieved data: {}", data.dump()));
+              moirai::format("WRAPPER: Recieved data: {}", data.dump()));
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
@@ -492,7 +492,7 @@ SolverWrapper::run()
 
             if (solution.empty()) {
               app.logger().information(
-                moirai::format("No legitimate paths for payload: {}", payload));
+                moirai::format("WRAPPER: No legitimate paths for payload: {}", payload));
               return;
             }
             solution["cs_slid"] =
@@ -508,10 +508,10 @@ SolverWrapper::run()
                                 : data["pid"].template get<std::string>();
             solution_queue->enqueue(solution.dump());
           });
-        app.logger().information(moirai::format("Solved {} packages", num_packages));
+        app.logger().information(moirai::format("WRAPPER: Solved {} packages", num_packages));
       }
     } catch (const std::exception& exc) {
-      app.logger().error(moirai::format("Exception occurred: {}", exc.what()));
+      app.logger().error(moirai::format("WRAPPER: Exception occurred: {}", exc.what()));
     }
   }
 }
