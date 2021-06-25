@@ -32,12 +32,8 @@ SearchWriter::run()
     // app.logger().information("SearchWriter polling....");
     Poco::Thread::sleep(2000);
     std::string results[500];
-    app.logger().information(
-      moirai::format("SEARCH: Queue size: {}", solution_queue->size_approx()));
     if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
         num_records > 0) {
-      app.logger().information(
-        moirai::format("SEARCH: Pushing: {}", num_records));
       std::vector<nlohmann::json> dataset = {};
 
       std::for_each(
@@ -85,7 +81,8 @@ SearchWriter::run()
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
           app.logger().debug(moirai::format(
             "Got successful response from ES Host: {}", response_raw.str()));
-          app.logger().debug(moirai::format("Pushed {} records", num_records));
+          app.logger().debug(
+            moirai::format("Pushed {} records", num_records));
         } else {
           app.logger().error(moirai::format("Error uploading data: <{}>: {}",
                                             response.getStatus(),
