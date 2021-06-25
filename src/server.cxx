@@ -281,65 +281,68 @@ Moirai::main(const ArgVec& arg)
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
       new moodycamel::ConcurrentQueue<std::string>();
-    SolverWrapper wrapper(node_queue,
-                          edge_queue,
-                          load_queue,
-                          solution_queue,
-                          facility_uri,
-                          facility_token,
-                          route_uri,
-                          route_token,
-                          facility_timings_filename);
-    KafkaReader reader(
-      std::accumulate(broker_url.begin(),
-                      broker_url.end(),
-                      std::string{},
-                      [](const std::string& acc, const std::string& arg) {
-                        return acc.empty() ? arg
-                                           : moirai::format("{},{}", acc, arg);
-                      }),
-      batch_size,
-      timeout,
-      topic_map,
-      node_queue,
-      edge_queue,
-      load_queue);
-    SearchWriter writer(Poco::URI(search_uri),
-                        search_user,
-                        search_pass,
-                        search_index,
-                        solution_queue);
-    int16_t num_threads = std::thread::hardware_concurrency();
-    num_threads = num_threads < 3 ? 3 : num_threads;
-    std::vector<Poco::Thread> threads(num_threads);
-    std::vector<std::shared_ptr<SolverWrapper>> secondary;
-    secondary.reserve(num_threads - 3);
+    {
+      SolverWrapper wrapper(node_queue,
+                            edge_queue,
+                            load_queue,
+                            solution_queue,
+                            facility_uri,
+                            facility_token,
+                            route_uri,
+                            route_token,
+                            facility_timings_filename);
+      KafkaReader reader(
+        std::accumulate(broker_url.begin(),
+                        broker_url.end(),
+                        std::string{},
+                        [](const std::string& acc, const std::string& arg) {
+                          return acc.empty()
+                                   ? arg
+                                   : moirai::format("{},{}", acc, arg);
+                        }),
+        batch_size,
+        timeout,
+        topic_map,
+        node_queue,
+        edge_queue,
+        load_queue);
+      SearchWriter writer(Poco::URI(search_uri),
+                          search_user,
+                          search_pass,
+                          search_index,
+                          solution_queue);
+      int16_t num_threads = std::thread::hardware_concurrency();
+      num_threads = num_threads < 3 ? 3 : num_threads;
+      std::vector<Poco::Thread> threads(num_threads);
+      std::vector<std::shared_ptr<SolverWrapper>> secondary;
+      secondary.reserve(num_threads - 3);
 
-    try {
-      threads[0].start(reader);
-      threads[1].start(writer);
-      threads[2].start(wrapper);
+      try {
+        threads[0].start(reader);
+        threads[1].start(writer);
+        threads[2].start(wrapper);
 
-      for (int idx = 3; idx < num_threads; ++idx) {
-        secondary.push_back(std::make_shared<SolverWrapper>(
-          load_queue, solution_queue, wrapper.get_solver()));
-        threads[idx].start(*secondary[idx - 3]);
+        for (int idx = 3; idx < num_threads; ++idx) {
+          secondary.push_back(std::make_shared<SolverWrapper>(
+            load_queue, solution_queue, wrapper.get_solver()));
+          threads[idx].start(*secondary[idx - 3]);
+        }
+      } catch (const std::exception& exc) {
+        logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
       }
-    } catch (const std::exception& exc) {
-      logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
-    }
-    waitForTerminationRequest();
-    logger().information("Termination requested");
-    reader.running = false;
-    writer.running = false;
-    wrapper.running = false;
+      waitForTerminationRequest();
+      logger().information("Termination requested");
+      reader.running = false;
+      writer.running = false;
+      wrapper.running = false;
 
-    for (auto& secondary_wrapper : secondary) {
-      secondary_wrapper->running = false;
-    }
+      for (auto& secondary_wrapper : secondary) {
+        secondary_wrapper->running = false;
+      }
 
-    for (auto& thread : threads)
-      thread.join();
+      for (auto& thread : threads)
+        thread.join();
+    }
 
     delete node_queue;
     delete edge_queue;

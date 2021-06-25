@@ -13,7 +13,6 @@ class KafkaReader : public Poco::Runnable
 {
 private:
   std::string broker_url;
-  RdKafka::Conf* config;
   RdKafka::KafkaConsumer* consumer;
   const uint16_t batch_size;
   const uint16_t timeout;
@@ -37,9 +36,7 @@ public:
 
   ~KafkaReader();
 
-  std::vector<RdKafka::Message*> consume_batch(RdKafka::KafkaConsumer*,
-                                               size_t,
-                                               int);
+  std::vector<RdKafka::Message*> consume_batch(size_t, int);
 
   virtual void run();
 };
