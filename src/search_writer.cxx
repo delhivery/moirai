@@ -28,7 +28,7 @@ SearchWriter::run()
   Poco::Util::Application& app = Poco::Util::Application::instance();
   Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
 
-  while (running) {
+  while (running or solution_queue->size_approx() > 0) {
     // app.logger().information("SearchWriter polling....");
     Poco::Thread::sleep(2000);
     std::string results[500];
@@ -81,8 +81,7 @@ SearchWriter::run()
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
           app.logger().debug(moirai::format(
             "Got successful response from ES Host: {}", response_raw.str()));
-          app.logger().debug(
-            moirai::format("Pushed {} records", num_records));
+          app.logger().debug(moirai::format("Pushed {} records", num_records));
         } else {
           app.logger().error(moirai::format("Error uploading data: <{}>: {}",
                                             response.getStatus(),

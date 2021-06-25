@@ -414,9 +414,12 @@ SolverWrapper::run()
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
 
-  while (running) {
+  while (running or load_queue->size_approx() > 0) {
     try {
       Poco::Thread::sleep(200);
+
+      if (solution_queue->size_approx() > 1000)
+        continue;
       std::string payloads[100];
       app.logger().debug(
         moirai::format("C: Queue size: {}", load_queue->size_approx()));
