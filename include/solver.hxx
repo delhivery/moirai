@@ -241,6 +241,15 @@ public:
 
       // Set successor edge node
       segment->outbound = filtered_graph[edge_descriptor];
+
+      if (segment->outbound->movement == MovementType::CARTING)
+        segment->distance +=
+          segment->node
+            ->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
+      else
+        segment->distance +=
+          segment->node
+            ->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
       // Create a successor center
       segment->next = std::make_shared<Segment>();
       // Set self as successor's predecessor
