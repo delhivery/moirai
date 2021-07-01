@@ -1,6 +1,7 @@
 #include "solver_wrapper.hxx"
 #include "date_utils.hxx"
 #include "format.hxx"
+#include "processor.hxx"
 #include "transportation.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
@@ -10,16 +11,27 @@
 #include <Poco/Util/ServerApplication.h>
 #include <algorithm>
 #include <cstddef>
-#include <execution>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+
+SolverWrapper::SolverWrapper(
+  moodycamel::ConcurrentQueue<std::string>* load_queue,
+  moodycamel::ConcurrentQueue<std::string>* solution_queue,
+  const std::shared_ptr<Solver> solver)
+  : load_queue(load_queue)
+  , solution_queue(solution_queue)
+  , solver(solver)
+{
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+  running = true;
+  // app.logger().information(solver.show_all());
+}
 
 SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* node_queue,
@@ -41,12 +53,13 @@ SolverWrapper::SolverWrapper(
   , edge_init_auth_token(edge_token)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
+  solver = std::make_shared<Solver>();
   init_timings(center_timings_filename);
   init_nodes();
   init_custody();
   init_edges();
-  app.logger().information(
-    moirai::format("Initialized graph: {}", solver.show()));
+  app.logger().debug(moirai::format("Initialized graph: {}", solver->show()));
+  running = true;
   // app.logger().information(solver.show_all());
 }
 
@@ -63,9 +76,6 @@ SolverWrapper::init_timings(
 
   auto facility_timings_json = nlohmann::json::parse(facility_timings_stream);
 
-  std::ranges::for_each(facility_timings_json,
-                        [this](auto const& facility_timing_entry) {});
-
   std::for_each(
     facility_timings_json.begin(),
     facility_timings_json.end(),
@@ -78,6 +88,12 @@ SolverWrapper::init_timings(
           std::stoi(facility_timing_entry["li"].template get<std::string>()),
           std::stoi(facility_timing_entry["lo"].template get<std::string>()));
     });
+}
+
+const std::shared_ptr<Solver>
+SolverWrapper::get_solver() const
+{
+  return solver;
 }
 
 void
@@ -128,7 +144,7 @@ SolverWrapper::init_nodes(int16_t page)
       transport_center
         ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
           DURATION(std::get<3>(facility_timings)));
-      solver.add_node(transport_center);
+      solver->add_node(transport_center);
 
       if (!facility["property_id"].is_null()) {
         std::string property_id =
@@ -167,16 +183,17 @@ SolverWrapper::init_custody()
     for (size_t i = 0; i < value.size(); ++i) {
       for (size_t j = 0; j < value.size(); ++j) {
         if (i != j) {
-          auto [vertex_primary, has_vertex_primary] = solver.add_node(value[i]);
+          auto [vertex_primary, has_vertex_primary] =
+            solver->add_node(value[i]);
           auto [vertex_secondary, has_vertex_seconday] =
-            solver.add_node(value[j]);
+            solver->add_node(value[j]);
 
           if (has_vertex_primary and has_vertex_seconday) {
             std::string name =
               moirai::format("CUSTODY-{}-{}", value[i], value[j]);
-            solver.add_edge(vertex_primary,
-                            vertex_secondary,
-                            std::make_shared<TransportEdge>(name, name));
+            solver->add_edge(vertex_primary,
+                             vertex_secondary,
+                             std::make_shared<TransportEdge>(name, name));
             app.logger().debug(moirai::format("Added custody edge: {}", name));
           } else {
             app.logger().error(
@@ -265,9 +282,9 @@ SolverWrapper::init_edges()
             target["center_code"].template get<std::string>();
 
           auto [source_vertex, has_source_vertex] =
-            solver.add_node(source_center_code);
+            solver->add_node(source_center_code);
           auto [target_vertex, has_target_vertex] =
-            solver.add_node(target_center_code);
+            solver->add_node(target_center_code);
           auto edge = std::make_shared<TransportEdge>(
             moirai::format("{}.{}", uuid, i * (stops.size() - 1) + j - i - 1),
             name,
@@ -277,7 +294,7 @@ SolverWrapper::init_edges()
             route_type == "carting" ? MovementType::CARTING
                                     : MovementType::LINEHAUL);
           if (has_source_vertex and has_target_vertex) {
-            solver.add_edge(source_vertex, target_vertex, edge);
+            solver->add_edge(source_vertex, target_vertex, edge);
           } else {
             app.logger().error(moirai::format(
               "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
@@ -305,18 +322,20 @@ SolverWrapper::find_paths(
   std::string bag_source,
   std::string bag_target,
   int32_t bag_start,
+  CLOCK bag_end,
   std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
   CLOCK start = ZERO + std::chrono::minutes{ bag_start };
-  CLOCK bag_pdd = CLOCK::max();
+  CLOCK bag_pdd = bag_end;
+  // bag_pdd = CLOCK::max();
   CLOCK bag_earliest_pdd = CLOCK::max();
-  const auto [source, has_source] = solver.add_node(bag_source);
-  const auto [target, has_target] = solver.add_node(bag_target);
+  const auto [source, has_source] = solver->add_node(bag_source);
+  const auto [target, has_target] = solver->add_node(bag_target);
 
   if (!has_source || !has_target) {
-    app.logger().error(
+    app.logger().debug(
       "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
       bag,
       bag_source,
@@ -326,32 +345,47 @@ SolverWrapper::find_paths(
     return nlohmann::json({});
   }
 
-  Path solution_earliest =
-    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+  auto solution_earliest_start_segment =
+    solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       source, target, start);
-  Path solution_ultimate;
+  std::shared_ptr<Segment> solution_ultimate_start_segment = nullptr;
 
-  if (solution_earliest.size() > 0) {
+  bool critical = false;
 
-    bag_earliest_pdd = std::get<3>(solution_earliest[0]);
+  if (solution_earliest_start_segment != nullptr) {
 
-    for (auto const& package : packages) {
-      std::string package_target_string = std::get<0>(package);
-      const auto [package_target, has_package_target] =
-        solver.add_node(package_target_string);
+    auto segment = solution_earliest_start_segment;
+    while (segment->next != nullptr)
+      segment = segment->next;
+    bag_earliest_pdd = segment->distance;
 
-      if (has_package_target) {
-        Path pkg_reverse_path =
-          solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-            package_target,
-            target,
-            ZERO + std::chrono::minutes(std::get<1>(package)));
+    if (bag_pdd < bag_earliest_pdd)
+      critical = true;
+    else {
+      auto child_earliest = *std::min_element(
+        packages.begin(), packages.end(), [](auto const& lhs, auto const& rhs) {
+          return std::get<1>(lhs) < std::get<1>(rhs);
+        });
 
-        if (pkg_reverse_path.size() > 0) {
-          CLOCK package_pdd = std::get<3>(pkg_reverse_path[0]);
+      const auto [child_target, has_child_target] =
+        solver->add_node(std::get<0>(child_earliest));
 
-          if (package_pdd < bag_pdd and package_pdd >= bag_earliest_pdd) {
-            bag_pdd = package_pdd;
+      if (child_target != target and has_child_target) {
+        auto child_pdd =
+          ZERO + std::chrono::minutes(std::get<1>(child_earliest));
+        auto child_critical_start_segment =
+          solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+            child_target, target, child_pdd);
+
+        if (child_critical_start_segment != nullptr) {
+          auto child_pdd_at_parent_target =
+            child_critical_start_segment->distance;
+
+          if (bag_pdd == CLOCK::max())
+            bag_pdd = child_pdd_at_parent_target;
+
+          if (child_pdd_at_parent_target < bag_earliest_pdd) {
+            critical = true;
           }
         }
       }
@@ -364,9 +398,11 @@ SolverWrapper::find_paths(
     bag_pdd = bag_earliest_pdd;
   }
 
-  solution_ultimate =
-    solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-      target, source, bag_pdd);
+  if (not critical) {
+    solution_ultimate_start_segment =
+      solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+        target, source, bag_pdd);
+  }
 
   nlohmann::json response;
   response["_id"] = bag;
@@ -377,93 +413,15 @@ SolverWrapper::find_paths(
     response["package"] = std::get<2>(packages[0]);
   }
 
-  response["earliest"]["locations"] = {};
-  response["ultimate"]["locations"] = {};
+  response["earliest"]["locations"] =
+    parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
+  response["earliest"]["first"] = response["earliest"]["locations"][0];
 
-  std::shared_ptr<TransportEdge> outbound_edge = nullptr;
-
-  for (auto idx = 0; idx < solution_earliest.size(); ++idx) {
-    auto [current_node, previous_node, inbound_edge, distance_current] =
-      solution_earliest[idx];
-
-    std::string current_node_code = current_node->code;
-    DURATION latency =
-      current_node->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
-
-    if (inbound_edge->movement == MovementType::CARTING)
-      latency = current_node
-                  ->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
-    std::string current_node_arrival =
-      date::format("%D %T", distance_current - latency);
-
-    nlohmann::json location_entry = { { "code", current_node_code },
-                                      { "arrival", current_node_arrival } };
-
-    if (outbound_edge != nullptr) {
-      location_entry["departure"] = date::format(
-        "%D %T", get_departure(distance_current, outbound_edge->departure));
-      location_entry["route"] =
-        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
-    }
-    response["earliest"]["locations"].push_back(location_entry);
-    outbound_edge = inbound_edge;
+  if (solution_ultimate_start_segment != nullptr) {
+    response["ultimate"]["locations"] =
+      parse_path<PathTraversalMode::REVERSE>(solution_ultimate_start_segment);
+    response["ultimate"]["first"] = response["ultimate"]["locations"][0];
   }
-  {
-    auto current_node = solver.get_node(source);
-    nlohmann::json location_entry = { { "code", solver.get_node(source)->code },
-                                      { "arrival",
-                                        date::format("%D %T", start) } };
-
-    if (outbound_edge != nullptr) {
-      location_entry["departure"] =
-        date::format("%D %T", get_departure(start, outbound_edge->departure));
-      location_entry["route"] =
-        outbound_edge->code.substr(0, outbound_edge->code.find('.'));
-    }
-    response["earliest"]["locations"].push_back(location_entry);
-    std::reverse(response["earliest"]["locations"].begin(),
-                 response["earliest"]["locations"].end());
-    response["earliest"]["first"] = location_entry;
-  }
-  std::shared_ptr<TransportEdge> inbound_edge = nullptr;
-
-  for (auto idx = 0; idx < solution_ultimate.size(); ++idx) {
-    auto [current_node, previous_node, outbound_edge, distance_current] =
-      solution_ultimate[idx];
-
-    std::string current_node_code = current_node->code;
-
-    DURATION latency =
-      current_node
-        ->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
-
-    if (outbound_edge->movement == MovementType::CARTING)
-      latency = current_node
-                  ->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
-
-    std::string current_node_arrival = date::format("%D %T", distance_current);
-    nlohmann::json location_entry = {
-      { "code", current_node_code },
-      { "arrival", current_node_arrival },
-      { "departure",
-        date::format("%D %T",
-                     get_departure(distance_current, outbound_edge->departure) +
-                       latency) },
-      { "route", outbound_edge->code.substr(0, outbound_edge->code.find('.')) }
-    };
-    response["ultimate"]["locations"].push_back(location_entry);
-
-    if (idx == 0)
-      response["ultimate"]["first"] = location_entry;
-  }
-  {
-    auto start_location = solver.get_node(target);
-    nlohmann::json location_entry = { { "code", solver.get_node(target)->code },
-                                      { "arrival",
-                                        date::format("%D %T", bag_pdd) } };
-    response["ultimate"]["locations"].push_back(location_entry);
-  }
-
   response["pdd"] = date::format("%D %T", bag_pdd);
   return response;
 }
@@ -475,17 +433,19 @@ SolverWrapper::run()
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
 
-  while (true) {
+  while (running or load_queue->size_approx() > 0) {
     try {
       Poco::Thread::sleep(200);
+
+      if (solution_queue->size_approx() > 10000)
+        continue;
       std::string payloads[100];
       app.logger().debug(
         moirai::format("C: Queue size: {}", load_queue->size_approx()));
 
-      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 100);
+      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 64);
           num_packages > 0) {
         std::for_each(
-          std::execution::par,
           payloads,
           payloads + num_packages,
           [&app, this](const std::string& payload) {
@@ -502,13 +462,13 @@ SolverWrapper::run()
             std::vector<std::tuple<std::string, int32_t, std::string>> packages;
 
             for (auto& waybill : data["items"]) {
-              if (waybill["cpdd_destination"].is_null() or
+              if (waybill["ipdd_destination"].is_null() or
                   waybill["cn"].is_null() or waybill["id"].is_null())
                 return;
               packages.emplace_back(
                 waybill["cn"].template get<std::string>(),
                 iso_to_date(
-                  waybill["cpdd_destination"].template get<std::string>(), true)
+                  waybill["ipdd_destination"].template get<std::string>(), true)
                   .time_since_epoch()
                   .count(),
                 waybill["id"].template get<std::string>());
@@ -524,6 +484,18 @@ SolverWrapper::run()
                 current_location == item_destination)
               return;
 
+            CLOCK tmax = CLOCK::max();
+
+            if (!data["ipdd_destination"].is_null() and
+                !data["ipdd_destination"].empty()) {
+              std::string ipdd =
+                data["ipdd_destination"].template get<std::string>();
+
+              if (ipdd.length() > 11) {
+                tmax = iso_to_date(ipdd, true);
+              }
+            }
+
             nlohmann::json solution =
               find_paths(bag_identifier,
                          current_location,
@@ -531,6 +503,7 @@ SolverWrapper::run()
                          iso_to_date(data["time"].template get<std::string>())
                            .time_since_epoch()
                            .count(),
+                         tmax,
                          packages);
 
             if (solution.empty()) {

@@ -3,7 +3,7 @@
 #include "format.hxx"
 #include <Poco/Util/ServerApplication.h>
 
-const std::string KafkaReader::consumer_group = "MOIRAI";
+const std::string KafkaReader::consumer_group = "CLOTHO";
 
 KafkaReader::KafkaReader(const std::string& broker_url,
                          const uint16_t batch_size,
@@ -20,10 +20,11 @@ KafkaReader::KafkaReader(const std::string& broker_url,
   , node_queue(node_queue)
   , edge_queue(edge_queue)
   , load_queue(load_queue)
+  , consumer(nullptr)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   app.logger().debug("Configuring kafka reader");
-  config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+  RdKafka::Conf* config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 
   std::string error_string;
 
@@ -53,9 +54,9 @@ KafkaReader::KafkaReader(const std::string& broker_url,
     app.logger().error(
       moirai::format("Error setting offset: {}", error_string));
   }
+  consumer = RdKafka::KafkaConsumer::create(config, error_string);
 
-  if (consumer = RdKafka::KafkaConsumer::create(config, error_string);
-      !consumer) {
+  if (!consumer) {
     app.logger().error(
       moirai::format("Error creating consumer. {}", error_string));
     throw Poco::ApplicationException(error_string);
@@ -83,9 +84,7 @@ KafkaReader::~KafkaReader()
 }
 
 std::vector<RdKafka::Message*>
-KafkaReader::consume_batch(RdKafka::KafkaConsumer* consumer,
-                           size_t batch_size,
-                           int timeout)
+KafkaReader::consume_batch(size_t batch_size, int timeout)
 {
   std::vector<RdKafka::Message*> messages;
   messages.reserve(batch_size);
@@ -127,7 +126,11 @@ KafkaReader::run()
 
   while (running) {
     Poco::Thread::sleep(200);
-    auto messages = consume_batch(consumer, batch_size, timeout);
+
+    if (load_queue->size_approx() > 10240)
+      continue;
+
+    auto messages = consume_batch(batch_size, timeout);
     if (messages.size() > 0)
       app.logger().debug(
         moirai::format("Accumulated {} messages", messages.size()));

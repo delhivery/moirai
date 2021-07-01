@@ -5,6 +5,18 @@ project(moirai)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_GENERATOR Ninja)
+# ASAN
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+
+# TSAN
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -Wthread-safety -fsanitize=thread")
+
+# MSAN
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=memory")
+
+# UBSAN
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fwhole-program -flto -fgraphite-identity -floop-nest-optimize -fipa-pta -fno-semantic-interposition -fno-plt")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
@@ -38,6 +50,7 @@ if(NOT LOCAL)
     src/utils.cxx
     src/kafka_reader.cxx
     src/search_writer.cxx
+    src/processor.cxx
     src/solver_wrapper.cxx
     src/server.cxx
   )
@@ -50,8 +63,8 @@ else(NOT LOCAL)
     src/solver.cxx
     src/utils.cxx
     src/file_reader.cxx
-    src/kafka_reader.cxx
     src/search_writer.cxx
+    src/processor.cxx
     src/solver_wrapper.cxx
     src/server_local.cxx
   )
@@ -71,7 +84,6 @@ target_link_libraries(
   ${PROJECT_NAME}
   Boost::graph
   fmt::fmt
-  tbb
   Poco::Foundation
   Poco::Util
   Poco::Net

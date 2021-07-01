@@ -281,32 +281,66 @@ Moirai::main(const ArgVec& arg)
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
       new moodycamel::ConcurrentQueue<std::string>();
-    SolverWrapper wrapper(node_queue,
-                          edge_queue,
-                          load_queue,
-                          solution_queue,
-                          facility_uri,
-                          facility_token,
-                          route_uri,
-                          route_token,
-                          facility_timings_filename);
-    FileReader reader("/home/amitprakash/tests/load.json", load_queue);
-    SearchWriter writer(Poco::URI(search_uri),
-                        search_user,
-                        search_pass,
-                        search_index,
-                        solution_queue);
-    std::vector<Poco::Thread> threads(3);
-    try {
-      threads[0].start(reader);
-      threads[1].start(writer);
-      threads[2].start(wrapper);
-    } catch (const std::exception& exc) {
-      logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
+    {
+      SolverWrapper wrapper(node_queue,
+                            edge_queue,
+                            load_queue,
+                            solution_queue,
+                            facility_uri,
+                            facility_token,
+                            route_uri,
+                            route_token,
+                            facility_timings_filename);
+      FileReader reader("/home/amitprakash/moirai/data/load.json", load_queue);
+
+      SearchWriter writer(Poco::URI(search_uri),
+                          search_user,
+                          search_pass,
+                          search_index,
+                          solution_queue);
+      int16_t num_threads = std::thread::hardware_concurrency();
+      num_threads = num_threads < 3 ? 3 : num_threads;
+      std::vector<Poco::Thread> threads(num_threads);
+      std::vector<std::shared_ptr<SolverWrapper>> secondary;
+      secondary.reserve(num_threads - 3);
+
+      try {
+        logger().information("Starting threads");
+        threads[0].start(reader);
+        logger().information("Started reader");
+        threads[1].start(writer);
+        logger().information("Started writer");
+        threads[2].start(wrapper);
+        logger().information("Started wrapper");
+
+        for (int idx = 3; idx < num_threads; ++idx) {
+          secondary.push_back(std::make_shared<SolverWrapper>(
+            load_queue, solution_queue, wrapper.get_solver()));
+          threads[idx].start(*secondary[idx - 3]);
+          logger().information("Started secondary");
+        }
+        logger().information("Started completely");
+      } catch (const std::exception& exc) {
+        logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
+      }
+      waitForTerminationRequest();
+      logger().information("Termination requested");
+      reader.running = false;
+      writer.running = false;
+      wrapper.running = false;
+
+      for (auto& secondary_wrapper : secondary) {
+        secondary_wrapper->running = false;
+      }
+
+      for (auto& thread : threads)
+        thread.join();
     }
-    waitForTerminationRequest();
-    for (auto& thread : threads)
-      thread.join();
+
+    delete node_queue;
+    delete edge_queue;
+    delete load_queue;
+    delete solution_queue;
   }
   return Poco::Util::Application::EXIT_OK;
 }
