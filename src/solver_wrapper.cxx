@@ -381,6 +381,9 @@ SolverWrapper::find_paths(
           auto child_pdd_at_parent_target =
             child_critical_start_segment->distance;
 
+          if (bag_pdd == CLOCK::max())
+            bag_pdd = child_pdd_at_parent_target;
+
           if (child_pdd_at_parent_target < bag_earliest_pdd) {
             critical = true;
           }
@@ -489,7 +492,7 @@ SolverWrapper::run()
                 data["ipdd_destination"].template get<std::string>();
 
               if (ipdd.length() > 11) {
-                tmax = iso_to_date(ipdd);
+                tmax = iso_to_date(ipdd, true);
               }
             }
 
