@@ -63,8 +63,8 @@ else(NOT LOCAL)
     src/solver.cxx
     src/utils.cxx
     src/file_reader.cxx
-    src/kafka_reader.cxx
     src/search_writer.cxx
+    src/processor.cxx
     src/solver_wrapper.cxx
     src/server_local.cxx
   )
