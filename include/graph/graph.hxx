@@ -27,6 +27,9 @@ private:
   VertexIndexPropertyMap m_vertices;
   EdgeIndexPropertyMap m_edges;
 
+  std::vector<size_t> out_edges;
+  std::vector<size_t> in_edges;
+
 public:
   typedef typename VertexIndexPropertyMap::property_index_map vertex_index_map;
   typedef typename EdgeIndexPropertyMap::property_index_map edge_index_map;
@@ -59,7 +62,8 @@ public:
 
   // edge_index_map edges() const;
 
-  vertex_descriptor source(const edge_descriptor&) const;
+  const vertex_descriptor source(const edge_descriptor&) const {
+  }
 
   vertex_descriptor target(const edge_descriptor&) const;
 

@@ -16,13 +16,15 @@ FileReader::FileReader(const std::string& datafile,
                        moodycamel::ConcurrentQueue<std::string>* load_queue)
   : load_file(datafile)
   , load_queue(load_queue)
-{}
+{
+    running = true;
+}
 
 void
 FileReader::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  while (true) {
+  while (running) {
     // app.logger().information("FileReader polling....");
     try {
       std::ifstream load_file_stream;

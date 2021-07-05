@@ -58,9 +58,8 @@ SolverWrapper::SolverWrapper(
   init_nodes();
   init_custody();
   init_edges();
-  app.logger().debug(moirai::format("Initialized graph: {}", solver->show()));
+  app.logger().information(moirai::format("Initialized graph: {}", solver->show()));
   running = true;
-  // app.logger().information(solver.show_all());
 }
 
 void

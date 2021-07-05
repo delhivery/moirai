@@ -16,7 +16,8 @@ set(CMAKE_GENERATOR Ninja)
 
 # UBSAN
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fwhole-program -flto -fgraphite-identity -floop-nest-optimize -fipa-pta -fno-semantic-interposition -fno-plt")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fwhole-program -fgraphite-identity -floop-nest-optimize -fipa-pta -fno-semantic-interposition -fno-plt")
+
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
@@ -79,6 +80,14 @@ if(ANALYZE)
   )
   set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
 endif(ANALYZE)
+
+include(CheckIPOSupported)
+
+check_ipo_supported()
+set_property(
+  TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION
+  TRUE
+)
 
 target_link_libraries(
   ${PROJECT_NAME}
