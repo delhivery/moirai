@@ -1,78 +1,44 @@
-#ifndef MOIRAI_GRAPH_GRAPH
-#define MOIRAI_GRAPH_GRAPH
-#include <ranges>
-#include <vector>
+#include <cstddef>
+#include <limits>
+#include <memory>
+#include <unordered_map>
 
-template<template<typename...> class Container, class Property>
-class PropertyMap
-{
-private:
-  Container<Property> m_property_map;
-
-public:
-  typedef const Container<const Property> property_index_map;
-  typedef typename Container<Property>::size_type property_descriptor;
-};
-
-template<class Vertex,
-         class Edge,
-         template<typename...> class VertexContainer = std::vector,
-         template<typename...> class EdgeContainer = std::vector>
+template<class VertexT, class EdgeT>
 class Graph
 {
 private:
-  typedef PropertyMap<VertexContainer, Vertex> VertexIndexPropertyMap;
-  typedef PropertyMap<EdgeContainer, Edge> EdgeIndexPropertyMap;
+  std::size_t max_node_index, max_edge_index;
 
-  VertexIndexPropertyMap m_vertices;
-  EdgeIndexPropertyMap m_edges;
+  std::unordered_map<size_t, VertexT> vertex_map;
+  std::unordered_map<size_t, EdgeT> edge_map;
 
-  std::vector<size_t> out_edges;
-  std::vector<size_t> in_edges;
+  VertexT& operator[](const size_t& vertex_id)
+  {
+    return vertex_map.at(vertex_id);
+  }
+
+  const VertexT& operator[](const size_t& vertex_id) const
+  {
+    return vertex_map.at(vertex_id);
+  }
+
+  EdgeT& get_edge(const size_t& edge_id) { return edge_map.at(edge_id); }
 
 public:
-  typedef typename VertexIndexPropertyMap::property_index_map vertex_index_map;
-  typedef typename EdgeIndexPropertyMap::property_index_map edge_index_map;
+  Graph()
+    : max_node_index(std::numeric_limits<size_t>::min())
+    , max_edge_index(std::numeric_limits<size_t>::min())
+  {}
 
-  typedef typename VertexContainer<Vertex>::size_type vertex_descriptor;
-  typedef typename EdgeContainer<Edge>::size_type edge_descriptor;
+  Graph(const Graph& other)
+    : max_node_index(other.max_node_index)
+    , max_edge_index(other.max_edge_index)
+    , vertex_map(other.vertex_map)
+    , edge_map(other.edge_map)
+  {}
 
-  std::ranges::views::all_t<VertexContainer<Vertex>> vertices() const
+  static std::shared_ptr<Graph<VertexT, EdgeT>> get()
   {
-    return std::ranges::views::all(m_vertices.cbegin(), m_vertices.cend());
+    return std::make_shared<Graph<VertexT, EdgeT>>();
   }
-
-  std::ranges::views::all_t<EdgeContainer<Edge>> edges() const
-  {
-    return std::ranges::views::all(m_edges.cbegin(), m_edges.cend());
-  }
-
-  const vertex_descriptor add_vetex(Vertex vertex)
-  {
-    m_vertices.push_back(vertex);
-  }
-
-  template<class... Args>
-  const vertex_descriptor add_vetex(Args&&... args)
-  {
-    m_vertices.emplace_back(std::forward<Args>(args)...);
-  }
-
-  // vertex_index_map vertices() const;
-
-  // edge_index_map edges() const;
-
-  const vertex_descriptor source(const edge_descriptor&) const {
-  }
-
-  vertex_descriptor target(const edge_descriptor&) const;
-
-  vertex_descriptor num_vertices() const;
-
-  edge_descriptor num_edges() const;
-
-  friend std::ranges::views::all_t<
-    Graph<Vertex, Edge, VertexContainer, EdgeContainer>>
-  get();
 };
-#endif
