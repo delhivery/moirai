@@ -1,80 +1,124 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
-project(moirai)
+project("" DESCRIPTION "" HOMEPAGE_URL "" LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+
+include(GenerateExportHeader)
+include(CheckIPOSupported)
+include(GNUInstallDirs)
+include(GetVersionFromGit)
+
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_GENERATOR Ninja)
+set(LTO_SUPPORTED false CACHE BOOL "Compiler supports LTO")
+
+option(ASAN "Enable address sanitizer" OFF)
+option(TSAN "Enable thread sanitizer" OFF)
+option(MSAN "Enable memory sanitizer" OFF)
+option(UBSAN "Enable unbounded sanitizer" OFF)
+option(ANAL "Enable code analysis" OFF)
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
 endif(NOT CMAKE_BUILD_TYPE)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  string(APPEND CMAKE_CXX_FLAGS "-fno-omit-frame-pointer")
+endif()
 
-option(ANALYZE "Analyze codebase for improvements" OFF)
-option(LOCAL "Run EP locally with production dataset" OFF)
+if(CMAKE_BUILD_TYPE MATCHES Release)
+  string(APPEND CMAKE_CXX_FLAGS "-fwhole-program")
+  string(APPEND CMAKE_CXX_FLAGS "-fgraphite-identity")
+  string(APPEND CMAKE_CXX_FLAGS "-floop-nest-optimize")
+  string(APPEND CMAKE_CXX_FLAGS "-fipa-pta")
+  string(APPEND CMAKE_CXX_FLAGS "-fno-semantic-interposition")
+  string(APPEND CMAKE_CXX_FLAGS "-fno-plt")
+  check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT error)
+endif()
 
-if(ANALYZE)
-  message(STATUS "Analysis on")
+if(ASAN AND TSAN AND MSAN AND UBSAN)
+  message(FATAL_ERROR "Sanitizer options are mutually exclusive")
+endif()
+
+if(ASAN)
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG "-fsanitize=address")
+endif()
+
+if(TSAN)
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG "-fsanitize=thread")
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG "-Wthread-safety")
+endif()
+
+if(MSAN)
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG "-fsanitize=memory")
+endif()
+
+if(UBSAN)
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG "-fsanitize=undefined")
+endif()
+
+if(ANAL)
   find_program(IWYU_PATH NAMES include-what-you-use iwyu REQUIRED)
   find_program(TIDY_PATH NAMES clang-tidy REQUIRED)
-endif(ANALYZE)
+  set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE include-what-you-use)
+  set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=*,readability-*)
+  set(CMAKE_LINK_WHAT_YOU_USE ON)
+endif()
 
-find_package(Boost COMPONENTS graph)
-find_package(fmt REQUIRED)
-find_package(TBB REQUIRED)
-find_package(Poco REQUIRED Util Foundation Net NetSSL)
-find_package(OpenSSL REQUIRED)
-find_package(RdKafkaCPP REQUIRED)
 
-if(NOT LOCAL)
-  add_executable(
-    ${PROJECT_NAME}
-    src/date_utils.cxx
-    src/graph_helpers.cxx
-    src/transportation.cxx
-    src/solver.cxx
-    src/utils.cxx
-    src/kafka_reader.cxx
-    src/search_writer.cxx
-    src/solver_wrapper.cxx
-    src/server.cxx
-  )
-else(NOT LOCAL)
-  add_executable(
-    ${PROJECT_NAME}
-    src/date_utils.cxx
-    src/graph_helpers.cxx
-    src/transportation.cxx
-    src/solver.cxx
-    src/utils.cxx
-    src/file_reader.cxx
-    src/kafka_reader.cxx
-    src/search_writer.cxx
-    src/solver_wrapper.cxx
-    src/server_local.cxx
-  )
-endif(NOT LOCAL)
+# target_include_directories(${PROJECT_NAME} PUBLIC include)
 
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+# if(LTO_SUPPORTED)
+#   set_property(
+#     TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION
+#     TRUE
+#   )
+# endif()
 
-if(ANALYZE)
-  set_property(
-    TARGET ${PROJECT_NAME} PROPERTY CXX_INCLUDE_WHAT_YOU_USE
-    ${IWYU_PATH}
-  )
-  set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
-endif(ANALYZE)
+# set(PROJECT_NAME "x")
+get_git_semver(PROJECT_VERSION)
 
-target_link_libraries(
-  ${PROJECT_NAME}
-  Boost::graph
-  fmt::fmt
-  tbb
-  Poco::Foundation
-  Poco::Util
-  Poco::Net
-  Poco::NetSSL
-  RdKafkaCPP::RdKafkaCPP
+file(WRITE "${PROJECT_BINARY_DIR}/VERSION" "${PROJECT_VERSION}")
+
+# Install version
+install(
+  FILES
+  "${PROJECT_BINARY_DIR}/VERSION"
+  DESTINATION
+  "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}"
+  COMPONENT
+  runtime
 )
+
+# Install cmake find script
+install(
+  FILES
+  "${PROJECT_NAME}-config.cmake"
+  DESTINATION
+  "${CMAKE_INSTALL_DATADIR}/cmake/"
+  COMPONENT
+  dev
+)
+
+install(
+  DIRECTORY
+  ${PROJECT_SOURCE_DIR}/data
+  DESTINATION
+  ${CMAKE_INSTALL_LOCALSTATEDIR}/${PROJECT_NAME}
+  COMPONENT
+  runtime
+)
+
+install(
+  DIRECTORY
+  ${PROJECT_SOURCE_DIR}/config
+  DESTINATION
+  ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
+  COMPONENT
+  runtime
+)
+
+add_subdirectory(src)
