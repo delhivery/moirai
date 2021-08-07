@@ -1,7 +1,7 @@
-add_executable(${PROJECT_NAME} main.cxx)
+add_library(lib${PROJECT_NAME} ${PROJECT_NAME}.cxx)
 
 target_link_libraries(
-  ${PROJECT_NAME}
   lib${PROJECT_NAME}
   ${PROJECT_NAME}_HEADERS
+  fmt::fmt
 )
