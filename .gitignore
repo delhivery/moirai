@@ -143,3 +143,5 @@ fabric.properties
 
 ######## Project ignores ########
 build/
+
+.cache/
