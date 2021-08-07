@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 project("" DESCRIPTION "" HOMEPAGE_URL "" LANGUAGES CXX)
 
+
+file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" BUILD_PATH)
+
+if(EXISTS "${BUILD_PATH}")
+    message(FATAL_ERROR "In source builds are unsupported")
+endif()
+
+string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 include(GenerateExportHeader)
@@ -82,6 +91,10 @@ endif()
 get_git_semver(PROJECT_VERSION)
 
 file(WRITE "${PROJECT_BINARY_DIR}/VERSION" "${PROJECT_VERSION}")
+add_compile_definitions(${PROJECT_NAME_UPPER}_VERSION_MAJOR=${PROJECT_VERSION_MAJOR})
+add_compile_definitions(${PROJECT_NAME_UPPER}_VERSION_MINOR=${PROJECT_VERSION_MINOR})
+add_compile_definitions(${PROJECT_NAME_UPPER}_VERSION_PATCH=${PROJECT_VERSION_PATCH})
+add_compile_definitions(${PROJECT_NAME_UPPER}_VERSION_TWEAK=${PROJECT_VERSION_TWEAK})
 
 # Install version
 install(
@@ -122,3 +135,7 @@ install(
 )
 
 add_subdirectory(src)
+
+add_executable(${PROJECT_NAME} main.cxx)
+
+target_link_libraries(${PROJECT_NAME}
