@@ -1,6 +1,6 @@
-#include <format.hxx>
-#include <moirai.hxx>
-#include <version.hxx>
+#include <moirai/format.hxx>
+#include <moirai/moirai.hxx>
+#include <moirai/version.hxx>
 
 const char*
 project()

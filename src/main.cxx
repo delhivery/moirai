@@ -1,5 +1,5 @@
 #include <iostream>
-#include <moirai.hxx>
+#include <moirai/moirai.hxx>
 
 int
 main()

@@ -30,6 +30,8 @@ include(GenerateExportHeader)
 include(CheckIPOSupported)
 include(GNUInstallDirs)
 include(GetVersionFromGit)
+include(ExternalProject)
+include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -148,10 +150,9 @@ install(
   runtime
 )
 
-
 find_package(fmt REQUIRED)
 
-add_subdirectory(include)
+add_subdirectory(iface)
 add_subdirectory(lib)
 add_subdirectory(src)
 
