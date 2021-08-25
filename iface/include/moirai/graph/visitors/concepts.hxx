@@ -74,38 +74,6 @@ concept TreeEdgeVisitorConcept = VisitorConcept<VisitorT, GraphT> and
   { visitor.tree_edge(edge, graph) } -> std::same_as<void>;
 };
 
-enum class Color : char { WHITE = 0, GRAY = 1, GREEN = 2, BLACK = 3 };
-
-template <typename VisitorT, typename GraphT, Color ColorT>
-concept ColorTargetVisitorConcept = VisitorConcept<VisitorT, GraphT> and
-    requires(VisitorT visitor, GraphT &graph, Color color,
-             typename GraphT::edge_descriptor edge) {
-  { visitor.color_target(color, edge, graph) } -> std::same_as<void>;
-};
-
-template <typename VisitorT, typename GraphT>
-concept DijkstraVisitorConcept =
-    InitializesVertexVisitorConcept<VisitorT, GraphT> and
-    DiscoversVertexVisitorConcept<VisitorT, GraphT> and
-    NotRelaxedEdgeVisitorConcept<VisitorT, GraphT> and
-    EdgeRelaxedVisitorConcept<VisitorT, GraphT> and
-    ExaminesEdgeVisitorConcept<VisitorT, GraphT> and
-    ExaminesVertexVisitorConcept<VisitorT, GraphT> and
-    FinishesVertexVisitorConcept<VisitorT, GraphT>;
-
-template <typename VisitorT, typename GraphT>
-concept BFSVisitorConcept =
-    InitializesVertexVisitorConcept<VisitorT, GraphT> and
-    DiscoversVertexVisitorConcept<VisitorT, GraphT> and
-    ExaminesEdgeVisitorConcept<VisitorT, GraphT> and
-    ExaminesVertexVisitorConcept<VisitorT, GraphT> and
-    FinishesVertexVisitorConcept<VisitorT, GraphT> and
-    NonTreeEdgeVisitorConcept<VisitorT, GraphT> and
-    TreeEdgeVisitorConcept<VisitorT, GraphT> and
-    ColorTargetVisitorConcept<VisitorT, GraphT, Color::GRAY> and
-    ColorTargetVisitorConcept<VisitorT, GraphT, Color::BLACK> and
-    FinishesVertexVisitorConcept<VisitorT, GraphT>;
-
 enum class VisitorEvents {
   no_event,
   initialize_vertex,

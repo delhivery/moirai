@@ -1,6 +1,6 @@
 #include <moirai/graph/concepts.hxx>
 #include <moirai/graph/visitors/concepts.hxx>
-#include <moirai/graph/visitors/visitors.hxx>
+#include <moirai/graph/visitors.hxx>
 #include <moirai/property_maps/concepts.hxx>
 
 template <IncidenceGraphConcept GraphT, typename BufferT, typename VisitorT,
