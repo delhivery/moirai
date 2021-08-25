@@ -36,7 +36,7 @@ See the [design document](Architecture.md) for additional details.
 
 ## Contribution guidelines
 
-\*\* If you awnt to contribute to moirai, be sure to review the
+** If you awnt to contribute to moirai, be sure to review the
 [contribution guidelines](Contributing.md)
 
 ## TODO
