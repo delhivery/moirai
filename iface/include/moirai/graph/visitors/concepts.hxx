@@ -23,7 +23,7 @@ template <typename VisitorT, typename GraphT>
 concept DiscoversVertexVisitorConcept = VisitorConcept<VisitorT, GraphT> and
     requires(VisitorT visitor, GraphT &graph,
              typename GraphT::vertex_descriptor vertex) {
-  { visitor.initialize_vertex(vertex, graph) } -> std::same_as<void>;
+  { visitor.discover_vertex(vertex, graph) } -> std::same_as<void>;
 };
 
 template <typename VisitorT, typename GraphT>
@@ -73,26 +73,4 @@ concept TreeEdgeVisitorConcept = VisitorConcept<VisitorT, GraphT> and
              typename GraphT::edge_descriptor edge) {
   { visitor.tree_edge(edge, graph) } -> std::same_as<void>;
 };
-
-enum class VisitorEvents {
-  no_event,
-  initialize_vertex,
-  start_vertex,
-  discover_vertex,
-  finish_vertex,
-  examine_vertex,
-  examine_edge,
-  tree_edge,
-  non_tree_edge,
-  gray_target,
-  black_target,
-  forward_or_cross_edge,
-  back_edge,
-  finish_edge,
-  edge_relaxed,
-  edge_not_relaxed,
-  edge_minimized,
-  edge_not_minimized
-};
-
 #endif

@@ -1,7 +1,10 @@
+#ifndef GRAPH_ALGORITHMS_BFS
+#define GRAPH_ALGORITHMS_BFS
 #include <moirai/graph/concepts.hxx>
-#include <moirai/graph/visitors/concepts.hxx>
 #include <moirai/graph/visitors.hxx>
+#include <moirai/graph/visitors/concepts.hxx>
 #include <moirai/property_maps/concepts.hxx>
+#include <ranges>
 
 template <IncidenceGraphConcept GraphT, typename BufferT, typename VisitorT,
           typename ColorMapT, typename SourceIteratorT>
@@ -80,29 +83,69 @@ void bfs_search(const GraphT &graph, typename GraphT::vertex_descriptor source,
   bfs_search(graph, sources, sources + 1, queue, visitor, color_map);
 }
 
-template <typename VisitorT> class BFSVisitor {
+template <std::ranges::input_range VisitorsT> class BFSVisitor {
 protected:
-  VisitorT m_visitor;
+  VisitorsT m_visitors;
 
 public:
   BFSVisitor() {}
 
-  BFSVisitor(VisitorT visitor) : m_visitor(visitor) {}
+  BFSVisitor(VisitorsT visitors) : m_visitors(visitors) {}
 
-  template <typename Visitor>
-  BFSVisitor<std::pair<
-      VisitorFunctor<VisitorEvents::initialize_vertex, Visitor>, VisitorT>>
-  do_on_initialize_vertex(Visitor visitor) {
-    typedef std::pair<VisitorFunctor<VisitorEvents::initialize_vertex, Visitor>,
-                      VisitorT>
-        visitor_list;
-    typedef BFSVisitor<visitor_list> result_type;
-    return result_type(visitor_list(visitor, m_visitor));
+private:
+  template <typename VertexT, typename GraphT>
+  void discover_vertex(VertexT vertex, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      discover_vertex_helper(visitor, vertex, graph);
   }
 
   template <typename VertexT, typename GraphT>
-  auto discover_vertex(VertexT vertex, GraphT &graph) {
-    invoke_visitors(m_visitor, vertex, graph);
-    return;
+  void examine_vertex(VertexT vertex, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      examine_vertex_helper(visitor, graph);
+  }
+
+  template <typename EdgeT, typename GraphT>
+  void examine_edge(EdgeT edge, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      examine_edge_helper(visitor, edge, graph);
+  }
+
+  template <typename EdgeT, typename GraphT>
+  void tree_edge(EdgeT edge, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      tree_edge_helper(visitor, edge, graph);
+  }
+
+  template <typename EdgeT, typename GraphT>
+  void non_tree_edge(EdgeT edge, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      non_tree_edge_helper(visitor, edge, graph);
+  }
+
+  template <typename EdgeT, typename GraphT>
+  void gray_target(EdgeT edge, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      color_target_helper(visitor, edge, graph, Color::GRAY);
+  }
+
+  template <typename EdgeT, typename GraphT>
+  void black_target(EdgeT edge, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      color_target_helper(visitor, edge, graph, Color::BLACK);
+  }
+
+  template <typename VertexT, typename GraphT>
+  void finish_vertex(VertexT vertex, GraphT &graph) {
+    for (auto visitor : m_visitors)
+      finish_vertex_helper(visitor, vertex, graph);
   }
 };
+
+template <VertexListGraphConcept GraphT, typename P, typename T, typename R>
+void bfs(const GraphT &graph, typename GraphT::vertex_descriptor source) {
+  GraphT &const_graph = const_cast<GraphT &>(graph);
+  // TODO Move from tag dispatch to constraints
+  bfs_dispatch(const_graph, source);
+}
+#endif
