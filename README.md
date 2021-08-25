@@ -1,7 +1,5 @@
 ---
-<div align="center">
-<img src="https://drive.google.com/file/d/1Ex9eaO5OFElJQW4j-O5CKufNYAOssxTz/view?usp=sharing">
-</div>
+![Moirae](assets/logo.svg)
 ---
 
 # Moirae
