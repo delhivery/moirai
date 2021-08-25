@@ -36,8 +36,21 @@ See the [design document](Architecture.md) for additional details.
 
 ## Contribution guidelines
 
-**If you awnt to contribute to moirai, be sure to review the
+**If you want to contribute to moirai, be sure to review the
 [contribution guidelines](Contributing.md)**
+
+## Available Solvers
+
+- Planner
+  - Uncapacitated
+    - Single source, single target shortest path
+    - Pareto optimal single source, single target shortest paths
+    - Single source, single target critical path
+  - Capacitated
+    - Multiple source, multiple sink shortest paths
+- Executors
+  - Greedy prioritization
+  - VRP with pickups, drops and time windows
 
 ## TODO
 
