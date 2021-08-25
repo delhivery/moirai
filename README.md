@@ -4,7 +4,7 @@
 
 # Moirae
 
-[Moirae](https://github.com/delhivery/moirai) is a logistics planner with the
+[Moirae](https://github.com/delhivery/moirae) is a logistics planner with the
 objective to automate routing and transportation. It has a comprehensive,
 flexible ecosystem of tools, libraries and algorithms that lets developers easily
 build, deploy and integrate a routing planner in their own logistics platform.
@@ -23,8 +23,8 @@ See the [install guide](Install.md) to use a docker container] or
 To install the current release
 
 ```bash
-layman -a moirai
-emerge -av moirai
+layman -a moirae
+emerge -av moirae
 ```
 
 ## Architecture
@@ -36,7 +36,7 @@ See the [design document](Architecture.md) for additional details.
 
 ## Contribution guidelines
 
-**If you want to contribute to moirai, be sure to review the
+**If you want to contribute to moirae, be sure to review the
 [contribution guidelines](Contributing.md)**
 
 ## Available Solvers
