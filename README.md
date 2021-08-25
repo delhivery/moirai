@@ -9,16 +9,16 @@ objective to automate routing and transportation. It has a comprehensive,
 flexible ecosystem of tools, libraries and algorithms that lets developers easily
 build, deploy and integrate a routing planner in their own logistics platform.
 
-Moirai was originally designed to automate shipment routing in Delhivery's own
+Moirae was originally designed to automate shipment routing in Delhivery's own
 transportation network. However, the system is general enough to be applicable in
 a wide variety of other domains, as well.
 
-Moirai provides a stable C++ interface.
+Moirae provides a stable C++ interface.
 
 ## Install
 
-See the [moirai install guide](Install.md) to use a [Docker container](Docker.md)
-or [build from source](Build.md).
+See the [install guide](Install.md) to use a docker container] or
+[build from source](Build.md).
 
 To install the current release
 
