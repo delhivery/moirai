@@ -1,5 +1,5 @@
 #include <cstddef>
-#include <moirai/graph/property_map_concepts.hxx>
+#include <moirai/graph/property_maps/concepts.hxx>
 #include <ranges>
 #include <vector>
 
@@ -77,6 +77,15 @@ private:
     verify_heap();
   }
 
+  void swap_heap_elements(size_type index_lhs, size_type index_rhs) {
+    value_type value_lhs = m_data[index_lhs];
+    value_type value_rhs = m_data[index_rhs];
+    m_data[index_lhs] = value_rhs;
+    m_data[index_rhs] = value_lhs;
+    put(m_indices, value_lhs, index_rhs);
+    put(m_indices, value_rhs, index_lhs);
+  }
+
   void preserve_heap_property_down() {
     if (m_data.empty())
       return;
@@ -97,7 +106,7 @@ private:
           get(m_distances, child_base_ptr[index_child_smallest]);
 
       if (index_first_child + D <= heap_size) {
-        for (size_t idx : std::ranges::iota_view{1, D}) {
+        for (size_t idx : std::views::iota(1, D)) {
           value_type value_idx = child_base_ptr[idx];
           distance_type distance_idx = get(m_distances, value_idx);
 
@@ -116,7 +125,15 @@ private:
           }
         }
       }
+
+      if (distance_child_smallest < distance_current) {
+        swap_heap_elements(index_child_smallest + index_first_child, index);
+        index = index_child_smallest + index_first_child;
+        continue;
+      } else
+        break;
     }
+    verify_heap();
   }
 
 public:
@@ -159,4 +176,29 @@ public:
     } else
       m_data.pop_back();
   }
+
+  void update(const value_type &value) {
+    size_type index = get(m_indices, value);
+    preserve_heap_property_up(index);
+    verify_heap();
+  }
+
+  bool contains(const value_type &value) const {
+    size_type index = get(m_indices, value);
+    return (index != (size_type)(-1));
+  }
+
+  void push_or_update(const value_type &value) {
+    size_type index = get(m_indices, value);
+
+    if (index == (size_type)(-1)) {
+      index = m_data.size();
+      m_data.push_back(value);
+      put(m_indices, value, index);
+    }
+    preserve_heap_property_up(index);
+    verify_heap();
+  }
+
+  DistanceMapT keys() const { return m_distances; }
 };

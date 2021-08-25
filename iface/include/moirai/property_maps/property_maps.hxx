@@ -1,6 +1,9 @@
+#ifndef PROPERTY_MAPS
+#define PROPERTY_MAPS
+
 #include <cassert>
 #include <iterator>
-#include <moirai/graph/property_map_concepts.hxx>
+#include <moirai/graph/property_maps/concepts.hxx>
 
 template <typename PropertyMapT, typename ReferenceT, typename KeyT>
 inline ReferenceT get(const PropertyMapT &map, const KeyT &key) {
@@ -175,3 +178,5 @@ public:
     return get(m_map, key);
   }
 };
+
+#endif

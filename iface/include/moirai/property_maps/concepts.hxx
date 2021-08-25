@@ -1,13 +1,17 @@
+#ifndef PROPERTY_MAPS_CONCEPTS
+#define PROPERTY_MAPS_CONCEPTS
+
 #include <concepts>
 #include <cstddef>
 #include <type_traits>
 
-template <typename MapT>
+template <typename MapT, typename KeyT>
 concept PropertyMapConcept = requires() {
   typename MapT::key_type;
   typename MapT::value_type;
   typename MapT::reference;
-  // typename T::category;
+
+  std::same_as<typename MapT::key_type, KeyT>;
 };
 
 template <typename SequenceContainerT, typename ValueT>
@@ -23,8 +27,8 @@ inline const SequenceContainerT &get(const SequenceContainerT *container,
   return container[key];
 }
 
-template <typename MapT>
-concept ReadablePropertyMapConcept = PropertyMapConcept<MapT> and
+template <typename MapT, typename KeyT>
+concept ReadablePropertyMapConcept = PropertyMapConcept<MapT, KeyT> and
     requires(const MapT &pmap, const typename MapT::key_type &key) {
 
   requires std::convertible_to<typename MapT::reference,
@@ -32,8 +36,8 @@ concept ReadablePropertyMapConcept = PropertyMapConcept<MapT> and
   { get(pmap, key) } -> std::same_as<typename MapT::value_type>;
 };
 
-template <typename MapT>
-concept WritablePropertyMapConcept = PropertyMapConcept<MapT> and
+template <typename MapT, typename KeyT>
+concept WritablePropertyMapConcept = PropertyMapConcept<MapT, KeyT> and
     requires(MapT &map, const typename MapT::key_type &key,
              const typename MapT::value_type &value) {
   requires std::convertible_to<typename MapT::reference, void>;
@@ -41,13 +45,15 @@ concept WritablePropertyMapConcept = PropertyMapConcept<MapT> and
   {put(map, key, value)};
 };
 
-template <typename MapT>
-concept ReadWritePropertyMapConcept = PropertyMapConcept<MapT> and
-    ReadablePropertyMapConcept<MapT> and WritablePropertyMapConcept<MapT>;
+template <typename MapT, typename KeyT>
+concept ReadWritePropertyMapConcept = PropertyMapConcept<MapT, KeyT> and
+    ReadablePropertyMapConcept<MapT, KeyT> and
+    WritablePropertyMapConcept<MapT, KeyT>;
 
-template <typename MapT>
+template <typename MapT, typename KeyT>
 concept LValuePropertyMapConcept =
-    PropertyMapConcept<MapT> and ReadablePropertyMapConcept<MapT> and
+    PropertyMapConcept<MapT, KeyT> and
+    ReadablePropertyMapConcept<MapT, KeyT> and
     (std::same_as<const typename MapT::value_type &,
                   typename MapT::reference> or
      std::same_as<typename MapT::value_type &, typename MapT::reference>) and
@@ -55,10 +61,11 @@ concept LValuePropertyMapConcept =
   { operator[](const_key) } -> std::same_as<const typename MapT::value_type &>;
 };
 
-template <typename MapT>
-concept MutableLValuePropertyMapConcept = PropertyMapConcept<MapT> and
-    ReadWritePropertyMapConcept<MapT> and
+template <typename MapT, typename KeyT>
+concept MutableLValuePropertyMapConcept = PropertyMapConcept<MapT, KeyT> and
+    ReadWritePropertyMapConcept<MapT, KeyT> and
     std::same_as<typename MapT::value_type &, typename MapT::reference> and
     requires(const typename MapT::key_type &const_key) {
   { operator[](const_key) } -> std::same_as<typename MapT::value_type &>;
 };
+#endif
