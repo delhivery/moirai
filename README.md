@@ -52,6 +52,15 @@ See the [design document](Architecture.md) for additional details.
   - Greedy prioritization
   - VRP with pickups, drops and time windows
 
+## Available Backends
+
+- Polling
+  - HTTP(S)
+  - Elasticsearch
+- Streaming
+  - Kafka
+  - Kinesis
+
 ## TODO
 
 - Graph in its own subproject/namespace
