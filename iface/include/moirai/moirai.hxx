@@ -1,9 +1,8 @@
+#include <moirai/graph/containers/concepts.hxx>
 #include <string>
-#include <moirai/containers/containers.hxx>
 
-const char* project();
+const char *project();
 
-const char* version();
+const char *version();
 
-std::string
-usage();
+std::string usage();

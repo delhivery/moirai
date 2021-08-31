@@ -3,13 +3,19 @@
 
 #include <cassert>
 #include <iterator>
-#include <moirai/graph/property_maps/concepts.hxx>
+#include <moirai/graph/concepts.hxx>
+#include <moirai/property_maps/concepts.hxx>
 
-template <typename PropertyMapT, typename ReferenceT, typename KeyT>
-inline ReferenceT get(const PropertyMapT &map, const KeyT &key) {
-  ReferenceT value = static_cast<const PropertyMapT &>(map)[key];
-  return value;
-}
+template <GraphConcept GraphT> class NullPropertyMap {
+public:
+  using key_type = void;
+  using value_type = void *;
+  using reference = void;
+
+  void *get(void) {}
+
+  void put(GraphT &, void *) {}
+};
 
 template <std::random_access_iterator IteratorT, typename IndexMapT,
           typename T = typename std::iterator_traits<IteratorT>::value_type,
@@ -125,6 +131,7 @@ public:
 };
 
 template <typename T> class TypedIdentityPropertyMap {
+public:
   using key_type = T;
   using value_type = T;
   using reference = T;
@@ -165,7 +172,7 @@ public:
   }
 };
 
-template <PropertyMapConcept PropertyMapT> class PropertyMapFunction {
+template <typename PropertyMapT> class PropertyMapFunction {
   PropertyMapT m_map;
   using param_type = typename PropertyMapT::key_type;
 

@@ -1,15 +1,18 @@
 #ifndef GRAPH_ALGORITHMS_BFS
 #define GRAPH_ALGORITHMS_BFS
+#include "moirai/property_maps/helpers.hxx"
+#include <functional>
 #include <moirai/graph/concepts.hxx>
 #include <moirai/graph/visitors.hxx>
 #include <moirai/graph/visitors/concepts.hxx>
 #include <moirai/property_maps/concepts.hxx>
+#include <queue>
 #include <ranges>
+#include <vector>
 
 template <IncidenceGraphConcept GraphT, typename BufferT, typename VisitorT,
-          typename ColorMapT, typename SourceIteratorT>
-requires VisitorConcept<VisitorT, GraphT> and
-    ReadWritePropertyMapConcept<ColorMapT, typename GraphT::vertex_descriptor>
+          ReadWritePropertyMapConcept ColorMapT, typename SourceIteratorT>
+requires VisitorConcept<VisitorT, GraphT>
 void bfs_visit(const GraphT &graph, SourceIteratorT source,
                SourceIteratorT target, BufferT &queue, VisitorT visitor,
                ColorMapT color_map) {
@@ -63,9 +66,8 @@ void bfs_visit(const GraphT &graph, typename GraphT::vertex_descriptor source,
 
 template <VertexListGraphConcept GraphT, typename SourceIteratorT,
           typename BufferT, typename VisitorT, typename ColorMapT>
-void bfs_search(const GraphT &graph, SourceIteratorT source,
-                SourceIteratorT target, BufferT &queue, VisitorT visitor,
-                ColorMapT color_map) {
+void bfs(const GraphT &graph, SourceIteratorT source, SourceIteratorT target,
+         BufferT &queue, VisitorT visitor, ColorMapT color_map) {
   using Color = typename ColorMapT::value_type;
 
   for (auto vertex : graph.vertices()) {
@@ -77,10 +79,10 @@ void bfs_search(const GraphT &graph, SourceIteratorT source,
 
 template <VertexListGraphConcept GraphT, typename BufferT, typename VisitorT,
           typename ColorMapT>
-void bfs_search(const GraphT &graph, typename GraphT::vertex_descriptor source,
-                BufferT &queue, VisitorT visitor, ColorMapT color_map) {
+void bfs(const GraphT &graph, typename GraphT::vertex_descriptor source,
+         BufferT &queue, VisitorT visitor, ColorMapT color_map) {
   typename GraphT::vertex_descriptor sources[1] = {source};
-  bfs_search(graph, sources, sources + 1, queue, visitor, color_map);
+  bfs(graph, sources, sources + 1, queue, visitor, color_map);
 }
 
 template <std::ranges::input_range VisitorsT> class BFSVisitor {
@@ -142,10 +144,63 @@ private:
   }
 };
 
-template <VertexListGraphConcept GraphT, typename P, typename T, typename R>
-void bfs(const GraphT &graph, typename GraphT::vertex_descriptor source) {
-  GraphT &const_graph = const_cast<GraphT &>(graph);
-  // TODO Move from tag dispatch to constraints
-  bfs_dispatch(const_graph, source);
+// TODO Implement defaults
+template <
+    VertexListGraphConcept GraphT, typename VisitorT = NullVisitor,
+    typename ColorMapT, // decltype(make_two_bit_color_map(graph.num_vertices(),
+                        // vertex_index_map ? vertex_index_map :
+                        // const_pmap(graph, vertex_index))
+    typename VertexIndexMapT, // decltype(const_pmap(graph, vertex_index))
+    typename BufferT = std::queue<typename GraphT::vertex_descriptor>>
+void bfs(const GraphT &const_graph, typename GraphT::vertex_descriptor source,
+         VisitorT visitor, ColorMapT color, VertexIndexMapT vertex_index_map,
+         BufferT buffer) {
+  GraphT &graph = const_cast<GraphT &>(const_graph);
+  bfs(graph, source, visitor, color, vertex_index_map, buffer);
 }
+
+template <IncidenceGraphConcept GraphT, typename VisitorT = NullVisitor,
+          typename ColorMapT, // defaults to decltype(choose_pmap)(graph,
+                              // vertex_color)
+          typename VertexIndexMapT,
+          typename BufferT = std::queue<typename GraphT::vertex_descriptor>>
+void bfs_visit(const GraphT &const_graph,
+               typename GraphT::vertex_descriptor source, VisitorT visitor,
+               ColorMapT color_map, VertexIndexMapT vertex_index_map,
+               BufferT buffer) {
+  GraphT &graph = const_cast<GraphT &>(const_graph);
+  bfs_visit(graph, source, buffer, visitor, color_map);
+}
+
+template <typename GraphT, typename SourceT> class BFSImplementation {
+  using result_type = void;
+
+  template <typename Args>
+  void operator()(const GraphT &const_graph, const SourceT &const_source,
+                  const Args &args) {
+    typename GraphT::vertex_descriptor sources[1] = {const_source};
+    std::queue<typename GraphT::vertex_descriptor> queue;
+    bfs(const_graph, &sources[0], &sources[1], queue, NullVisitor(),
+        make_color_map(const_graph));
+  }
+};
+
+template <typename T> struct type_t { using type = T; };
+
+template <GraphConcept GraphT, typename VertexDescriptorT,
+          typename VisitorT = NullVisitor,
+          ReadablePropertyMapConcept VertexIndexMapT = NullPropertyMap,
+          ReadWritePropertyMapConcept ColorMapT = NullPropertyMap,
+          typename BufferT = std::queue<typename GraphT::vertex_descriptor>>
+requires VisitorConcept<VisitorT, GraphT> and
+    ReadWritePropertyMapConcept<ColorMapT>
+struct BFSParameters {
+  type_t<GraphT> graph_t;
+  type_t<VertexDescriptorT> vertex_descriptor_t;
+  type_t<VisitorT> visitor_t;
+  type_t<VertexIndexMapT> vertex_index_map_t;
+  type_t<ColorMapT> color_map_t;
+  type_t<BufferT> buffer_t;
+};
+
 #endif
