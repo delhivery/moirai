@@ -1,14 +1,17 @@
+#include "server.hxx"
 #include "concurrentqueue.h"
 #include "date_utils.hxx"
-#include "format.hxx"
+#include "file_reader.hxx"
 #include "graph_helpers.hxx"
 #include "kafka_reader.hxx"
+#include "scan_reader.hxx"
 #include "search_writer.hxx"
-#include "server.hxx"
 #include "solver_wrapper.hxx"
 #include "transportation.hxx"
 #include <Poco/Util/HelpFormatter.h>
+#include <fmt/format.h>
 #include <numeric>
+#include <thread>
 
 void
 Moirai::display_help()
@@ -38,7 +41,8 @@ Moirai::uninitialize()
 
 void
 Moirai::reinitialize()
-{}
+{
+}
 
 void
 Moirai::defineOptions(Poco::Util::OptionSet& options)
@@ -51,213 +55,255 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
       .callback(
         Poco::Util::OptionCallback<Moirai>(this, &Moirai::handle_help)));
 
-  options.addOption(Poco::Util::Option("route-api", "a", "Route dump API")
-                      .required(true)
-                      .repeatable(false)
-                      .argument("<uri>", true)
-                      .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_route_api)));
-
-  options.addOption(
-    Poco::Util::Option("facility-timings", "b", "Path to facility timings file")
+#ifdef WITH_NODE_FILE
+  options.addOption(Poco::Util::Option("nodes-file", "n", "Nodes data file")
       .required(true)
       .repeatable(false)
-      .argument("<path>", true)
+      .argument("<filepath>", true)
+      .group("node")
       .callback(Poco::Util::OptionCallback<Moirai>(
-        this, &Moirai::set_facility_timings_file)));
-
-  options.addOption(Poco::Util::Option("facility-api", "c", "Facility dump API")
+          this, &Moirai::set_node_file
+      ));
+#else
+  options.addOption(Poco::Util::Option("nodes-uri", "n", "Nodes data API")
                       .required(true)
                       .repeatable(false)
                       .argument("<uri>", true)
+                      .group("node")
                       .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_facility_api)));
+                        this, &Moirai::set_node_uri)));
+  options.addOption(Poco::Util::Option("nodes-idx", "ni", "Nodes data index")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<index>", true)
+                      .group("node")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_node_idx)));
+  options.addOption(Poco::Util::Option("node-user", "nu", "Nodes API user")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<username>", true)
+                      .group("node")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_node_user)));
+  options.addOption(Poco::Util::Option("node-pass", "np", "Nodes API pass")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<password>", true)
+                      .group("node")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_node_user)));
+#endif
 
-  options.addOption(Poco::Util::Option("route-token", "e", "Route API Token")
+#ifdef WITH_EDGE_FILE
+  options.addOption(Poco::Util::Option("edge-file", "e", "Edges data file")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<filepath>", true)
+                      .group("edge")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_edge_file)));
+#else
+  options.addOption(Poco::Util::Option("edge-api", "e", "Edges data API")
                       .required(true)
                       .repeatable(false)
                       .argument("<uri>", true)
+                      .group("edge")
                       .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_route_token)));
-
-  options.addOption(
-    Poco::Util::Option("facility-topic", "f", "Facility data topic")
-      .required(true)
-      .repeatable(false)
-      .argument("<topic_name>", true)
-      .callback(
-        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_node_topic)));
-
-  options.addOption(
-    Poco::Util::Option("search-index", "i", "Elasticsearch index")
-      .required(true)
-      .repeatable(false)
-      .argument("<string>", true)
-      .callback(
-        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_search_index)));
-
-  options.addOption(Poco::Util::Option("kafka-broker", "k", "Kafka broker url")
+                        this, &Moirai::set_edge_uri)));
+  options.addOption(Poco::Util::Option("edge-auth", "ea", "Edge data API auth")
                       .required(true)
-                      .repeatable(true)
-                      .argument("<broker_uri:broker_port>", true)
+                      .repeatable(false)
+                      .argument("<token>", true)
+                      .group("edge")
                       .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_broker_url)));
+                        this, &Moirai::set_edge_auth)));
+#endif
 
+#ifdef WITH_LOAD_FILE
+  options.addOption(Poco::Util::Option("load-file", "l", "Loads data file")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<filepath>", true)
+                      .group("load")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_load_file)));
+#else
   options.addOption(
-    Poco::Util::Option("facility-token", "l", "Facility API Token")
+    Poco::Util::Option("load-broker", "l", "Load data kafka broker")
+      .required(true)
+      .repeatable(true)
+      .argument("<uri>", true)
+      .group("load")
+      .callback(Poco::Util::OptionCallback<Moirai>(
+        this, &Moirai::set_load_broker_uri)));
+  options.addOption(
+    Poco::Util::Option("load-batch-size", "lz", "Load consumer batch size")
+      .required(false)
+      .repeatable(false)
+      .argument("<int>", true)
+      .group("load")
+      .callback(
+        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_load_broker_sz)));
+  options.addOption(
+    Poco::Util::Option("load-timeout", "ls", "Load consumer timeout")
+      .required(false)
+      .repeatable(false)
+      .argument("<millis>", true)
+      .group("load")
+      .callback(Poco::Util::OptionCallback<Moirai>(
+        this, &Moirai::set_load_broker_timeout)));
+  options.addOption(Poco::Util::Option("load-topic", "lt", "Load data topic")
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<topic>", true)
+                      .group("load")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_load_topic)));
+#endif
+
+#ifdef ENABLE_SYNC
+  options.addOption(
+    Poco::Util::Option("sync-uri", "s", "ES URI to sync output to")
       .required(true)
       .repeatable(false)
       .argument("<uri>", true)
-      .callback(Poco::Util::OptionCallback<Moirai>(
-        this, &Moirai::set_facility_api_token)));
-
+      .group("sync")
+      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_uri)));
   options.addOption(
-    Poco::Util::Option("package-topic", "p", "Package data topic")
+    Poco::Util::Option("sync-index", "si", "ES index to sync output to")
       .required(true)
       .repeatable(false)
-      .argument("<topic_name>", true)
-      .callback(
-        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_load_topic)));
-
-  options.addOption(Poco::Util::Option("route-topic", "r", "Route data topic")
-                      .required(true)
-                      .repeatable(false)
-                      .argument("<topic_name>", true)
-                      .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_edge_topic)));
-
-  options.addOption(Poco::Util::Option("search-uri", "s", "Elasticsearch URI")
-                      .required(true)
-                      .repeatable(false)
-                      .argument("<es_uri>", true)
-                      .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_search_uri)));
-
+      .argument("<index>", true)
+      .group("sync")
+      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_idx)));
   options.addOption(
-    Poco::Util::Option(
-      "batch-timeout", "t", "Seconds to wait before processing batch")
-      .required(false)
-      .repeatable(false)
-      .argument("<milliseconds>", true)
-      .callback(
-        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_batch_timeout)));
-
-  options.addOption(
-    Poco::Util::Option("search-user", "u", "Elasticsearch username")
+    Poco::Util::Option("sync-username", "su", "Username credentials to ES to sync output to")
       .required(true)
       .repeatable(false)
-      .argument("<string>", true)
-      .callback(Poco::Util::OptionCallback<Moirai>(
-        this, &Moirai::set_search_username)));
+      .argument("<username>", true)
+      .group("sync")
+      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_user)));
   options.addOption(
-    Poco::Util::Option("search-pass", "w", "Elasticsearch password")
+    Poco::Util::Option("sync-password", "sp", "Password credentials to ES to sync output to")
       .required(true)
       .repeatable(false)
-      .argument("<string>", true)
-      .callback(Poco::Util::OptionCallback<Moirai>(
-        this, &Moirai::set_search_password)));
+      .argument("<password>", true)
+      .group("sync")
+      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_pass)));
+#endif
+}
 
-  options.addOption(Poco::Util::Option("batch-size",
-                                       "z",
-                                       "Number of documents to fetch per batch")
-                      .required(false)
-                      .repeatable(false)
-                      .argument("<int>", true)
-                      .callback(Poco::Util::OptionCallback<Moirai>(
-                        this, &Moirai::set_batch_size)));
+#ifdef WITH_NODE_FILE
+void
+Moirai::set_node_file(const std::string& name, const std::string& value)
+{
+  file_nodes = value;
+}
+#else
+void
+Moirai::set_node_uri(const std::string& name, const std::string& value)
+{
+  node_sync_uri = value;
 }
 
 void
-Moirai::set_facility_timings_file(const std::string& name,
-                                  const std::string& value)
+Moirai::set_node_idx(const std::string& name, const std::string& value)
 {
-  facility_timings_filename = value;
+  node_sync_idx = value;
 }
 
 void
-Moirai::set_facility_api(const std::string& name, const std::string& value)
+Moirai::set_node_user(const std::string& name, const std::string& value)
 {
-  facility_uri = value;
+  node_sync_user = value;
 }
 
 void
-Moirai::set_facility_api_token(const std::string& name,
-                               const std::string& value)
+Moirai::set_node_pass(const std::string& name, const std::string& value)
 {
-  facility_token = value;
+  node_sync_pass = value;
+}
+#endif
+
+#ifdef WITH_EDGE_FILE
+void
+Moirai::set_edge_file(const std::string& name, const std::string& value)
+{
+  file_edges = value;
+}
+#else
+void
+Moirai::set_edge_uri(const std::string& name, const std::string& value)
+{
+  edge_uri = value;
 }
 
 void
-Moirai::set_route_api(const std::string& name, const std::string& value)
+Moirai::set_edge_auth(const std::string& name, const std::string& value)
 {
-  route_uri = value;
+  edge_token = value;
+}
+#endif
+
+#ifdef WITH_LOAD_FILE
+void
+Moirai::set_load_file(const std::string& name, const std::string& value)
+{
+  file_loads = value;
+}
+#else
+void
+Moirai::set_load_broker_uri(const std::string& name, const std::string& value)
+{
+  load_broker_uris.emplace_back(value);
 }
 
 void
-Moirai::set_route_token(const std::string& name, const std::string& value)
+Moirai::set_load_broker_size(const std::string& name, const std::string& value)
 {
-  route_token = value;
+  load_batch_size = std::atoi(value.c_str());
 }
 
 void
-Moirai::set_search_uri(const std::string& name, const std::string& value)
+Moirai::set_load_broker_timeout(const std::string& name,
+                                const std::string& value)
 {
-  search_uri = value;
-}
-
-void
-Moirai::set_search_username(const std::string& name, const std::string& value)
-{
-  search_user = value;
-}
-
-void
-Moirai::set_search_password(const std::string& name, const std::string& value)
-{
-  search_pass = value;
-}
-
-void
-Moirai::set_search_index(const std::string& name, const std::string& value)
-{
-  search_index = value;
-}
-
-void
-Moirai::set_batch_timeout(const std::string& name, const std::string& value)
-{
-  timeout = std::atoi(value.c_str());
-}
-
-void
-Moirai::set_batch_size(const std::string& name, const std::string& value)
-{
-  batch_size = std::atoi(value.c_str());
-}
-
-void
-Moirai::set_edge_topic(const std::string& name, const std::string& value)
-{
-  topic_map.insert(StringToStringMap::value_type("edge", value));
-}
-
-void
-Moirai::set_node_topic(const std::string& name, const std::string& value)
-{
-  topic_map.insert(StringToStringMap::value_type("node", value));
+  load_consumer_timeout = std::atoi(value.c_str());
 }
 
 void
 Moirai::set_load_topic(const std::string& name, const std::string& value)
 {
-  topic_map.insert(StringToStringMap::value_type("load", value));
+  load_topic = value;
+}
+#endif
+
+#ifdef ENABLE_SYNC
+void
+Moirai::set_sync_uri(const std::string& name, const std::string& value)
+{
+  sync_uri = value;
 }
 
 void
-Moirai::set_broker_url(const std::string& name, const std::string& value)
+Moirai::set_sync_idx(const std::string& name, const std::string& value)
 {
-  broker_url.push_back(value);
+  sync_idx = value;
 }
+
+void
+Moirai::set_sync_user(const std::string& name, const std::string& value)
+{
+  sync_user = value;
+}
+
+void
+Moirai::set_sync_pass(const std::string& name, const std::string& value)
+{
+  sync_pass = value;
+}
+#endif
 
 void
 Moirai::handle_help(const std::string& name, const std::string& value)
@@ -271,54 +317,92 @@ int
 Moirai::main(const ArgVec& arg)
 {
 
+  logger().information("Starting main");
   if (!help_requested) {
-    moodycamel::ConcurrentQueue<std::string>* node_queue =
-      new moodycamel::ConcurrentQueue<std::string>();
-    moodycamel::ConcurrentQueue<std::string>* edge_queue =
-      new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* load_queue =
       new moodycamel::ConcurrentQueue<std::string>();
     moodycamel::ConcurrentQueue<std::string>* solution_queue =
       new moodycamel::ConcurrentQueue<std::string>();
-    SolverWrapper wrapper(node_queue,
-                          edge_queue,
-                          load_queue,
-                          solution_queue,
-                          facility_uri,
-                          facility_token,
-                          route_uri,
-                          route_token,
-                          facility_timings_filename);
-    KafkaReader reader(
-      std::accumulate(broker_url.begin(),
-                      broker_url.end(),
-                      std::string{},
-                      [](const std::string& acc, const std::string& arg) {
-                        return acc.empty() ? arg
-                                           : moirai::format("{},{}", acc, arg);
-                      }),
-      batch_size,
-      timeout,
-      topic_map,
-      node_queue,
-      edge_queue,
-      load_queue);
-    SearchWriter writer(Poco::URI(search_uri),
-                        search_user,
-                        search_pass,
-                        search_index,
-                        solution_queue);
-    std::vector<Poco::Thread> threads(3);
-    try {
-      threads[0].start(reader);
-      threads[1].start(writer);
-      threads[2].start(wrapper);
-    } catch (const std::exception& exc) {
-      logger().error(moirai::format("MAIN: Error occurred: {}", exc.what()));
+    {
+      SolverWrapper wrapper(load_queue,
+                            solution_queue,
+#ifdef WITH_NODE_FILE
+                            file_nodes,
+#else
+                            node_sync_uri,
+                            node_sync_idx,
+                            node_sync_user,
+                            node_sync_pass,
+#endif
+#ifdef WITH_EDGE_FILE
+                            file_edges,
+#else
+                            edge_uri,
+                            edge_token,
+#endif
+      );
+
+      std::shared_ptr<ScanReader> reader = nullptr;
+
+#ifdef WITH_LOAD_FILE
+      reader = std::make_shared<FileReader>(file_loads, load_queue);
+#else
+      reader = std::make_shared<KafkaReader>(
+        std::accumulate(
+          load_broker_uris.begin(),
+          load_broker_uris.end(),
+          std::string{},
+          [](const std::string& acc, const std::string& broker_uri) {
+            return acc.empty() ? broker_uri
+                               : fmt::format("{},{}", acc, broker_uri);
+          }),
+        load_batch_size,
+        load_consumer_timeout,
+        load_topic,
+        load_queue);
+#endif
+      std::shared_ptr<SearchWriter> writer = nullptr;
+
+#ifdef ENABLE_SYNC
+      writer = std::make_shared<SearchWriter>(
+        Poco::URI(sync_uri), sync_idx, sync_user, sync_pass, solution_queue);
+#endif
+      int16_t num_threads = std::thread::hardware_concurrency();
+      num_threads = num_threads < 3 ? 3 : num_threads;
+      std::vector<Poco::Thread> threads(num_threads);
+      std::vector<std::shared_ptr<SolverWrapper>> secondary;
+      secondary.reserve(num_threads - 3);
+
+      try {
+        threads[0].start(*reader);
+        threads[1].start(*writer);
+        threads[2].start(wrapper);
+
+        for (int idx = 3; idx < num_threads; ++idx) {
+          secondary.emplace_back(load_queue, solution_queue, wrapper);
+          threads[idx].start(*secondary[idx - 3]);
+        }
+      } catch (const std::exception& exc) {
+        logger().error(fmt::format("MAIN: Error occurred: {}", exc.what()));
+      }
+      waitForTerminationRequest();
+      logger().information("Termination requested");
+      reader->running = false;
+      writer.running = false;
+      wrapper.running = false;
+
+      for (auto& secondary_wrapper : secondary) {
+        secondary_wrapper->running = false;
+      }
+
+      for (auto& thread : threads)
+        thread.join();
     }
-    waitForTerminationRequest();
-    for (auto& thread : threads)
-      thread.join();
+
+    delete node_queue;
+    delete edge_queue;
+    delete load_queue;
+    delete solution_queue;
   }
   return Poco::Util::Application::EXIT_OK;
 }

@@ -31,6 +31,9 @@ iso_to_date(const std::string&);
 CLOCK
 iso_to_date(const std::string&, const bool);
 
+CLOCK
+iso_to_date(const std::string&, const TIME_OF_DAY&);
+
 int64_t
 now_as_int64();
 

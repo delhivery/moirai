@@ -1,10 +1,11 @@
 #include "file_reader.hxx"
 #include "date_utils.hxx"
-#include "format.hxx"
 #include <Poco/Util/ServerApplication.h>
 #include <exception>
+#include <fmt/format.h>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <string>
 #include <sys/inotify.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -14,42 +15,47 @@
 
 FileReader::FileReader(const std::string& datafile,
                        moodycamel::ConcurrentQueue<std::string>* load_queue)
-  : load_file(datafile)
-  , load_queue(load_queue)
-{}
+  : ScanReader(load_queue)
+  , load_file(datafile)
+{
+}
 
 void
 FileReader::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  while (true) {
-    // app.logger().information("FileReader polling....");
+  std::ifstream load_file_stream;
+  std::ofstream clear_file_stream;
+  int last_position = 0;
+
+  try {
+    load_file_stream.open(load_file);
+    assert(load_file_stream.is_open());
+    assert(!load_file_stream.fail());
+  } catch (const std::exception& exc) {
+    app.logger().error(fmt::format("FR: Error opening file: {}", exc.what()));
+  }
+  while (running) {
     try {
-      std::ifstream load_file_stream;
-      std::ofstream clear_file_stream;
       Poco::Thread::sleep(200);
-      load_file_stream.open(load_file);
-      assert(load_file_stream.is_open());
-      assert(!load_file_stream.fail());
+      load_file_stream.seekg(0, std::ios::end);
+      auto filesize = load_file_stream.tellg();
 
-      if (load_file_stream.peek() != std::ifstream::traits_type::eof()) {
-        auto payload = nlohmann::json::parse(load_file_stream);
+      for (auto current = last_position; current < filesize;
+           current = load_file_stream.tellg()) {
+        load_file_stream.seekg(last_position, std::ios::beg);
+        std::string input;
+        std::getline(load_file_stream, input);
+        last_position = load_file_stream.tellg();
+        auto payload = nlohmann::json::parse(input);
 
-        if (!payload.is_array()) {
-          app.logger().error("Payload is not an array");
-          continue;
-        }
-
-        std::for_each(
-          payload.begin(), payload.end(), [this](auto const& record) {
-            load_queue->enqueue(record.dump());
-          });
+        if (payload.is_object())
+          load_queue->enqueue(payload.dump());
+        else
+          app.logger().error("Payload is not an object");
       }
-      load_file_stream.close();
-      clear_file_stream.open(load_file, std::ios::out | std::ios::trunc);
-      clear_file_stream.close();
     } catch (const std::exception& exc) {
-      app.logger().error(moirai::format("FR: Error occurred: {}", exc.what()));
+      app.logger().error(fmt::format("FR: Error occurred: {}", exc.what()));
     }
   }
 }

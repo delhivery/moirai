@@ -1,9 +1,9 @@
 #include "date_utils.hxx"
-#include "format.hxx"
 #include "transportation.hxx"
 #include <cstdint>
 #include <cstdlib>
 #include <date/date.h>
+#include <fmt/format.h>
 #include <iostream>
 #include <regex>
 #include <vector>
@@ -61,11 +61,24 @@ iso_to_date(const std::string& date_string, const bool is_offset)
 
   if (is_offset)
     formatted_string =
-      moirai::format("{} {}", date_string.substr(0, 10), "04:00:00");
+      fmt::format("{} {}", date_string.substr(0, 10), "04:00:00");
   std::stringstream date_stream{ formatted_string };
   CLOCK clock;
   date_stream >> date::parse("%F %T", clock);
   return clock;
+}
+
+CLOCK
+iso_to_date(const std::string& date_string, const TIME_OF_DAY& cutoff)
+{
+  std::string formatted_string{ date_string };
+
+  formatted_string =
+    fmt::format("{} {}", date_string.substr(0, 10), "00:00:00");
+  std::stringstream date_stream{ formatted_string };
+  CLOCK clock;
+  date_stream >> date::parse("%F %T", clock);
+  return clock + cutoff - DURATION{ 330 };
 }
 
 int64_t

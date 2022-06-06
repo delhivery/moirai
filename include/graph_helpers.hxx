@@ -23,7 +23,7 @@ struct FilterByVehicleType
     const typename boost::graph_traits<G>::edge_descriptor& edge) const
   {
     auto edge_props = (*graph)[edge];
-    return edge_props->vehicle <= V;
+    return edge_props->m_vehicle <= V;
   }
 };
 

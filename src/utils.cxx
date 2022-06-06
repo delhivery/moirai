@@ -1,11 +1,11 @@
 #include "utils.hxx"
-#include "format.hxx"
 #include <Poco/Base64Encoder.h>
+#include <fmt/format.h>
 
 std::string
 indexAndTypeToPath(const std::string& search_index, const std::string& doc_type)
 {
-  return moirai::format("/{}/{}/", search_index, doc_type);
+  return fmt::format("/{}/{}/", search_index, doc_type);
 }
 
 std::string
@@ -13,7 +13,7 @@ indexAndTypeToPath(const std::string& search_index,
                    const std::string& doc_type,
                    const std::string& doc_id)
 {
-  return moirai::format("/{}/{}/{}/", search_index, doc_type, doc_id);
+  return fmt::format("/{}/{}/{}/", search_index, doc_type, doc_id);
 }
 
 std::string

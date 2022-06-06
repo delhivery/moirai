@@ -1,11 +1,11 @@
 #include "search_writer.hxx"
-#include "format.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Net/HTTPSClientSession.h>
 #include <Poco/Thread.h>
 #include <Poco/Util/ServerApplication.h>
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 SearchWriter::SearchWriter(
@@ -19,7 +19,9 @@ SearchWriter::SearchWriter(
   , password(search_pass)
   , search_index(search_index)
   , solution_queue(solution_queue)
-{}
+  , running(true)
+{
+}
 
 void
 SearchWriter::run()
@@ -27,13 +29,13 @@ SearchWriter::run()
   Poco::Util::Application& app = Poco::Util::Application::instance();
   Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
 
-  while (true) {
-    // app.logger().information("SearchWriter polling....");
-    Poco::Thread::sleep(200);
-    std::string results[500];
-    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 500);
+  while (running or solution_queue->size_approx() > 0) {
+    Poco::Thread::sleep(2000);
+    std::string results[1024];
+    if (size_t num_records = solution_queue->try_dequeue_bulk(results, 1024);
         num_records > 0) {
       std::vector<nlohmann::json> dataset = {};
+
       std::for_each(
         results,
         results + num_records,
@@ -56,9 +58,10 @@ SearchWriter::run()
                         [](const std::string& acc, const nlohmann::json& row) {
                           return acc.empty()
                                    ? row.dump()
-                                   : moirai::format("{}\n{}", acc, row.dump());
+                                   : fmt::format("{}\n{}", acc, row.dump());
                         });
       stringified += "\n";
+      app.logger().information(stringified);
       try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        "/_bulk",
@@ -76,18 +79,17 @@ SearchWriter::run()
 
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK or
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
-          app.logger().debug(moirai::format(
+          app.logger().debug(fmt::format(
             "Got successful response from ES Host: {}", response_raw.str()));
-          app.logger().information(
-            moirai::format("Pushed {} records", num_records));
+          app.logger().debug(fmt::format("Pushed {} records", num_records));
         } else {
-          app.logger().error(moirai::format("Error uploading data: <{}>: {}",
+          app.logger().error(fmt::format("Error uploading data: <{}>: {}",
                                             response.getStatus(),
                                             response_raw.str()));
-          app.logger().error(moirai::format("Raw data: {}", stringified));
+          app.logger().error(fmt::format("Raw data: {}", stringified));
         }
       } catch (const std::exception& exc) {
-        app.logger().error(moirai::format(
+        app.logger().error(fmt::format(
           "Error pushing data: {}. Data: {}", exc.what(), stringified));
       }
     }

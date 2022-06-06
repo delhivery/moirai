@@ -1,6 +1,5 @@
 #include "solver.hxx"
-#include "date_utils.hxx" // for CLOCK
-#include "format.hxx"
+#include "date_utils.hxx"                        // for CLOCK
 #include "graph_helpers.hxx"                     // for FilterByVehicleType
 #include "transportation.hxx"                    // for VehicleType, AIR
 #include <boost/graph/detail/adjacency_list.hpp> // for get, num_vertices
@@ -8,6 +7,7 @@
 #include <boost/graph/filtered_graph.hpp>        // for filtered_graph
 #include <boost/graph/reverse_graph.hpp>         // for get, make_reverse_g...
 #include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
+#include <fmt/format.h>
 #include <numeric>
 #include <string> // for string
 
@@ -22,12 +22,12 @@ Solver::add_node(std::string node_code_or_name) const
 std::pair<Node<Graph>, bool>
 Solver::add_node(std::shared_ptr<TransportCenter> center)
 {
-  auto created = add_node(center->code);
+  auto created = add_node(center->m_code);
 
   if (created.second)
     return created;
   Node<Graph> node = boost::add_vertex(center, graph);
-  vertex_by_name[center->code] = node;
+  vertex_by_name[center->m_code] = node;
   return { node, true };
 }
 
@@ -50,14 +50,14 @@ Solver::add_edge(const Node<Graph>& source,
                  const Node<Graph>& target,
                  std::shared_ptr<TransportEdge> route)
 {
-  if (edge_by_name.contains(route->code))
-    return { edge_by_name.at(route->code), true };
+  if (edge_by_name.contains(route->m_code))
+    return { edge_by_name.at(route->m_code), true };
   route->update(graph[source], graph[target]);
   return boost::add_edge(source, target, route, graph);
 }
 
 template<>
-Path
+std::shared_ptr<Segment>
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -71,7 +71,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
 }
 
 template<>
-Path
+std::shared_ptr<Segment>
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -85,7 +85,7 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
 }
 
 template<>
-Path
+std::shared_ptr<Segment>
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -101,7 +101,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
 }
 
 template<>
-Path
+std::shared_ptr<Segment>
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,
@@ -119,7 +119,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
 std::string
 Solver::show() const
 {
-  return moirai::format(
+  return fmt::format(
     "Graph<{}, {}>", boost::num_vertices(graph), boost::num_edges(graph));
 }
 
@@ -130,21 +130,23 @@ Solver::show_all() const
 
   for (auto vertex : boost::make_iterator_range(boost::vertices(graph))) {
     auto node = graph[vertex];
-    output.push_back(node->code);
+    output.push_back(node->m_code);
   }
 
   for (auto edge : boost::make_iterator_range(boost::edges(graph))) {
     auto route = graph[edge];
     auto source = boost::source(edge, graph);
     auto target = boost::target(edge, graph);
-    output.push_back(moirai::format(
-      "{}: {} TO {}", route->code, graph[source]->code, graph[target]->code));
+    output.push_back(fmt::format("{}: {} TO {}",
+                                 route->m_code,
+                                 graph[source]->m_code,
+                                 graph[target]->m_code));
   }
 
   return std::accumulate(output.begin(),
                          output.end(),
                          std::string{},
                          [](const std::string& acc, const std::string& arg) {
-                           return moirai::format("{}\n{}", acc, arg);
+                           return fmt::format("{}\n{}", acc, arg);
                          });
 }

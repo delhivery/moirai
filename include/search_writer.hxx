@@ -16,6 +16,8 @@ private:
   moodycamel::ConcurrentQueue<std::string>* solution_queue;
 
 public:
+  std::atomic<bool> running;
+
   SearchWriter(const Poco::URI&,
                const std::string&,
                const std::string&,

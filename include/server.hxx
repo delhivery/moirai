@@ -3,30 +3,39 @@
 
 #include "utils.hxx"
 #include <Poco/Util/ServerApplication.h>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 class Moirai : public Poco::Util::ServerApplication
 {
 private:
-  std::vector<std::string> broker_url;
-  StringToStringMap topic_map;
-  uint16_t batch_size;
-  uint16_t timeout;
+#ifdef WITH_NODE_FILE
+  std::filesyste::path file_nodes;
+#else
+  std::string node_sync_uri, node_sync_idx, node_sync_user, node_sync_pass;
+#endif
 
-  std::string search_uri;
-  std::string search_user;
-  std::string search_pass;
-  std::string search_index;
+#ifdef WITH_EDGE_FILE
+  std::filesystem::path file_edges;
+#else
+  std::string edge_uri, edge_token;
+#endif
 
-  std::string facility_timings_filename;
-  std::string facility_uri;
-  std::string facility_token;
+#ifdef WITH_LOAD_FILE
+  std::filesystem::path file_loads;
+#else
+  // StringToStringMap topic_map;
+  std::string load_topic;
+  std::vector<std::string> load_broker_uris;
+  uint8_t load_batch_size, load_consumer_timeout;
+#endif
 
-  std::string route_uri;
-  std::string route_token;
+#ifdef ENABLE_SYNC
+  std::string sync_uri, sync_idx, sync_user, sync_pass;
+#endif
 
-  bool help_requested;
+  bool help_requested = false;
 
 public:
   Moirai() {}
@@ -45,35 +54,40 @@ protected:
 
   void defineOptions(Poco::Util::OptionSet&);
 
-  void set_facility_api(const std::string&, const std::string&);
+#ifdef WITH_NODE_FILE
+  void set_node_file(const std::string&, const std::string&);
+#else
+  void set_node_uri(const std::string&, const std::string&);
+  void set_node_idx(const std::string&, const std::string&);
+  void set_node_user(const std::string&, const std::string&);
+  void set_node_pass(const std::string&, const std::string&);
+#endif
 
-  void set_facility_api_token(const std::string&, const std::string&);
+#ifdef WITH_EDGE_FILE
+  void set_edge_file(const std::string&, const std::string&);
+#else
+  void set_edge_uri(const std::string&, const std::string&);
+  void set_edge_auth(const std::string&, const std::string&);
+#endif
 
-  void set_route_api(const std::string&, const std::string&);
-
-  void set_route_token(const std::string&, const std::string&);
-
-  void set_search_uri(const std::string&, const std::string&);
-
-  void set_search_username(const std::string&, const std::string&);
-
-  void set_search_password(const std::string&, const std::string&);
-
-  void set_search_index(const std::string&, const std::string&);
-
-  void set_batch_timeout(const std::string&, const std::string&);
-
-  void set_batch_size(const std::string&, const std::string&);
-
-  void set_edge_topic(const std::string&, const std::string&);
-
-  void set_node_topic(const std::string&, const std::string&);
-
+#ifdef WITH_LOAD_FILE
+  void set_load_file(const std::string&, const std::string&);
+#else
+  void set_load_broker_timeout(const std::string&, const std::string&);
+  void set_load_broker_size(const std::string&, const std::string&);
+  void set_load_broker_uri(const std::string&, const std::string&);
   void set_load_topic(const std::string&, const std::string&);
 
-  void set_broker_url(const std::string&, const std::string&);
+  // void set_edge_topic(const std::string&, const std::string&);
+  // void set_node_topic(const std::string&, const std::string&);
+#endif
 
-  void set_facility_timings_file(const std::string&, const std::string&);
+#ifdef ENABLE_SYNC
+  void set_sync_uri(const std::string&, const std::string&);
+  void set_sync_idx(const std::string&, const std::string&);
+  void set_sync_user(const std::string&, const std::string&);
+  void set_sync_pass(const std::string&, const std::string&);
+#endif
 
   void handle_help(const std::string&, const std::string&);
 

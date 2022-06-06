@@ -2,16 +2,15 @@
 #define MOIRAI_FILE_READER
 
 #include "concurrentqueue.h"
+#include "scan_reader.hxx"
 #include "utils.hxx"
 #include <Poco/Runnable.h>
 #include <filesystem>
 
-class FileReader : public Poco::Runnable
+class FileReader : public ScanReader
 {
 private:
-  std::atomic<bool> running;
   std::filesystem::path load_file;
-  moodycamel::ConcurrentQueue<std::string>* load_queue;
 
 public:
   FileReader(const std::string&, moodycamel::ConcurrentQueue<std::string>*);

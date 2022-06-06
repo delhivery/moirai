@@ -38,46 +38,57 @@ using Latency = DURATION;
 
 struct TransportCenter
 {
-  std::string code;
+  std::string m_code, m_name;
 
 public:
   TransportCenter() = default;
 
-  TransportCenter(std::string);
+  TransportCenter(const std::string&, const std::string&);
 
   template<MovementType M, ProcessType P>
   void set_latency(Latency<M, P> latency)
   {
-    latencies[std::make_pair(M, P)] = latency;
+    m_latencies[std::make_pair(M, P)] = latency;
   }
 
   template<MovementType M, ProcessType P>
   Latency<M, P> get_latency()
   {
-    return latencies[std::make_pair(M, P)];
+    auto const key = std::make_pair(M, P);
+
+    return m_latencies.contains(key) ? m_latencies[key] : Latency<M, P>(0);
   }
 
+  void set_cutoff(TIME_OF_DAY cutoff) { this->m_cutoff = cutoff; }
+
+  TIME_OF_DAY get_cutoff() { return m_cutoff; }
+
 private:
-  std::map<std::pair<MovementType, ProcessType>, DURATION> latencies;
+  std::map<std::pair<MovementType, ProcessType>, DURATION> m_latencies;
+  TIME_OF_DAY m_cutoff;
 };
 
 struct TransportEdge
 {
-  std::string code;
-  std::string name;
+  std::string m_code;
+  std::string m_name;
 
-  TIME_OF_DAY departure;
+  TIME_OF_DAY m_departure;
 
-  DURATION duration;
+  DURATION m_duration;
+  DURATION m_duration_loading;
+  DURATION m_duration_unloading;
 
-  VehicleType vehicle;
-  MovementType movement;
+  VehicleType m_vehicle;
+  MovementType m_movement;
 
-  bool transient;
+  bool m_transient;
+  bool m_terminal;
 
   TransportEdge()
-    : transient(false)
-  {}
+    : m_transient(false)
+  {
+  }
 
   TransportEdge(std::string, std::string);
 
@@ -85,8 +96,11 @@ struct TransportEdge
                 std::string,
                 TIME_OF_DAY,
                 DURATION,
+                DURATION,
+                DURATION,
                 VehicleType,
-                MovementType);
+                MovementType,
+                bool);
 
   template<PathTraversalMode M>
   COST weight() const;
@@ -100,8 +114,8 @@ struct TransportEdge
               std::shared_ptr<TransportCenter>);
 
 private:
-  DURATION offset_source;
-  DURATION offset_target;
+  DURATION m_offset_source;
+  DURATION m_offset_target;
 };
 
 #endif
