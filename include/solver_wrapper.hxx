@@ -76,13 +76,12 @@ public:
   std::vector<std::shared_ptr<TransportCenter>> read_nodes(
     const std::filesystem::path&);
 
-  auto find_paths(
-    std::string bag,
-    std::string bag_source,
-    std::string bag_target,
-    int32_t bag_start,
-    CLOCK bag_end,
-    std::vector<std::tuple<std::string, int32_t, std::string>>&) const;
+  auto find_paths(const std::string,
+                  const std::string,
+                  const std::string,
+                  const CLOCK,
+                  const CLOCK,
+                  const std::vector<TransportationLoadSubItem>&) const;
 
   virtual void run();
 };

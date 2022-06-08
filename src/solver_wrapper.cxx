@@ -15,6 +15,7 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <istream>
+#include <list>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <sstream>
@@ -268,8 +269,8 @@ SolverWrapper::init_edges()
           edge_name,
           edge_dep,
           edge_dur,
-          edge_dur_loading,
-          edge_dur_unloading,
+          edge_loading,
+          edge_unloading,
           edge_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
           edge_type == "carting" ? MovementType::CARTING
                                  : MovementType::LINEHAUL,
@@ -285,129 +286,111 @@ SolverWrapper::init_edges()
 
 auto
 SolverWrapper::find_paths(
-  std::string bag,
-  std::string bag_source,
-  std::string bag_target,
-  int32_t bag_start,
-  CLOCK bag_end,
-  std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
+  const std::string item,
+  const std::string item_source_idx,
+  const std::string item_target_idx,
+  const CLOCK item_start,
+  const CLOCK item_target_limit,
+  const std::vector<TransportationLoadSubItem>& subitems) const
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  CLOCK ZERO = CLOCK{ std::chrono::minutes{ 0 } };
-  CLOCK start = ZERO + std::chrono::minutes{ bag_start };
-  CLOCK bag_pdd = bag_end;
-  app.logger().debug(fmt::format("Bag end: {:%Y-%m-%d %H:%M:%S}", bag_end));
-  // bag_pdd = CLOCK::max();
-  CLOCK bag_earliest_pdd = CLOCK::max();
-  const auto [source, has_source] = solver->add_node(bag_source);
-  const auto [target, has_target] = solver->add_node(bag_target);
+  CLOCK item_reach_by = item_target_limit;
+  nlohmann::json response = { { "_id", item },
+                              { "waybill", item },
+                              { "package", item } };
 
-  app.logger().debug("Finding path for {} with tmax: {}", bag, bag_end);
+  std::vector<Segment> item_route_e, item_route_u;
 
-  if (!has_source || !has_target) {
-    app.logger().debug(
-      "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
-      bag,
-      bag_source,
-      has_source,
-      bag_target,
-      has_target);
-    return nlohmann::json({});
-  }
+  CLOCK item_target_arrival_e{ CLOCK::max() };
 
-  auto solution_earliest_start_segment =
-    solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
-      source, target, start);
-  std::shared_ptr<Segment> solution_ultimate_start_segment = nullptr;
+  auto [item_source, has_item_source] = solver->add_node(item_source_idx);
+  auto [item_target, has_item_target] = solver->add_node(item_target_idx);
 
-  bool critical = false;
+  if (has_item_source and has_item_target) {
+    item_route_e =
+      solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+        item_source, item_target, item_start);
 
-  if (solution_earliest_start_segment != nullptr) {
+    if (item_route_e.size() > 0) {
+      auto item_arrival_target_e = item_route_e.back().m_distance;
 
-    auto segment = solution_earliest_start_segment;
-    while (segment->next != nullptr)
-      segment = segment->next;
-    bag_earliest_pdd = segment->distance;
+      if (item_arrival_target_e < item_reach_by) {
+        std::vector<std::vector<Segment>> subitems_route_u;
+        subitems_route_u.reserve(subitems.size());
+        auto subitems_reach_by_min =
+          std::min_element(subitems.begin(),
+                           subitems.end(),
+                           [](const auto& lhs, const auto& rhs) {
+                             return lhs.m_reach_by < rhs.m_reach_by;
+                           });
 
-    app.logger().debug(fmt::format(
-      "Bad pdd {:%Y-%m-%d %H:%M:%S} earliest_pdd: {:%Y-%m-%d %H:%M:%S}",
-      bag_pdd,
-      bag_earliest_pdd));
-    if (bag_pdd < bag_earliest_pdd)
-      critical = true;
-    else if (packages.size() > 0) {
-      auto child_earliest = *std::min_element(
-        packages.begin(), packages.end(), [](auto const& lhs, auto const& rhs) {
-          return std::get<1>(lhs) < std::get<1>(rhs);
-        });
+        if (subitems_reach_by_min->m_reach_by > item_arrival_target_e) {
+          std::for_each(
+            subitems.begin(),
+            subitems.end(),
+            [&item_target, &subitems_route_u, this](auto& subitem) {
+              const auto [subitem_target, has_subitem_target] =
+                solver->add_node(subitem.m_target_idx);
 
-      const auto [child_target, has_child_target] =
-        solver->add_node(std::get<0>(child_earliest));
+              if (has_subitem_target)
+                subitems_route_u.push_back(
+                  find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+                    subitem_target, item_target, subitem.m_reach_by));
+            });
 
-      if (child_target != target and has_child_target) {
-        auto child_pdd =
-          ZERO + std::chrono::minutes(std::get<1>(child_earliest));
-        auto child_critical_start_segment =
-          solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-            child_target, target, child_pdd);
+          auto subitems_depart_by_min = std::min_element(
+            subitems_route_u.begin(),
+            subitems_route_u.end(),
+            [](auto const& lhs, auto const& rhs) {
+              return lhs.back().m_distance < rhs.back().m_distance;
+            });
 
-        if (child_critical_start_segment != nullptr) {
-          auto child_pdd_at_parent_target =
-            child_critical_start_segment->distance;
-
-          if (bag_pdd == CLOCK::max())
-            bag_pdd = child_pdd_at_parent_target;
-
-          if (child_pdd_at_parent_target < bag_earliest_pdd) {
-            critical = true;
+          if (subitems_depart_by_min->back().m_distance >
+              item_arrival_target_e) {
+            item_reach_by = subitems_depart_by_min->back().m_distance;
+            item_route_u =
+              solver
+                ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+                  item_target,
+                  item_source,
+                  subitems_depart_by_min->back().m_distance);
           }
         }
       }
     }
+
+    if (item_route_e.size() > 0) {
+      auto item_path_e = parse_path(item_route_e);
+      response["earliest"] = { { "locations", item_path_e },
+                               { "first", item_path_e.front() } };
+
+      if (item_route_e.size() > 1)
+        response["earliest"]["second"] = item_path_e[1];
+    } else {
+      response["error"] =
+        fmt::format("No route to destination found from {} to {}",
+                    item_source_idx,
+                    item_target_idx);
+    }
+
+    if (item_route_u.size() > 0) {
+      auto item_path_u = parse_path(item_route_u);
+      response["ultimate"] = { { "locations", item_path_u },
+                               { "first", item_path_u.front() } };
+
+      if (item_route_u.size() > 1)
+        response["ultimate"]["second"] = item_path_u[1];
+    }
   } else
-    critical = true;
+    response["error"] = fmt::format(
+      "{}{}{}",
+      has_item_source ? "" : fmt::format("Unknown source<{}>", item_source_idx),
+      has_item_source or has_item_target ? "" : ", ",
+      has_item_target ? ""
+                      : fmt::format("Unknown target<{}>", item_target_idx));
 
-  if (bag_pdd == CLOCK::max()) {
-    bag_pdd = bag_earliest_pdd;
-  }
-
-  if (not critical) {
-    solution_ultimate_start_segment =
-      solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-        target, source, bag_pdd);
-  }
-
-  nlohmann::json response;
-  response["_id"] = bag;
-  response["waybill"] = bag;
-  response["package"] = bag;
-
-  if (packages.size() > 0) {
-    response["package"] = std::get<2>(packages[0]);
-  }
-
-  if (auto earliest_path =
-        parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
-      earliest_path.size() > 0) {
-    response["earliest"]["locations"] = earliest_path;
-    response["earliest"]["first"] = earliest_path[0];
-
-    if (earliest_path.size() > 1)
-      response["earliest"]["second"] = earliest_path[1];
-  }
-
-  if (auto ultimate_path =
-        parse_path<PathTraversalMode::REVERSE>(solution_ultimate_start_segment);
-      ultimate_path.size() > 0) {
-    response["ultimate"]["locations"] = ultimate_path;
-    response["ultimate"]["first"] = ultimate_path[0];
-
-    if (ultimate_path.size() > 1)
-      response["ultimate"]["second"] = ultimate_path[1];
-  }
-
-  response["pdd"] = date::format("%D %T", bag_pdd);
-  response["pdd_ts"] = bag_pdd.time_since_epoch().count();
+  response["pdd"] = date::format("%D %T", item_reach_by);
+  response["pdd_ts"] = item_reach_by.time_since_epoch().count();
 
   return response;
 }
@@ -418,8 +401,6 @@ SolverWrapper::run()
   Poco::Util::Application& app = Poco::Util::Application::instance();
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
-  app.logger().debug(fmt::format("0. Facility timings has {} entries",
-                                 facility_timings_map.size()));
 
   while (running or load_queue->size_approx() > 0) {
     try {
@@ -428,8 +409,6 @@ SolverWrapper::run()
       if (solution_queue->size_approx() > 10000)
         continue;
       std::string payloads[100];
-      // app.logger().debug(fmt::format("C: Queue size: {}",
-      // load_queue->size_approx()));
 
       if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 64);
           num_packages > 0) {
@@ -439,104 +418,64 @@ SolverWrapper::run()
           [&app, this](const std::string& payload) {
             nlohmann::json data = nlohmann::json::parse(payload);
 
-            if (data["id"].is_null() or data["location"].is_null() or
-                data["destination"].is_null() or data["time"].is_null()) {
+            std::list<std::string> item_required_fields{
+              "id", "location", "destination", "time"
+            };
+
+            auto isNull =
+              std::any_of(item_required_fields.begin(),
+                          item_required_fields.end(),
+                          [&data](const std::string& key) {
+                            return data[key].is_null() || data[key].empty();
+                          });
+
+            if (isNull) {
               app.logger().debug(fmt::format(
                 "Null data against mandatory fields. {}", data.dump()));
               return;
             }
 
-            app.logger().debug(fmt::format("Recieved data: {}", data.dump()));
-            std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+            auto subItems =
+              data["item"] | std::views::filter([](const auto& item) {
+                return not(item["id"].is_null() or
+                           item["ipdd_destination"].is_null() or
+                           item["cn"].is_null());
+              }) |
+              std::views::transform([](const auto& item) {
+                return TransportationLoadSubItem{
+                  item["id"].template get<std::string>(),
+                  item["ipdd_destination"].template get<std::string>(),
+                  item["cn"].template get<std::string>()
+                };
+              }) |
+              std::views::to_vector;
+            std::string item_idx = data["id"];
+            std::string item_src = data["location"];
+            std::string item_tar = data["destination"];
+            std::string item_arr = data["time"];
+            CLOCK item_reach_by;
 
-            app.logger().debug(fmt::format("1. Facility timings has {} entries",
-                                           facility_timings_map.size()));
+            if (data["ipdd_destination"].is_null() or
+                data["ipdd_destination"].empty())
+              item_reach_by = CLOCK::max();
+            else
+              item_arrive_by = date::parse(data["ipdd_destination"]);
 
-            for (auto& waybill : data["items"]) {
-              if (waybill["ipdd_destination"].is_null() or
-                  waybill["cn"].is_null() or waybill["id"].is_null())
-                return;
-              auto waybill_cn = waybill["cn"].template get<std::string>();
+            auto solution = find_paths(
+              item_idx, item_src, item_tar, item_arr, item_arr_by, subItems);
 
-              auto waybill_tmax = iso_to_date(
-                waybill["ipdd_destination"].template get<std::string>(), true);
+            auto cs_slid = data["cs_slid"];
+            auto cs_act = data["cs_act"];
+            auto pid = data["pid"];
 
-              if (facility_timings_map.contains(waybill_cn))
-                waybill_tmax = iso_to_date(
-                  waybill["ipdd_destination"].template get<std::string>(),
-                  std::get<4>(facility_timings_map[waybill_cn]));
+            if (not(cs_slid.empty() or cs_slid.is_null()))
+              solution["cs_slid"] = cs_slid;
 
-              packages.emplace_back(waybill_cn,
-                                    waybill_tmax.time_since_epoch().count(),
-                                    waybill["id"].template get<std::string>());
-            }
+            if (not(cs_act.empty() or cs_act.is_null()))
+              solution["cs_act"] = cs_act;
 
-            app.logger().debug(fmt::format("2. Facility timings has {} entries",
-                                           facility_timings_map.size()));
-
-            std::string bag_identifier = data["id"].template get<std::string>();
-            std::string current_location =
-              data["location"].template get<std::string>();
-            std::string item_destination =
-              data["destination"].template get<std::string>();
-
-            if (current_location.empty() or item_destination.empty() or
-                current_location == item_destination)
-              return;
-
-            CLOCK tmax = CLOCK::max();
-            app.logger().debug(fmt::format("3. Facility timings has {} entries",
-                                           facility_timings_map.size()));
-
-            if (!data["ipdd_destination"].is_null() and
-                !data["ipdd_destination"].empty()) {
-              app.logger().debug(
-                fmt::format("4. Facility timings has {} entries",
-                            facility_timings_map.size()));
-              std::string ipdd =
-                data["ipdd_destination"].template get<std::string>();
-
-              app.logger().debug(
-                fmt::format("5. Facility timings has {} entries",
-                            facility_timings_map.size()));
-              if (ipdd.length() > 11) {
-                tmax = iso_to_date(ipdd, true);
-                app.logger().debug(
-                  fmt::format("6. Facility timings has {} entries",
-                              facility_timings_map.size()));
-
-                if (facility_timings_map.contains(item_destination))
-                  tmax = iso_to_date(
-                    ipdd, std::get<4>(facility_timings_map[item_destination]));
-              }
-            }
-
-            nlohmann::json solution =
-              find_paths(bag_identifier,
-                         current_location,
-                         item_destination,
-                         iso_to_date(data["time"].template get<std::string>())
-                           .time_since_epoch()
-                           .count(),
-                         tmax,
-                         packages);
-
-            if (solution.empty()) {
-              app.logger().debug(
-                fmt::format("No legitimate paths for payload: {}", payload));
-              return;
-            }
-            solution["cs_slid"] =
-              data["cs_slid"].is_null()
-                ? ""
-                : data["cs_slid"].template get<std::string>();
-
-            solution["cs_act"] = data["cs_act"].is_null()
-                                   ? ""
-                                   : data["cs_act"].template get<std::string>();
-            solution["pid"] = data["pid"].is_null()
-                                ? ""
-                                : data["pid"].template get<std::string>();
+            if (not(pid.empty() or pid.is_null()))
+              solution["pid"] = pid;
             solution_queue->enqueue(solution.dump());
           });
       }

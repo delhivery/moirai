@@ -1,15 +1,8 @@
 #include "date_utils.hxx"
 #include "transportation.hxx"
-#include <cstdint>
-#include <cstdlib>
-#include <date/date.h>
-#include <fmt/format.h>
-#include <iostream>
-#include <regex>
-#include <vector>
 
 std::uint16_t
-datemod(DURATION lhs, DURATION rhs)
+datemod(DURATION_MINUTES lhs, DURATION_MINUTES rhs)
 {
   std::int16_t count_lhs = lhs.count();
   std::int16_t count_rhs = rhs.count();
@@ -18,43 +11,48 @@ datemod(DURATION lhs, DURATION rhs)
 }
 
 template<>
-CLOCK
-CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(CLOCK start,
-                                                                COST cost) const
+CLOCK_MINUTES
+EdgeTraversalCost::operator()<PathTraversalMode::FORWARD>(
+  const CLOCK_MINUTES& start,
+  const TemporalEdgeCost& cost) const
 {
-  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
+  if (cost.m_transient)
     return start;
-  TIME_OF_DAY minutes_start{ start -
-                             std::chrono::floor<std::chrono::days>(start) };
-  DURATION wait_time{ datemod(cost.first - minutes_start,
-                              std::chrono::days{ 1 }) };
-  return start + wait_time + cost.second;
+
+  auto start_days = floor<days>(start);
+  auto start_minutes = start - start_days;
+  auto time_idle = start_minutes - cost.m_departure;
+  auto time_idle_days =
+    std::chrono::weekday{ std::chrono::sys_days{ start_days } };
+
+  return start + time_idle + cost.m_duration;
 }
 
 template<>
-CLOCK
-CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK start,
-                                                                COST cost) const
+CLOCK_MINUTES
+EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK_MINUTES start,
+                                                          COST cost) const
 {
   if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
     return start;
-  TIME_OF_DAY minutes_start{ start -
-                             std::chrono::floor<std::chrono::days>(start) };
-  DURATION wait_time{ datemod(minutes_start - cost.first,
-                              std::chrono::days{ 1 }) };
+  TIME_OF_DAY_MINUTES minutes_start{
+    start - std::chrono::floor<std::chrono::days>(start)
+  };
+  DURATION_MINUTES wait_time{ datemod(minutes_start - cost.first,
+                                      std::chrono::days{ 1 }) };
   return start - wait_time - cost.second;
 }
 
-CLOCK
+CLOCK_MINUTES
 iso_to_date(const std::string& date_string)
 {
   std::stringstream date_stream{ date_string };
-  CLOCK clock;
+  CLOCK_MINUTES clock;
   date_stream >> date::parse("%F %T", clock);
   return clock;
 }
 
-CLOCK
+CLOCK_MINUTES
 iso_to_date(const std::string& date_string, const bool is_offset)
 {
   std::string formatted_string{ date_string };
@@ -63,20 +61,21 @@ iso_to_date(const std::string& date_string, const bool is_offset)
     formatted_string =
       fmt::format("{} {}", date_string.substr(0, 10), "04:00:00");
   std::stringstream date_stream{ formatted_string };
-  CLOCK clock;
+  CLOCK_MINUTES clock;
   date_stream >> date::parse("%F %T", clock);
   return clock;
 }
 
-CLOCK
-iso_to_date(const std::string& date_string, const TIME_OF_DAY& cutoff)
+CLOCK_MINUTES
+iso_to_date(const std::string& date_string,
+            const TIME_OF_DAY_IN_MINUTES& cutoff)
 {
   std::string formatted_string{ date_string };
 
   formatted_string =
     fmt::format("{} {}", date_string.substr(0, 10), "00:00:00");
   std::stringstream date_stream{ formatted_string };
-  CLOCK clock;
+  CLOCK_MINUTES clock;
   date_stream >> date::parse("%F %T", clock);
   return clock + cutoff - DURATION{ 330 };
 }
@@ -123,12 +122,13 @@ time_string_to_time(const std::string& time_string)
   return std::chrono::minutes(time + time_days);
 }
 
-CLOCK
-get_departure(CLOCK start, TIME_OF_DAY departure)
+CLOCK_MINUTES
+get_departure(CLOCK_MINUTES start, TIME_OF_DAY_IN_MINUTES departure)
 {
-  TIME_OF_DAY minutes_start{ start -
-                             std::chrono::floor<std::chrono::days>(start) };
-  DURATION wait_time{ datemod(departure - minutes_start,
-                              std::chrono::days{ 1 }) };
+  TIME_OF_DAY_IN_MINUTES minutes_start{
+    start - std::chrono::floor<std::chrono::days>(start)
+  };
+  DURATION_MINUTES wait_time{ datemod(departure - minutes_start,
+                                      std::chrono::days{ 1 }) };
   return start + wait_time;
 }

@@ -34,7 +34,7 @@ enum PathTraversalMode : std::uint8_t
 };
 
 template<MovementType, ProcessType>
-using Latency = DURATION;
+using Latency = DURATION_MINUTES;
 
 struct TransportCenter
 {
@@ -59,13 +59,13 @@ public:
     return m_latencies.contains(key) ? m_latencies[key] : Latency<M, P>(0);
   }
 
-  void set_cutoff(TIME_OF_DAY cutoff) { this->m_cutoff = cutoff; }
+  void set_cutoff(TIME_OF_DAY_MINUTES cutoff) { this->m_cutoff = cutoff; }
 
-  TIME_OF_DAY get_cutoff() { return m_cutoff; }
+  TIME_OF_DAY_MINUTES get_cutoff() { return m_cutoff; }
 
 private:
-  std::map<std::pair<MovementType, ProcessType>, DURATION> m_latencies;
-  TIME_OF_DAY m_cutoff;
+  std::map<std::pair<MovementType, ProcessType>, DURATION_MINUTES> m_latencies;
+  TIME_OF_DAY_MINUTES m_cutoff;
 };
 
 struct TransportEdge
@@ -73,11 +73,11 @@ struct TransportEdge
   std::string m_code;
   std::string m_name;
 
-  TIME_OF_DAY m_departure;
+  TIME_OF_DAY_MINUTES m_departure;
 
-  DURATION m_duration;
-  DURATION m_duration_loading;
-  DURATION m_duration_unloading;
+  DURATION_MINUTES m_duration;
+  DURATION_MINUTES m_duration_loading;
+  DURATION_MINUTES m_duration_unloading;
 
   VehicleType m_vehicle;
   MovementType m_movement;
@@ -94,28 +94,31 @@ struct TransportEdge
 
   TransportEdge(std::string,
                 std::string,
-                TIME_OF_DAY,
-                DURATION,
-                DURATION,
-                DURATION,
+                TIME_OF_DAY_MINUTES,
+                DURATION_MINUTES,
+                DURATION_MINUTES,
+                DURATION_MINUTES,
                 VehicleType,
                 MovementType,
                 bool);
 
   template<PathTraversalMode M>
-  COST weight() const;
+  TemporalEdgeCost weight() const;
 
-  template<PathTraversalMode M>
-  COST weight_alt(CLOCK) const;
-
-  int wgt() const;
+  const CLOCK_MINUTES& departure(const CLOCK_MINUTES&) const;
 
   void update(std::shared_ptr<TransportCenter>,
               std::shared_ptr<TransportCenter>);
 
 private:
-  DURATION m_offset_source;
-  DURATION m_offset_target;
+  DURATION_MINUTES m_offset_source;
+  DURATION_MINUTES m_offset_target;
+};
+
+struct TransportationLoadSubItem
+{
+  std::string m_idx, m_target_idx;
+  CLOCK_MINUTES m_reach_by;
 };
 
 #endif

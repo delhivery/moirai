@@ -3,76 +3,25 @@
 
 #include "date_utils.hxx"
 #include "processor.hxx"
+#include <algorithm>
+#include <fmt/chrono.h>
 
-template<>
 nlohmann::json
-parse_path<PathTraversalMode::FORWARD>(const std::shared_ptr<Segment> start)
+parse_path(const std::vector<Segment>& route)
 {
-  nlohmann::json response = {};
-
-  if (start != nullptr) {
-    auto current = start;
-
-    while (current->next != nullptr) {
-      nlohmann::json entry = {
-        { "code", current->node->m_code },
-        { "arrival", date::format("%D %T", current->distance) },
-        { "arrival_ts", current->distance.time_since_epoch().count() },
-        { "route",
-          current->outbound->m_code.substr(
-            0, current->outbound->m_code.find('.')) },
-        { "departure",
-          date::format(
-            "%D %T",
-            get_departure(current->distance, current->outbound->m_departure)) },
-        { "departure_ts",
-          get_departure(current->distance, current->outbound->m_departure)
-            .time_since_epoch()
-            .count() },
-      };
-      response.push_back(entry);
-      current = current->next;
-    }
-    nlohmann::json entry = {
-      { "code", current->node->m_code },
-      { "arrival", date::format("%D %T", current->distance) },
-      { "arrival_ts", current->distance.time_since_epoch().count() }
-    };
-    response.push_back(entry);
-  }
-  return response;
-}
-
-template<>
-nlohmann::json
-parse_path<PathTraversalMode::REVERSE>(const std::shared_ptr<Segment> start)
-{
-  nlohmann::json response = {};
-
-  if (start != nullptr) {
-    auto current = start;
-    auto arrival = current->distance;
-
-    while (current->next != nullptr) {
-      nlohmann::json entry = {
-        { "code", current->node->m_code },
-        { "arrival", date::format("%D %T", arrival) },
-        { "arrival_ts", arrival.time_since_epoch().count() },
-        { "route",
-          current->outbound->m_code.substr(
-            0, current->outbound->m_code.find('.')) },
-        { "departure", date::format("%D %T", current->distance) },
-        { "departure_ts", current->distance.time_since_epoch().count() }
-      };
-      response.push_back(entry);
-      arrival = current->distance + current->outbound->m_duration;
-      current = current->next;
-    }
-    nlohmann::json entry{ { "code", current->node->m_code },
-                          { "arrival", date::format("%D %T", arrival) },
-                          { "arrival_ts",
-                            arrival.time_since_epoch().count() } };
-    response.push_back(entry);
-  }
-  return response;
+  nlohmann::json data = nlohmann::json::array();
+  std::transform(
+    route.begin(),
+    route.end(),
+    std::back_inserter(data),
+    [](const Segment& segment) {
+      std::string departure = fmt::format(
+        "{:%D %T}", segment.m_outbound->departure(segment.m_distance));
+      return nlohmann::json{ { "code", segment.m_node->m_code },
+                             { "arrival",
+                               fmt::format("{:%D %T}", segment.m_distance) },
+                             { "route", segment.m_outbound->m_code },
+                             { "departure", departure } };
+    });
+  return data;
 }

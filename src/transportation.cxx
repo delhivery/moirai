@@ -27,10 +27,10 @@ TransportEdge::TransportEdge(std::string code, std::string name)
 
 TransportEdge::TransportEdge(std::string code,
                              std::string name,
-                             TIME_OF_DAY departure,
-                             DURATION duration,
-                             DURATION duration_loading,
-                             DURATION duration_unloading,
+                             TIME_OF_DAY_IN_MINUTES departure,
+                             DURATION_MINUTES duration,
+                             DURATION_MINUTES duration_loading,
+                             DURATION_MINUTES duration_unloading,
                              VehicleType vehicle,
                              MovementType movement,
                              bool terminal = false)
@@ -76,8 +76,8 @@ COST
 TransportEdge::weight<PathTraversalMode::FORWARD>() const
 {
   if (m_transient)
-    return { TIME_OF_DAY::max(), DURATION::max() };
-  TIME_OF_DAY actual_departure{ datemod(m_departure - m_offset_source,
+    return { TIME_OF_DAY::max(), DURATION_MINUTES::max() };
+  TIME_OF_DAY_IN_MINUTES actual_departure{ datemod(m_departure - m_offset_source,
                                         std::chrono::days{ 1 }) };
   return { actual_departure, m_offset_source + m_duration + m_offset_target };
 }
@@ -87,8 +87,8 @@ COST
 TransportEdge::weight<PathTraversalMode::REVERSE>() const
 {
   if (m_transient)
-    return { TIME_OF_DAY::max(), DURATION::max() };
-  TIME_OF_DAY actual_departure{ datemod(m_departure + m_duration + m_offset_target,
+    return { TIME_OF_DAY::max(), DURATION_MINUTES::max() };
+  TIME_OF_DAY_IN_MINUTES actual_departure{ datemod(m_departure + m_duration + m_offset_target,
                                         std::chrono::days{ 1 }) };
   return { actual_departure, m_duration + m_offset_source + m_offset_target };
 }

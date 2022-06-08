@@ -1,8 +1,9 @@
 #ifndef MOIRAI_SOLVER_HXX
 #define MOIRAI_SOLVER_HXX
 
-#include "date_utils.hxx"                                      // for CLOCK
-#include "transportation.hxx"                                  // for Trans...
+#include "date_utils.hxx"     // for CLOCK
+#include "transportation.hxx" // for Trans...
+#include <algorithm>
 #include <boost/graph/adjacency_list.hpp>                      // for source
 #include <boost/graph/dijkstra_shortest_paths.hpp>             // for dijks...
 #include <boost/graph/filtered_graph.hpp>                      // for target
@@ -48,11 +49,9 @@ using Edge = typename boost::graph_traits<G>::edge_descriptor;
 
 struct Segment
 {
-  std::shared_ptr<TransportCenter> node = nullptr;
-  std::shared_ptr<TransportEdge> outbound = nullptr;
-  std::shared_ptr<Segment> prev = nullptr;
-  std::shared_ptr<Segment> next = nullptr;
-  CLOCK distance;
+  std::shared_ptr<TransportCenter> m_node = nullptr;
+  std::shared_ptr<TransportEdge> m_outbound = nullptr;
+  CLOCK m_distance;
 };
 
 class Solver
@@ -81,25 +80,23 @@ public:
   std::string show_all() const;
 
   template<typename FilteredGraph>
-  std::shared_ptr<Segment> path_forward(
-    const Node<FilteredGraph>& source,
-    const Node<FilteredGraph>& target,
-    CLOCK start,
-    const FilteredGraph& filtered_graph) const
+  std::vector<Segment> path_forward(const Node<FilteredGraph>& source,
+                                    const Node<FilteredGraph>& target,
+                                    CLOCK start,
+                                    const FilteredGraph& filtered_graph) const
   {
-    typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
-      predecessor_edge_map_t;
-    typedef boost::associative_property_map<predecessor_edge_map_t>
-      predecessor_edge_property_map_t;
+    using node_t = Node<FilteredGraph>;
+    using edge_t = Edge<FilteredGraph>;
+    using pred_edge_map_t = std::map<node_t, edge_t>;
+    using pred_edge_pmap_t = boost::associative_property_map<pred_edge_map_t>;
 
-    predecessor_edge_map_t predecessors;
-    predecessor_edge_property_map_t predecessors_property_map(predecessors);
-
-    auto recorder = boost::record_edge_predecessors(predecessors_property_map,
-                                                    boost::on_edge_relaxed());
-    boost::dijkstra_visitor<decltype(recorder)> visitor(recorder);
-
+    pred_edge_map_t preds;
+    pred_edge_pmap_t preds_pmap(preds);
     std::vector<CLOCK> distances(boost::num_vertices(filtered_graph));
+
+    auto recorder =
+      boost::record_edge_predecessors(preds_pmap, boost::on_edge_relaxed());
+    boost::dijkstra_visitor<decltype(recorder)> visitor(recorder);
 
     auto w_map = boost::make_transform_value_property_map(
       [](std::shared_ptr<TransportEdge> edge) {
@@ -133,71 +130,48 @@ public:
         .distance_inf(CLOCK::max())
         .visitor(visitor));
 
-    auto segment = std::make_shared<Segment>();
-    segment->next = nullptr;
-    segment->outbound = nullptr;
+    std::vector<Segment> path;
+    path.emplace_back();
 
-    for (Node<FilteredGraph> current = target; current != source;
-         current =
-           boost::source(predecessors_property_map[current], filtered_graph)) {
-
-      auto edge_descriptor = predecessors_property_map[current];
+    for (node_t current = target; current != source;
+         current = boost::source(preds_pmap[current], filtered_graph)) {
+      auto edge_descriptor = preds_pmap[current];
       auto sour_descriptor = boost::source(edge_descriptor, filtered_graph);
       CLOCK distance = distances[current];
 
       if (distance == CLOCK::max())
-        return nullptr;
+        return path;
 
-      // We are at current center
-      // Set node
-      segment->node = filtered_graph[current];
-      // Set current center distance
-      segment->distance = distances[current];
+      path.back().m_node = filtered_graph[current];
+      path.back().m_distance = distances[current];
 
-      // Create predecessor segment
-      segment->prev = std::make_shared<Segment>();
-      // Set predecessor's successor as self
-      segment->prev->next = segment;
-
-      // Set outbound edge on predecessor
-      segment->prev->outbound = filtered_graph[edge_descriptor];
-
-      // Move self to predecessor
-      segment = segment->prev;
-
-      /*path.push_back(std::make_tuple(filtered_graph[current],
-                                     filtered_graph[sour_descriptor],
-                                     filtered_graph[edge_descriptor],
-                                     distance));*/
+      path.emplace_back();
+      path.back().m_outbound = filtered_graph[edge_descriptor];
     }
-    segment->node = filtered_graph[source];
-    segment->distance = distances[source];
-    segment->prev = nullptr;
-
-    // We are at path origin
-    return segment;
+    path.back().m_node = filtered_graph[source];
+    path.back().m_distance = distances[source];
+    std::reverse(path.begin(), path.end());
+    return path;
   }
 
   template<typename FilteredGraph>
-  std::shared_ptr<Segment> path_reverse(
-    const Node<FilteredGraph>& source,
-    const Node<FilteredGraph>& target,
-    CLOCK start,
-    const FilteredGraph& filtered_graph) const
+  std::vector<Segment> path_reverse(const Node<FilteredGraph>& source,
+                                    const Node<FilteredGraph>& target,
+                                    CLOCK start,
+                                    const FilteredGraph& filtered_graph) const
   {
-    typedef std::map<Node<FilteredGraph>, Edge<FilteredGraph>>
-      predecessor_edge_map_t;
-    typedef boost::associative_property_map<predecessor_edge_map_t>
-      predecessor_edge_property_map_t;
+    using node_t = Node<FilteredGraph>;
+    using edge_t = Edge<FilteredGraph>;
+    using pred_edge_map_t = std::map<node_t, edge_t>;
+    using pred_edge_pmap_t = boost::associative_property_map<pred_edge_map_t>;
 
-    predecessor_edge_map_t predecessors;
-    predecessor_edge_property_map_t predecessors_property_map(predecessors);
-
-    auto recorder = boost::record_edge_predecessors(predecessors_property_map,
-                                                    boost::on_edge_relaxed());
-    boost::dijkstra_visitor<decltype(recorder)> visitor(recorder);
-
+    pred_edge_map_t preds;
+    pred_edge_pmap_t preds_pmap(preds);
     std::vector<CLOCK> distances(boost::num_vertices(filtered_graph));
+
+    auto recorder =
+      boost::record_edge_predecessors(preds_pmap, boost::on_edge_relaxed());
+    boost::dijkstra_visitor<decltype(recorder)> visitor(recorder);
 
     auto w_map = boost::make_transform_value_property_map(
       [](std::shared_ptr<TransportEdge> edge) {
@@ -220,28 +194,25 @@ public:
         .distance_inf(CLOCK::min())
         .visitor(visitor));
 
-    auto segment = std::make_shared<Segment>();
-    segment->prev = nullptr;
+    std::vector<Segment> path;
+    path.emplace_back();
 
-    for (Node<FilteredGraph> current = target; current != source;
-         current =
-           boost::source(predecessors_property_map[current], filtered_graph)) {
-      auto edge_descriptor = predecessors_property_map[current];
+    for (node_t current = target; current != source;
+         current = boost::source(preds_pmap[current], filtered_graph)) {
+      auto edge_descriptor = preds_pmap[current];
       auto sour_descriptor = boost::source(edge_descriptor, filtered_graph);
       CLOCK distance = distances[current];
 
       if (distance == CLOCK::min())
-        return nullptr;
+        return path;
 
-      // We are at current center
-      // Set node as current center
-      segment->node = filtered_graph[current];
-      // Set current center distance
-      segment->distance = distances[current];
+      path.back().m_node = filtered_graph[current];
+      path.back().m_distance = distances[current];
+      path.back().m_outbound = filtered_graph[edge_descriptor];
 
-      // Set successor edge node
-      segment->outbound = filtered_graph[edge_descriptor];
+      path.emplace_back();
 
+      /*
       if (segment->outbound->m_movement == MovementType::CARTING)
         segment->distance +=
           segment->node
@@ -250,33 +221,17 @@ public:
         segment->distance +=
           segment->node
             ->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
-      // Create a successor center
-      segment->next = std::make_shared<Segment>();
-      // Set self as successor's predecessor
-      segment->next->prev = segment;
-
-      // Move self to successor edge
-      segment = segment->next;
-
-      /*path.push_back(std::make_tuple(filtered_graph[current],
-                                     filtered_graph[sour_descriptor],
-                                     filtered_graph[edge_descriptor],
-                                     distance));*/
+      */
     }
-    segment->node = filtered_graph[source];
-    segment->distance = distances[source];
-    segment->next = nullptr;
-
-    while (segment->prev != nullptr)
-      segment = segment->prev;
-    // We are at path origin center
-    return segment;
+    path.back().m_node = filtered_graph[source];
+    path.back().m_distance = distances[source];
+    return path;
   }
 
   template<PathTraversalMode P, VehicleType V = VehicleType::AIR>
-  std::shared_ptr<Segment> find_path(const Node<Graph>&,
-                                     const Node<Graph>&,
-                                     CLOCK) const;
+  std::vector<Segment> find_path(const Node<Graph>&,
+                                 const Node<Graph>&,
+                                 CLOCK) const;
 };
 
 #endif
