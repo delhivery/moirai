@@ -2,9 +2,11 @@
 #define moirai_date_utils
 
 #include <chrono> // for duration, system_clock, time_point
+#include <climits>
 #include <concepts>
 #include <cstdint> // for int16_t, int32_t, uint8_t
 #include <ratio>   // for ratio
+#include <vector>
 
 using namespace std::chrono;
 
@@ -16,29 +18,30 @@ using CLOCK_MINUTES = time_point<system_clock, DURATION_MINUTES>;
 
 enum PathTraversalMode : std::uint8_t;
 
-enum DAY_OF_WEEK : std::uint8_t
+struct TemporalEdgeCostAttributes
 {
-  SUN = 0x00000001,
-  MON = 0x00000010,
-  TUE = 0x00000100,
-  WED = 0x00001000,
-  THU = 0x00010000,
-  FRI = 0x00100000,
-  SAT = 0x01000000,
-};
+  constexpr uint8_t BITS = CHAR_BIT * sizeof(uint8_t);
 
-struct TemporalEdgeCost
-{
   TIME_OF_DAY_MINUTES m_departure;
   DURATION_MINUTES m_duration;
-  uint8_t m_working_days = 0x01111111;
-  bool m_transient;
-}
+  uint8_t m_working_days = 0;
+  bool m_transient = false;
+
+  TemporalEdgeCostAttributes() = default;
+
+  TemporalEdgeCostAttributes(const TIME_OF_DAY_MINUTES&,
+                             const DURATION_MINUTES&,
+                             const std::vector<int>&);
+
+  template<PathTraversalMode>
+  int8_t next_working_day(const weekday&) const;
+};
 
 struct EdgeTraversalCost
 {
   template<PathTraversalMode>
-  CLOCK_MINUTES operator()(const CLOCK_MINUTES&, const TemporalEdgeCost&) const;
+  CLOCK_MINUTES operator()(const CLOCK_MINUTES&,
+                           const TemporalEdgeCostAttributes&) const;
 };
 
 uint16_t datemod(DURATION_MINUTES, DURATION_MINUTES);

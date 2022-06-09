@@ -10,22 +10,76 @@ datemod(DURATION_MINUTES lhs, DURATION_MINUTES rhs)
   return ((count_lhs % count_rhs) + count_rhs) % count_rhs;
 }
 
+TemporalEdgeCostAttributes
+  : TemporalEdgeCostAttributes(const TIME_OF_DAY_MINUTES& departure,
+                               const DURATION_MINUTES& duration,
+                               const std::vector<int>& working_days)
+  : m_departure(departure)
+  , m_duration(duration)
+  , m_transient(false)
+{
+  for (const auto working_day : working_days)
+    m_working_days |=
+      1 << (sizeof(m_working_days) * CHAR_BIT - working_day - 2);
+}
+
+template<>
+uint8_t
+TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::FORWARD>(
+  const weekday& start_day) const
+{
+  uint8_t to_shift = start_day.c_encoding();
+  uint8_t rshift = m_working_days << to_shift + 1;
+  uint8_t lshift = m_working_days >> 7 - to_shift;
+  uint8_t result = rshift | lshift;
+  return std::countl_zero(result) - 1;
+}
+
+template<>
+uint8_t TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::REVERSE>(const weekday& start_day) const {
+  
+};
+
 template<>
 CLOCK_MINUTES
 EdgeTraversalCost::operator()<PathTraversalMode::FORWARD>(
   const CLOCK_MINUTES& start,
-  const TemporalEdgeCost& cost) const
+  const TemporalEdgeCostAttributes& cost_attrs) const
 {
-  if (cost.m_transient)
+  if (cost_attrs.m_transient)
     return start;
 
-  auto start_days = floor<days>(start);
-  auto start_minutes = start - start_days;
-  auto time_idle = start_minutes - cost.m_departure;
-  auto time_idle_days =
-    std::chrono::weekday{ std::chrono::sys_days{ start_days } };
+  auto start_day = floor<days>(start);
+  auto start_day_of_week = weekday(sys_days(start_day));
 
-  return start + time_idle + cost.m_duration;
+  auto start_minutes = start - start_day;
+
+  DURATION_MINUTES time_idle = 0;
+  std::chrono::days base_offset = 0, days_idle = 0;
+
+  // If departure earlier than start time, then we need to at least wait until
+  // next day to depart. So we need to find the next available working day
+  // starting stary_day +1
+  if (start_minutes > cost_attrs.m_departure)
+    base_offset = 1;
+  days_idle = cost_attrs.next_working_day(start_day_of_week + base_offset);
+
+  time_idle = base_offset + days_idle + cost_attrs.m_departure - start_minutes;
+  return start + time_idle + cost_attrs.m_duration;
+}
+
+template<>
+CLOCK_MINUTES
+EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(
+  const CLOCK_MINUTES& start,
+  const TemporalEdgeCostAttributes& cost_attrs) const
+{
+  if (cost_attrs.m_transient)
+    return start;
+
+  auto start_day = floor<days>(start);
+  auto start_day_of_week = weekday(sys_days(start_day));
+  auto start_minutes = start - start_day;
 }
 
 template<>
@@ -35,9 +89,6 @@ EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK_MINUTES start,
 {
   if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
     return start;
-  TIME_OF_DAY_MINUTES minutes_start{
-    start - std::chrono::floor<std::chrono::days>(start)
-  };
   DURATION_MINUTES wait_time{ datemod(minutes_start - cost.first,
                                       std::chrono::days{ 1 }) };
   return start - wait_time - cost.second;

@@ -103,7 +103,7 @@ struct TransportEdge
                 bool);
 
   template<PathTraversalMode M>
-  TemporalEdgeCost weight() const;
+  TemporalEdgeCostAttributes weight() const;
 
   const CLOCK_MINUTES& departure(const CLOCK_MINUTES&) const;
 
