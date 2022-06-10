@@ -16,25 +16,39 @@ using TIME_OF_DAY_MINUTES = DURATION_MINUTES;
 
 using CLOCK_MINUTES = time_point<system_clock, DURATION_MINUTES>;
 
+constexpr DURATION_MINUTES HOUR = DURATION_MINUTES(60);
+
+constexpr DURATION_MINUTES DAY = DURATION_MINUTES(24 * 60);
+
+constexpr DURATION_MINUTES IST = DURATION_MINUTES(330);
+
 enum PathTraversalMode : std::uint8_t;
 
-struct TemporalEdgeCostAttributes
+class TemporalEdgeCostAttributes
 {
-  constexpr uint8_t BITS = CHAR_BIT * sizeof(uint8_t);
+private:
+  // mDeparture = departure - loading
+  hh_mm_ss<minutes> mDeparture;
+  // mArrival = arrival + unloading = loading + departure + duration + unloading
+  hh_mm_ss<minutes> mArrival;
+  minutes mDuration;
+  uint8_t mDepartureDays = 0;
+  uint8_t mArrivalDays = 0;
+  bool mTransient = false;
 
-  TIME_OF_DAY_MINUTES m_departure;
-  DURATION_MINUTES m_duration;
-  uint8_t m_working_days = 0;
-  bool m_transient = false;
-
+public:
   TemporalEdgeCostAttributes() = default;
 
-  TemporalEdgeCostAttributes(const TIME_OF_DAY_MINUTES&,
+  TemporalEdgeCostAttributes(const DURATION_MINUTES&,
+                             const TIME_OF_DAY_MINUTES&,
                              const DURATION_MINUTES&,
-                             const std::vector<int>&);
+                             const DURATION_MINUTES&,
+                             const std::vector<uint8_t>&);
 
   template<PathTraversalMode>
   int8_t next_working_day(const weekday&) const;
+
+  auto transient() const -> bool;
 };
 
 struct EdgeTraversalCost

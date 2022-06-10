@@ -10,76 +10,110 @@ datemod(DURATION_MINUTES lhs, DURATION_MINUTES rhs)
   return ((count_lhs % count_rhs) + count_rhs) % count_rhs;
 }
 
-TemporalEdgeCostAttributes
-  : TemporalEdgeCostAttributes(const TIME_OF_DAY_MINUTES& departure,
-                               const DURATION_MINUTES& duration,
-                               const std::vector<int>& working_days)
-  : m_departure(departure)
-  , m_duration(duration)
-  , m_transient(false)
+TemporalEdgeCostAttributes::TemporalEdgeCostAttributes(
+  const DURATION_MINUTES& loading,
+  const TIME_OF_DAY_MINUTES& departure,
+  const DURATION_MINUTES& duration,
+  const DURATION_MINUTES& unloading,
+  const std::vector<uint8_t>& departureDays)
+  : mDuration(duration)
+  , mTransient(false)
 {
-  for (const auto working_day : working_days)
-    m_working_days |=
-      1 << (sizeof(m_working_days) * CHAR_BIT - working_day - 2);
+  mDeparture = hh_mm_ss<minutes>(departure - loading);
+  mArrival = datemod(departure + duration + unloading, days(1));
+
+  for (const auto& departureDay : departureDays)
+    mDepartureDays |= 1 << sizeof(mDepartureDays) * CHAR_BIT - departureDay - 2;
+  mArrivalDays = mDepartureDays;
+
+  if (mDeparture + mDuration + mUnloading > days(1)) {
+    mArrivalDays = mDepartureDays >> 1;
+    uint8_t lwd = mDepartureDays & 1;
+    lwd = lwd << 6;
+    mArrivalDays |= lwd;
+  }
+}
+
+auto
+TemporalEdgeCostAttributes::transient() const -> bool
+{
+  return mTransient;
 }
 
 template<>
-uint8_t
+int8_t
 TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::FORWARD>(
-  const weekday& start_day) const
+  const weekday& startDay) const
 {
-  uint8_t to_shift = start_day.c_encoding();
-  uint8_t rshift = m_working_days << to_shift + 1;
-  uint8_t lshift = m_working_days >> 7 - to_shift;
-  uint8_t result = rshift | lshift;
+  uint8_t toShift = startDay.c_encoding();
+  uint8_t lShift = mDepartureDays << toShift + 1;
+  lShift >>= 1;
+  uint8_t rShift = mDepartureDays >> 7 - toShift;
+  uint8_t result = lShift | rShift;
   return std::countl_zero(result) - 1;
 }
 
 template<>
-uint8_t TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::REVERSE>(const weekday& start_day) const {
-  
+int8_t
+TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::REVERSE>(
+  const weekday& startDay) const
+{
+  uint8_t toShift = startDay.c_encoding();
+  uint8_t rShift = mDepartureDays >> CHAR_BIT - toShift - 2;
+  uint8_t lShift = mDepartureDays << toShift + 2;
+  lShift >>= 1;
+  uint8_t result = lShift | rShift;
+  return std::countr_zero(result);
 };
 
 template<>
 CLOCK_MINUTES
 EdgeTraversalCost::operator()<PathTraversalMode::FORWARD>(
-  const CLOCK_MINUTES& start,
-  const TemporalEdgeCostAttributes& cost_attrs) const
+  const CLOCK_MINUTES& arrival,
+  const TemporalEdgeCostAttributes& costAttrs) const
 {
-  if (cost_attrs.m_transient)
-    return start;
+  if (costAttrs.transient())
+    return arrival;
+  auto arrivalDay = floor<days>(arrival);
+  auto arrivalWeekday = weekday(sys_days(arrivalDay));
+  auto arrivalTime = arrival - arrivalDay;
 
-  auto start_day = floor<days>(start);
-  auto start_day_of_week = weekday(sys_days(start_day));
-
-  auto start_minutes = start - start_day;
-
-  DURATION_MINUTES time_idle = 0;
-  std::chrono::days base_offset = 0, days_idle = 0;
+  DURATION_MINUTES timeIdle(0);
+  days baseOffset(0), daysIdle(0);
 
   // If departure earlier than start time, then we need to at least wait until
   // next day to depart. So we need to find the next available working day
   // starting stary_day +1
-  if (start_minutes > cost_attrs.m_departure)
-    base_offset = 1;
-  days_idle = cost_attrs.next_working_day(start_day_of_week + base_offset);
+  if (arrivalTime > costAttrs.mDeparture)
+    baseOffset = days(1);
+  daysIdle = days(costAttrs.next_working_day<PathTraversalMode::FORWARD>(
+    arrivalWeekday + baseOffset));
 
-  time_idle = base_offset + days_idle + cost_attrs.m_departure - start_minutes;
-  return start + time_idle + cost_attrs.m_duration;
+  timeIdle = baseOffset + daysIdle + costAttrs.mDeparture - arrivalTime;
+  return arrival + timeIdle + costAttrs.mDuration;
 }
 
 template<>
 CLOCK_MINUTES
 EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(
-  const CLOCK_MINUTES& start,
-  const TemporalEdgeCostAttributes& cost_attrs) const
+  const CLOCK_MINUTES& arrival,
+  const TemporalEdgeCostAttributes& costAttrs) const
 {
-  if (cost_attrs.m_transient)
-    return start;
+  if (costAttrs.transient())
+    return arrival;
+  auto arrivalDay = floor<days>(arrival);
+  auto arrivalWeekday = weekday(sys_days(arrivalDay));
+  auto arrivalTime = arrival - arrivalDay;
 
-  auto start_day = floor<days>(start);
-  auto start_day_of_week = weekday(sys_days(start_day));
-  auto start_minutes = start - start_day;
+  DURATION_MINUTES timeIdle(0);
+  days baseOffset(0), daysIdle(0);
+
+  if (arrivalTime < costAttrs.arrival())
+    baseOffset = days(1);
+  daysIdle = days(costAttrs.next_working_day<PathTraversalMode::REVERSE>(
+    arrivalWeekday - baseOffset));
+  timeIdle = baseOffset + daysIdle + arrivalTime - costAttrs.mArrival;
+  return arrival - timeIdle - costAttrs.mDuration - costAttrs.mUnloading;
 }
 
 template<>
@@ -89,8 +123,7 @@ EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(CLOCK_MINUTES start,
 {
   if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max())
     return start;
-  DURATION_MINUTES wait_time{ datemod(minutes_start - cost.first,
-                                      std::chrono::days{ 1 }) };
+  DURATION_MINUTES wait_time{ datemod(minutes_start - cost.first, days{ 1 }) };
   return start - wait_time - cost.second;
 }
 
@@ -134,11 +167,10 @@ iso_to_date(const std::string& date_string,
 int64_t
 now_as_int64()
 {
-  return std::chrono::system_clock::now().time_since_epoch().count() / 1000 /
-         1000;
+  return system_clock::now().time_since_epoch().count() / 1000 / 1000;
 }
 
-std::chrono::minutes
+minutes
 time_string_to_time(const std::string& time_string)
 {
   std::regex split_day_regex("day");
@@ -170,16 +202,13 @@ time_string_to_time(const std::string& time_string)
   std::uint16_t time =
     std::atoi(parts[0].c_str()) * 60 + std::atoi(parts[1].c_str());
 
-  return std::chrono::minutes(time + time_days);
+  return minutes(time + time_days);
 }
 
 CLOCK_MINUTES
 get_departure(CLOCK_MINUTES start, TIME_OF_DAY_IN_MINUTES departure)
 {
-  TIME_OF_DAY_IN_MINUTES minutes_start{
-    start - std::chrono::floor<std::chrono::days>(start)
-  };
-  DURATION_MINUTES wait_time{ datemod(departure - minutes_start,
-                                      std::chrono::days{ 1 }) };
+  TIME_OF_DAY_IN_MINUTES minutes_start{ start - floor<days>(start) };
+  DURATION_MINUTES wait_time{ datemod(departure - minutes_start, days{ 1 }) };
   return start + wait_time;
 }
