@@ -2,11 +2,12 @@
 #define MOIRAI_TRANSPORTATION
 
 #include "date_utils.hxx" // for DURATION, COST, TIME_OF_DAY
-#include <cstdint>        // for uint8_t
-#include <map>            // for map, map<>::mapped_type
-#include <memory>         // for shared_ptr
-#include <string>         // for string
-#include <utility>        // for pair, make_pair
+#include "edge_cost_attributes.hxx"
+#include <cstdint> // for uint8_t
+#include <map>     // for map, map<>::mapped_type
+#include <memory>  // for shared_ptr
+#include <string>  // for string
+#include <utility> // for pair, make_pair
 
 enum VehicleType : std::uint8_t
 {
@@ -27,14 +28,8 @@ enum ProcessType : std::uint8_t
   CUSTODY = 2,
 };
 
-enum PathTraversalMode : std::uint8_t
-{
-  FORWARD = 0,
-  REVERSE = 1,
-};
-
 template<MovementType, ProcessType>
-using Latency = DURATION_MINUTES;
+using Latency = minutes;
 
 struct TransportCenter
 {
@@ -59,13 +54,13 @@ public:
     return m_latencies.contains(key) ? m_latencies[key] : Latency<M, P>(0);
   }
 
-  void set_cutoff(TIME_OF_DAY_MINUTES cutoff) { this->m_cutoff = cutoff; }
+  void set_cutoff(time_of_day cutoff) { this->m_cutoff = cutoff; }
 
-  TIME_OF_DAY_MINUTES get_cutoff() { return m_cutoff; }
+  time_of_day get_cutoff() { return m_cutoff; }
 
 private:
-  std::map<std::pair<MovementType, ProcessType>, DURATION_MINUTES> m_latencies;
-  TIME_OF_DAY_MINUTES m_cutoff;
+  std::map<std::pair<MovementType, ProcessType>, minutes> m_latencies;
+  time_of_day m_cutoff;
 };
 
 struct TransportEdge
@@ -73,11 +68,11 @@ struct TransportEdge
   std::string m_code;
   std::string m_name;
 
-  TIME_OF_DAY_MINUTES m_departure;
+  time_of_day m_departure;
 
-  DURATION_MINUTES m_duration;
-  DURATION_MINUTES m_duration_loading;
-  DURATION_MINUTES m_duration_unloading;
+  minutes m_duration;
+  minutes m_duration_loading;
+  minutes m_duration_unloading;
 
   VehicleType m_vehicle;
   MovementType m_movement;
@@ -94,10 +89,10 @@ struct TransportEdge
 
   TransportEdge(std::string,
                 std::string,
-                TIME_OF_DAY_MINUTES,
-                DURATION_MINUTES,
-                DURATION_MINUTES,
-                DURATION_MINUTES,
+                time_of_day,
+                minutes,
+                minutes,
+                minutes,
                 VehicleType,
                 MovementType,
                 bool);
@@ -105,20 +100,20 @@ struct TransportEdge
   template<PathTraversalMode M>
   TemporalEdgeCostAttributes weight() const;
 
-  const CLOCK_MINUTES& departure(const CLOCK_MINUTES&) const;
+  const datetime& departure(const datetime&) const;
 
   void update(std::shared_ptr<TransportCenter>,
               std::shared_ptr<TransportCenter>);
 
 private:
-  DURATION_MINUTES m_offset_source;
-  DURATION_MINUTES m_offset_target;
+  minutes m_offset_source;
+  minutes m_offset_target;
 };
 
 struct TransportationLoadSubItem
 {
   std::string m_idx, m_target_idx;
-  CLOCK_MINUTES m_reach_by;
+  datetime m_reach_by;
 };
 
 #endif

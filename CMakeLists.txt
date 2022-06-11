@@ -75,6 +75,7 @@ find_package(RdKafkaCPP REQUIRED)
 add_executable(
   ${PROJECT_NAME}
   src/date_utils.cxx
+  src/edge_cost_attributes.cxx
   src/graph_helpers.cxx
   src/transportation.cxx
   src/solver.cxx
