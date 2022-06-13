@@ -11,13 +11,13 @@ class Moirai : public Poco::Util::ServerApplication
 {
 private:
 #ifdef WITH_NODE_FILE
-  std::filesyste::path file_nodes;
+  std::filesystem::path nodeFile;
 #else
   std::string node_sync_uri, node_sync_idx, node_sync_user, node_sync_pass;
 #endif
 
 #ifdef WITH_EDGE_FILE
-  std::filesystem::path file_edges;
+  std::filesystem::path edgeFile;
 #else
   std::string edge_uri, edge_token;
 #endif
@@ -38,21 +38,19 @@ private:
   bool help_requested = false;
 
 public:
-  Moirai() {}
+  Moirai() = default;
 
-  ~Moirai() {}
+  ~Moirai() override = default;
 
 private:
   void display_help();
 
 protected:
-  void initialize(Poco::Util::Application&);
+  void initialize(Poco::Util::Application& application) override;
 
-  void uninitialize();
+  void uninitialize() override;
 
-  void reinitialize();
-
-  void defineOptions(Poco::Util::OptionSet&);
+  void defineOptions(Poco::Util::OptionSet& optionset) override;
 
 #ifdef WITH_NODE_FILE
   void set_node_file(const std::string&, const std::string&);
@@ -91,7 +89,7 @@ protected:
 
   void handle_help(const std::string&, const std::string&);
 
-  int main(const ArgVec&);
+  auto main(const ArgVec& args) -> int override;
 };
 
 #endif

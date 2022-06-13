@@ -40,59 +40,59 @@ public:
   ClusterConfig(std::string = "",
                 uint8_t = KAFKA | SCHEMA_REGISTRY | PUSH_GATEWAY);
 
-  inline bool has_feature(flags_t) const;
+  inline auto has_feature(flags_t) const -> bool;
 
   void load_config_from_env();
 
   void set_brokers(std::string);
-  std::string get_brokers() const;
+  auto get_brokers() const -> std::string;
 
-  std::string get_consumer_group() const;
+  auto get_consumer_group() const -> std::string;
 
   void set_consumer_buffering_time(std::chrono::milliseconds);
-  std::chrono::milliseconds get_consumer_buffering_time() const;
+  auto get_consumer_buffering_time() const -> std::chrono::milliseconds;
 
   void set_producer_buffering_time(std::chrono::milliseconds);
-  std::chrono::milliseconds get_producer_buffering_time() const;
+  auto get_producer_buffering_time() const -> std::chrono::milliseconds;
 
   void set_producer_message_timeout(std::chrono::milliseconds);
-  std::chrono::milliseconds get_producer_message_timeout() const;
+  auto get_producer_message_timeout() const -> std::chrono::milliseconds;
 
   void set_minimum_topology_buffering(std::chrono::milliseconds);
-  std::chrono::milliseconds get_minimum_topology_buffering() const;
+  auto get_minimum_topology_buffering() const -> std::chrono::milliseconds;
 
   void set_max_pending_sink_messages(std::size_t);
-  std::size_t get_max_pending_sink_messages() const;
+  auto get_max_pending_sink_messages() const -> std::size_t;
 
-  bool set_ca_cert_path(std::filesystem::path);
-  std::filesystem::path get_ca_cert_path() const;
+  auto set_ca_cert_path(std::filesystem::path) -> bool;
+  auto get_ca_cert_path() const -> std::filesystem::path;
 
-  bool set_private_key_path(std::filesystem::path,
+  auto set_private_key_path(std::filesystem::path,
                             std::filesystem::path,
-                            std::string = "");
-  std::filesystem::path get_client_cert_path() const;
-  std::filesystem::path get_private_key_path() const;
-  std::string get_private_key_passphrase() const;
+                            std::string = "") -> bool;
+  auto get_client_cert_path() const -> std::filesystem::path;
+  auto get_private_key_path() const -> std::filesystem::path;
+  auto get_private_key_passphrase() const -> std::string;
 
   void set_schema_registry_uri(std::string);
-  std::string get_schema_registry_uri() const;
+  auto get_schema_registry_uri() const -> std::string;
 
   void set_pushgateway_uri(std::string);
-  std::string get_pushgateway_uri() const;
+  auto get_pushgateway_uri(std::string) const -> std::string;
 
   void set_schema_registry_timeout(std::chrono::milliseconds);
-  std::chrono::milliseconds get_schema_registry_timeout() const;
+  auto get_schema_registry_timeout() const -> std::chrono::milliseconds;
 
   void set_storage_root(std::string);
-  std::string get_storage_root() const;
+  auto get_storage_root() const -> std::string;
 
   void set_fail_fast(bool);
-  bool get_fail_fast() const;
+  auto get_fail_fast() const -> bool;
 
-  std::shared_ptr<ClusterMetadata> get_cluster_metadata() const;
+  auto get_cluster_metadata() const -> std::shared_ptr<ClusterMetadata>;
 
   void set_cluster_state_timeout(std::chrono::seconds);
-  std::chrono::seconds get_cluster_state_timeout() const;
+  auto get_cluster_state_timeout() const -> std::chrono::seconds;
 
   void validate();
 

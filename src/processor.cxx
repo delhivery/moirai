@@ -10,6 +10,7 @@ nlohmann::json
 parse_path(const std::vector<Segment>& route)
 {
   nlohmann::json data = nlohmann::json::array();
+  /*
   std::transform(
     route.begin(),
     route.end(),
@@ -23,5 +24,6 @@ parse_path(const std::vector<Segment>& route)
                              { "route", segment.m_outbound->m_code },
                              { "departure", departure } };
     });
+  */
   return data;
 }

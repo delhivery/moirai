@@ -31,89 +31,90 @@ enum ProcessType : std::uint8_t
 template<MovementType, ProcessType>
 using Latency = minutes;
 
-struct TransportCenter
+class TransportCenter
 {
-  std::string m_code, m_name;
+private:
+  std::string mCode, mName;
+  std::map<std::pair<MovementType, ProcessType>, minutes> mLatencies;
+  time_of_day mCutoff;
 
 public:
   TransportCenter() = default;
 
-  TransportCenter(const std::string&, const std::string&);
+  TransportCenter(std::string,
+                  std::string,
+                  time_of_day,
+                  MovementType,
+                  ProcessType,
+                  minutes);
+
+  [[nodiscard]] auto code() const -> std::string;
 
   template<MovementType M, ProcessType P>
-  void set_latency(Latency<M, P> latency)
+  void set_latency(Latency<M, P> latency);
+  /*
   {
-    m_latencies[std::make_pair(M, P)] = latency;
+    mLatencies[std::make_pair(M, P)] = latency;
   }
+  */
 
   template<MovementType M, ProcessType P>
-  Latency<M, P> get_latency()
+  auto get_latency() -> Latency<M, P>;
+  /*
   {
     auto const key = std::make_pair(M, P);
 
-    return m_latencies.contains(key) ? m_latencies[key] : Latency<M, P>(0);
+    return mLatencies.contains(key) ? mLatencies[key] : Latency<M, P>(0);
   }
-
-  void set_cutoff(time_of_day cutoff) { this->m_cutoff = cutoff; }
-
-  time_of_day get_cutoff() { return m_cutoff; }
-
-private:
-  std::map<std::pair<MovementType, ProcessType>, minutes> m_latencies;
-  time_of_day m_cutoff;
+  */
+  auto cutoff() -> time_of_day; // { return mCutoff; }
 };
 
-struct TransportEdge
+class TransportEdge : public TemporalEdgeCostAttributes
 {
-  std::string m_code;
-  std::string m_name;
+private:
+  std::string mCode;
+  std::string mName;
 
-  time_of_day m_departure;
+  VehicleType mVehicle;
+  MovementType mMovement;
 
-  minutes m_duration;
-  minutes m_duration_loading;
-  minutes m_duration_unloading;
+  minutes mOutDockSource;
+  minutes mInDockTarget;
 
-  VehicleType m_vehicle;
-  MovementType m_movement;
-
-  bool m_transient;
-  bool m_terminal;
-
-  TransportEdge()
-    : m_transient(false)
-  {
-  }
-
+public:
   TransportEdge(std::string, std::string);
 
   TransportEdge(std::string,
                 std::string,
-                time_of_day,
-                minutes,
-                minutes,
-                minutes,
-                VehicleType,
-                MovementType,
-                bool);
+                const VehicleType&,
+                const MovementType&,
+                const minutes&,
+                const minutes&,
+                const minutes&,
+                const time_of_day&,
+                const minutes&,
+                const minutes&,
+                const std::vector<uint8_t>&);
 
-  template<PathTraversalMode M>
-  TemporalEdgeCostAttributes weight() const;
+  [[nodiscard]] auto code() const -> std::string;
 
-  const datetime& departure(const datetime&) const;
-
-  void update(std::shared_ptr<TransportCenter>,
-              std::shared_ptr<TransportCenter>);
-
-private:
-  minutes m_offset_source;
-  minutes m_offset_target;
+  [[nodiscard]] auto vehicle() const -> VehicleType;
 };
 
-struct TransportationLoadSubItem
+class TransportationLoadAttributes
 {
-  std::string m_idx, m_target_idx;
-  datetime m_reach_by;
+private:
+  std::string mIdx;
+  std::string mTargetIdx;
+  datetime mReachBy;
+
+public:
+  TransportationLoadAttributes();
+
+  TransportationLoadAttributes(std::string, std::string, datetime);
+
+  [[nodiscard]] auto reach_by() const -> datetime;
 };
 
 #endif

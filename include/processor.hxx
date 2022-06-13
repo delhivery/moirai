@@ -4,7 +4,7 @@
 #include "solver.hxx"
 #include <nlohmann/json.hpp>
 
-nlohmann::json
-parse_path(const std::vector<Segment>&);
+auto
+parse_path(const std::vector<Segment>&) -> nlohmann::json;
 
 #endif

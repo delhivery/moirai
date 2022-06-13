@@ -8,6 +8,7 @@
 #include <Poco/Runnable.h>
 #include <Poco/URI.h>
 #include <filesystem>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -17,53 +18,49 @@ class SolverWrapper : public Poco::Runnable
 {
 private:
   std::shared_ptr<Solver> solver;
+  moodycamel::ConcurrentQueue<std::string>* mLoadQueuePtr;
+  moodycamel::ConcurrentQueue<std::string>* mSolutionQueuePtr;
 
 #ifdef WITH_NODE_FILE
-  std::filesystem::path node_file;
+  std::filesystem::path nodeFile;
 #else
   Poco::URI node_uri;
   std::string node_idx, node_user, node_pass;
 #endif
 
 #ifdef WITH_EDGE_FILE
-  std::filesystem::path edge_file;
+  std::filesystem::path edgeFile;
 #else
   Poco::URI edge_uri;
   std::string edge_auth;
 #endif
-
-  std::unordered_map<std::string, std::vector<Node<Graph>>> colocated_nodes;
-
-  moodycamel::ConcurrentQueue<std::string>* load_queue;
-  moodycamel::ConcurrentQueue<std::string>* solution_queue;
 
 public:
   std::atomic<bool> running;
 
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
-                const std::shared_ptr<Solver>,
-                const std::filesystem::path&);
+                std::shared_ptr<Solver>);
 
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*
 #ifdef WITH_NODE_FILE
                 ,
-                const std::filesystem::path&
+                std::filesystem::path&
 #else
                 ,
-                const std::string&,
-                const std::string&,
-                const std::string&,
-                const std::string&
+                std::string&,
+                std::string&,
+                std::string&,
+                std::string&
 #endif
 #ifdef WITH_EDGE_FILE
                 ,
-                const std::filesystem::path&
+                std::filesystem::path&
 #else
                 ,
-                const std::string&,
-                const std::string&
+                std::string&,
+                std::string&
 #endif
   );
 
@@ -73,16 +70,17 @@ public:
 
   void init_edges();
 
-  std::vector<std::shared_ptr<TransportCenter>> read_nodes(
-    const std::filesystem::path&);
+  auto read_nodes(const std::filesystem::path&)
+    -> std::vector<std::shared_ptr<TransportCenter>>;
 
-  auto find_paths(const std::string,
-                  const std::string,
-                  const std::string,
-                  const CLOCK,
-                  const CLOCK,
-                  const std::vector<TransportationLoadSubItem>&) const;
+  auto find_paths(const std::string&,
+                  const std::string&,
+                  const std::string&,
+                  datetime,
+                  datetime,
+                  const std::vector<TransportationLoadAttributes>&) const
+    -> nlohmann::json;
 
-  virtual void run();
+  void run() override;
 };
 #endif

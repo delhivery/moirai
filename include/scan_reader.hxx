@@ -13,14 +13,14 @@
 class ScanReader : public Poco::Runnable
 {
 protected:
-  moodycamel::ConcurrentQueue<std::string>* load_queue;
+  moodycamel::ConcurrentQueue<std::string>* mloadQueuePtr;
 
 public:
-  std::atomic<bool> running;
+  std::atomic<bool> mRunning;
 
   ScanReader(moodycamel::ConcurrentQueue<std::string>*);
 
-  virtual void run() = 0;
+  void run() override = 0;
 };
 
 #endif

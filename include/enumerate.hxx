@@ -14,7 +14,10 @@ enumerate(T&& iterable)
     std::size_t idx;
     Iter iter;
 
-    bool operator!=(const iterator& other) const { return iter != other.iter; }
+    auto operator!=(const iterator& other) const -> bool
+    {
+      return iter != other.iter;
+    }
 
     void operator++()
     {

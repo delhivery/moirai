@@ -8,6 +8,8 @@
 #include "date_utils.hxx"     // for CLOCK
 #include "transportation.hxx" // for PathTraversalMode, VehicleType
 
+static const char emptyChar = 0xFF;
+
 template<class G, VehicleType V>
 struct FilterByVehicleType
 {
@@ -17,28 +19,29 @@ struct FilterByVehicleType
 
   FilterByVehicleType(const G* graph)
     : graph(graph)
-  {}
-
-  bool operator()(
-    const typename boost::graph_traits<G>::edge_descriptor& edge) const
   {
-    auto edge_props = (*graph)[edge];
-    return edge_props->m_vehicle <= V;
+  }
+
+  auto operator()(
+    const typename boost::graph_traits<G>::edge_descriptor& edge) const -> bool
+  {
+    auto edgeProps = (*graph)[edge];
+    return edgeProps->vehicle() <= V;
   }
 };
 
 template<PathTraversalMode>
 struct Compare
 {
-  bool operator()(CLOCK, CLOCK) const;
+  auto operator()(datetime, datetime) const -> bool;
 };
 
 template<typename E>
-static E
-null_edge()
+static auto
+null_edge() -> E
 {
-  E null_e;
-  memset((char*)&null_e, 0xFF, sizeof(E));
-  return null_e;
+  E nullEdge;
+  memset((char*)&nullEdge, emptyChar, sizeof(E));
+  return nullEdge;
 }
 #endif

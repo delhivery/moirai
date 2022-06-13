@@ -13,30 +13,29 @@
 class KafkaReader : public ScanReader
 {
 private:
-  std::string broker_url;
-  RdKafka::KafkaConsumer* consumer;
-  const uint16_t batch_size;
+  std::string mBrokerUrl;
+  RdKafka::KafkaConsumer* mConsumerPtr;
+  const uint16_t batchSize;
   const uint16_t timeout;
-  static const std::string consumer_group;
-  std::vector<std::string> topics;
-  StringToStringMap topic_map;
-  moodycamel::ConcurrentQueue<std::string>* node_queue;
-  moodycamel::ConcurrentQueue<std::string>* edge_queue;
+  static const std::string consumerGroup;
+  std::string mTopic;
+  moodycamel::ConcurrentQueue<std::string>* mNodeQueuePtr;
+  moodycamel::ConcurrentQueue<std::string>* mEdgeQueuePtr;
 
 public:
   KafkaReader(const std::string&,
-              const uint16_t,
-              const uint16_t,
-              const StringToStringMap&,
+              uint16_t,
+              uint16_t,
+              std::string,
               moodycamel::ConcurrentQueue<std::string>*,
               moodycamel::ConcurrentQueue<std::string>*,
               moodycamel::ConcurrentQueue<std::string>*);
 
-  ~KafkaReader();
+  ~KafkaReader() override;
 
-  std::vector<RdKafka::Message*> consume_batch(size_t, int);
+  auto consume_batch(size_t, int) -> std::vector<RdKafka::Message*>;
 
-  virtual void run();
+  void run() override;
 };
 
 #endif

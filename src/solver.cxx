@@ -1,5 +1,5 @@
 #include "solver.hxx"
-#include "date_utils.hxx"                        // for CLOCK
+#include "date_utils.hxx"                        // for datetime
 #include "graph_helpers.hxx"                     // for FilterByVehicleType
 #include "transportation.hxx"                    // for VehicleType, AIR
 #include <boost/graph/detail/adjacency_list.hpp> // for get, num_vertices
@@ -11,142 +11,216 @@
 #include <numeric>
 #include <string> // for string
 
-std::pair<Node<Graph>, bool>
-Solver::add_node(std::string node_code_or_name) const
+auto
+Solver::add_node(const std::string& nodeCodeOrName) const
+  -> std::pair<Node<Graph>, bool>
 {
-  if (vertex_by_name.contains(node_code_or_name))
-    return { vertex_by_name.at(node_code_or_name), true };
+  if (mNamedVertexMap.contains(nodeCodeOrName)) {
+    return { mNamedVertexMap.at(nodeCodeOrName), true };
+  }
   return { Graph::null_vertex(), false };
 }
 
-std::pair<Node<Graph>, bool>
-Solver::add_node(std::shared_ptr<TransportCenter> center)
+auto
+Solver::add_node(const std::shared_ptr<TransportCenter>& center)
+  -> std::pair<Node<Graph>, bool>
 {
-  auto created = add_node(center->m_code);
+  auto created = add_node(center->code());
 
-  if (created.second)
+  if (created.second) {
     return created;
+  }
   Node<Graph> node = boost::add_vertex(center, graph);
-  vertex_by_name[center->m_code] = node;
+  mNamedVertexMap[center->code()] = node;
   return { node, true };
 }
 
-std::shared_ptr<TransportCenter>
+auto
 Solver::get_node(const Node<Graph> node) const
+  -> std::shared_ptr<TransportCenter>
 {
   return graph[node];
 }
 
-std::pair<Edge<Graph>, bool>
-Solver::add_edge(std::string edge_code) const
+auto
+Solver::add_edge(const std::string& edgeCode) const
+  -> std::pair<Edge<Graph>, bool>
 {
-  if (edge_by_name.contains(edge_code))
-    return { edge_by_name.at(edge_code), true };
+  if (mNamedEdgeMap.contains(edgeCode)) {
+    return { mNamedEdgeMap.at(edgeCode), true };
+  }
   return { null_edge<Edge<Graph>>(), false };
 }
 
-std::pair<Edge<Graph>, bool>
+auto
 Solver::add_edge(const Node<Graph>& source,
                  const Node<Graph>& target,
-                 std::shared_ptr<TransportEdge> route)
+                 const std::shared_ptr<TransportEdge>& edge)
+  -> std::pair<Edge<Graph>, bool>
 {
-  if (edge_by_name.contains(route->m_code))
-    return { edge_by_name.at(route->m_code), true };
-  route->update(graph[source], graph[target]);
-  return boost::add_edge(source, target, route, graph);
+  if (mNamedEdgeMap.contains(edge->code())) {
+    return { mNamedEdgeMap.at(edge->code()), true };
+  }
+  return boost::add_edge(source, target, edge, graph);
+}
+
+template<typename FilteredGraph>
+auto
+Solver::solve(const Node<FilteredGraph>& src,
+              const Node<FilteredGraph>& tar,
+              datetime beg,
+              datetime max,
+              const auto& wMap,
+              const auto& comparator,
+              const FilteredGraph& fGraph) const -> std::vector<Segment>
+{
+  using node_t = Node<FilteredGraph>;
+  using edge_t = Edge<FilteredGraph>;
+  using edge_pred_map_t = std::unordered_map<node_t, edge_t>;
+  using edge_pred_pmap_t = associative_property_map<edge_pred_map_t>;
+
+  edge_pred_map_t preds;
+  edge_pred_pmap_t predsPmap(preds);
+  std::vector<datetime> distances(num_vertices(fGraph), datetime::max());
+
+  auto recorder = record_edge_predecessors(predsPmap, on_edge_relaxed());
+  dijkstra_visitor<decltype(recorder)> visitor(recorder);
+
+  dijkstra_shortest_paths(
+    fGraph,
+    src,
+    distance_map(distances.data())
+      .weight_map(wMap)
+      .distance_compare(comparator)
+      .distance_combine([](datetime current, const WeightFunction& edgeCost) {
+        return edgeCost(current);
+      })
+      .distance_zero(beg)
+      .distance_inf(max)
+      .visitor(visitor));
+
+  std::vector<Segment> path;
+
+  node_t node = tar;
+  datetime distance = distances[node];
+
+  for (; node != src; node = source(predsPmap[node], fGraph)) {
+    auto outEdge = predsPmap[node];
+    distance = distances[node];
+
+    if (distance == max) {
+      break;
+    }
+    path.emplace_back(fGraph[node], fGraph[outEdge], distance);
+  }
+
+  if (node == src) {
+    path.emplace_back(fGraph[node], nullptr, distances[node]);
+  }
+  std::reverse(path.begin(), path.end());
+  return path;
 }
 
 template<>
-std::vector<Segment>
+auto
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
-  CLOCK start) const
+  datetime start) const -> std::vector<Segment>
 {
-  typedef FilterByVehicleType<Graph, VehicleType::AIR> FilterType;
-  typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
+  using FilterType = FilterByVehicleType<Graph, VehicleType::AIR>;
+  using FilteredGraph = boost::filtered_graph<Graph, FilterType>;
+
   FilterType filter{ &graph };
-  FilteredGraph filtered_graph(graph, filter);
-  return path_forward(source, target, start, filtered_graph);
+  FilteredGraph fGraph(graph, filter);
+  return solve(source,
+               target,
+               start,
+               datetime::max(),
+               make_transform_value_property_map(
+                 [](const auto& edge) -> WeightFunction {
+                   return edge->template weight<PathTraversalMode::FORWARD>();
+                 },
+                 boost::get(edge_bundle, fGraph)),
+               std::less<>(),
+               fGraph);
 }
 
 template<>
-std::vector<Segment>
+auto
 Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,
-  CLOCK start) const
+  datetime start) const -> std::vector<Segment>
 {
-  typedef FilterByVehicleType<Graph, VehicleType::SURFACE> FilterType;
-  typedef boost::filtered_graph<Graph, FilterType> FilteredGraph;
+  using FilterType = FilterByVehicleType<Graph, VehicleType::SURFACE>;
+  using FilteredGraph = boost::filtered_graph<Graph, FilterType>;
+
   FilterType filter{ &graph };
-  FilteredGraph filtered_graph(graph, filter);
-  return path_forward(source, target, start, filtered_graph);
+  FilteredGraph fGraph(graph, filter);
+  return solve(source,
+               target,
+               start,
+               datetime::max(),
+               boost::make_transform_value_property_map(
+                 [](const auto& edge) -> WeightFunction {
+                   return edge->template weight<PathTraversalMode::FORWARD>();
+                 },
+                 get(edge_bundle, fGraph)),
+               std::less<>(),
+               fGraph);
 }
 
 template<>
-std::vector<Segment>
+auto
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   const Node<Graph>& source,
   const Node<Graph>& target,
-  CLOCK start) const
+  datetime start) const -> std::vector<Segment>
 {
-  typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
-  typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::AIR> FilterType;
-  typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;
-  REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
-  FilterType filter{ &reversed_graph };
-  FilteredGraph filtered_graph(reversed_graph, filter);
-  return path_reverse(source, target, start, filtered_graph);
+  using ReversedGraph = boost::reverse_graph<Graph, const Graph&>;
+  using FilterType = FilterByVehicleType<ReversedGraph, VehicleType::AIR>;
+  using FilteredGraph = boost::filtered_graph<ReversedGraph, FilterType>;
+
+  ReversedGraph revGraph = boost::make_reverse_graph(graph);
+  FilterType filter{ &revGraph };
+  FilteredGraph fGraph(revGraph, filter);
+  return solve(source,
+               target,
+               start,
+               datetime::min(),
+               boost::make_transform_value_property_map(
+                 [](const auto& edge) -> WeightFunction {
+                   return edge->template weight<PathTraversalMode::REVERSE>();
+                 },
+                 get(edge_bundle, fGraph)),
+               std::greater<>(),
+               fGraph);
 }
 
 template<>
-std::vector<Segment>
+auto
 Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   const Node<Graph>& source,
   const Node<Graph>& target,
-  CLOCK start) const
+  datetime start) const -> std::vector<Segment>
 {
-  typedef boost::reverse_graph<Graph, const Graph&> REVERSED_GRAPH;
-  typedef FilterByVehicleType<REVERSED_GRAPH, VehicleType::SURFACE> FilterType;
-  typedef boost::filtered_graph<REVERSED_GRAPH, FilterType> FilteredGraph;
-  REVERSED_GRAPH reversed_graph = boost::make_reverse_graph(graph);
-  FilterType filter{ &reversed_graph };
-  FilteredGraph filtered_graph(reversed_graph, filter);
-  return path_reverse(source, target, start, filtered_graph);
-}
+  using ReversedGraph = boost::reverse_graph<Graph, const Graph&>;
+  using FilterType = FilterByVehicleType<ReversedGraph, VehicleType::SURFACE>;
+  using FilteredGraph = boost::filtered_graph<ReversedGraph, FilterType>;
 
-std::string
-Solver::show() const
-{
-  return fmt::format(
-    "Graph<{}, {}>", boost::num_vertices(graph), boost::num_edges(graph));
-}
-
-std::string
-Solver::show_all() const
-{
-  std::vector<std::string> output;
-
-  for (auto vertex : boost::make_iterator_range(boost::vertices(graph))) {
-    auto node = graph[vertex];
-    output.push_back(node->m_code);
-  }
-
-  for (auto edge : boost::make_iterator_range(boost::edges(graph))) {
-    auto route = graph[edge];
-    auto source = boost::source(edge, graph);
-    auto target = boost::target(edge, graph);
-    output.push_back(fmt::format("{}: {} TO {}",
-                                 route->m_code,
-                                 graph[source]->m_code,
-                                 graph[target]->m_code));
-  }
-
-  return std::accumulate(output.begin(),
-                         output.end(),
-                         std::string{},
-                         [](const std::string& acc, const std::string& arg) {
-                           return fmt::format("{}\n{}", acc, arg);
-                         });
+  ReversedGraph revGraph = boost::make_reverse_graph(graph);
+  FilterType filter{ &revGraph };
+  FilteredGraph fGraph(revGraph, filter);
+  return solve(source,
+               target,
+               start,
+               datetime::min(),
+               boost::make_transform_value_property_map(
+                 [](const auto& edge) -> WeightFunction {
+                   return edge->template weight<PathTraversalMode::REVERSE>();
+                 },
+                 get(edge_bundle, fGraph)),
+               std::greater<>(),
+               fGraph);
 }

@@ -24,7 +24,7 @@ public:
                const std::string&,
                moodycamel::ConcurrentQueue<std::string>*);
 
-  virtual void run();
+  void run() override;
 };
 
 #endif

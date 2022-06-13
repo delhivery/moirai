@@ -21,7 +21,7 @@ struct show_graph : public boost::base_visitor<show_graph<DistanceMap>>
   {
     auto source = boost::source(edge, graph);
     auto target = boost::target(edge, graph);
-    auto distance_source = boost::get(*distance_map, source);
-    auto distance_target = boost::get(*distance_map, target);
+    auto sourceDistance = boost::get(*distance_map, source);
+    auto targetDistance = boost::get(*distance_map, target);
   }
 };

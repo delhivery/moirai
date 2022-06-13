@@ -2,9 +2,8 @@
 #include "concurrentqueue.h"
 #include <string>
 
-ScanReader::ScanReader(moodycamel::ConcurrentQueue<std::string>* load_queue)
-  : Poco::Runnable()
-  , load_queue(load_queue)
+ScanReader::ScanReader(moodycamel::ConcurrentQueue<std::string>* loadQueuePtr)
+  : mloadQueuePtr(loadQueuePtr)
 {
-  running = true;
+  mRunning = true;
 }

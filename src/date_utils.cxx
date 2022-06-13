@@ -7,51 +7,60 @@ time_of_day::time_of_day() noexcept
 }
 
 time_of_day::time_of_day(minutes _minutes) noexcept
-  : mTime(_minutes % ONE_DAY)
+  : mTime(_minutes % oneDay)
 {
 }
 
-time_of_day&
-time_of_day::operator+=(const time_of_day& other) noexcept
+auto
+time_of_day::operator+=(const time_of_day& other) noexcept -> time_of_day&
 {
   mTime += other.mTime;
-  mTime %= ONE_DAY;
-  // mTime = (mTime.to_duration() + other.mTime.to_duration()) % ONE_DAY;
+  mTime %= oneDay;
+  // mTime = (mTime.to_duration() + other.mTime.to_duration()) % oneDay;
   return *this;
 }
 
-minutes
-time_of_day::to_duration() const noexcept
+auto
+time_of_day::to_duration() const noexcept -> minutes
 {
   return mTime;
 }
 
-const time_of_day
-time_of_day::operator+(const time_of_day& other) const noexcept
+auto
+time_of_day::operator+(const time_of_day& other) const noexcept -> time_of_day
 {
   time_of_day result = *this;
   result += other;
   return result;
 }
 
-time_of_day&
-time_of_day::operator-=(const time_of_day& other) noexcept
+auto
+time_of_day::operator-=(const time_of_day& other) noexcept -> time_of_day&
 {
   mTime -= other.mTime;
-  mTime %= ONE_DAY;
+  mTime %= oneDay;
   return *this;
 }
 
-const time_of_day
-time_of_day::operator-(const time_of_day& other) const noexcept
+auto
+time_of_day::operator-(const time_of_day& other) const noexcept -> time_of_day
 {
   time_of_day result = *this;
   result -= other;
   return result;
 }
 
-datetime
-parse_date(std::string_view dateString)
+auto
+parse_time(std::string_view timeString) -> minutes
+{
+  minutes result{ 0 };
+  std::stringstream timeStream(std::string(timeString), std::ios_base::in);
+  timeStream >> date::parse("%R", result);
+  return result;
+}
+
+auto
+parse_date(std::string_view dateString) -> datetime
 {
   datetime result;
   std::stringstream dateStream(std::string(dateString), std::ios_base::in);
@@ -59,21 +68,11 @@ parse_date(std::string_view dateString)
   return result;
 }
 
-datetime
-parse_datetime(std::string_view dateString)
+auto
+parse_datetime(std::string_view dateString) -> datetime
 {
   datetime result;
   std::stringstream dateStream(std::string(dateString), std::ios_base::in);
   dateStream >> date::parse("%F %R", result);
   return result;
 }
-
-/*
-datetime
-get_departure(datetime start, time_of_day departure)
-{
-  time_of_day minutes_start{ start - floor<days>(start) };
-  minutes wait_time{ datemod(departure - minutes_start, days{ 1 }) };
-  return start + wait_time;
-}
-*/

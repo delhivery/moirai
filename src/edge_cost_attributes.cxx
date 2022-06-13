@@ -10,8 +10,8 @@ TemporalEdgeCostAttributes::TemporalEdgeCostAttributes(
   const std::vector<uint8_t>& departureDays)
   : mLoading(loading)
   , mDeparture(departure)
-  , mDuration(duration)
   , mUnloading(unloading)
+  , mDuration(duration)
   , mTransient(false)
 {
   static_assert(sizeof(mDepartureDays) == 1);
@@ -19,8 +19,9 @@ TemporalEdgeCostAttributes::TemporalEdgeCostAttributes(
 
   mArrival = mDeparture + mDuration;
 
-  for (const auto& departureDay : departureDays)
-    mDepartureDays |= 1 << CHAR_BIT - departureDay - 2;
+  for (const auto& departureDay : departureDays) {
+    mDepartureDays |= 1 << (CHAR_BIT - departureDay - 2);
+  }
   mArrivalDays = mDepartureDays;
 
   uint8_t arrivalOffset = 0;
@@ -28,14 +29,15 @@ TemporalEdgeCostAttributes::TemporalEdgeCostAttributes(
 
   while (cDuration > days(1)) {
     arrivalOffset++;
-    arrivalOffset %= 7;
+    arrivalOffset %= daysInWeek;
     cDuration -= days(1);
   }
 
-  if (mArrival < mDeparture)
-    arrivalOffset = (arrivalOffset + 1) % 7;
+  if (mArrival < mDeparture) {
+    arrivalOffset = (arrivalOffset + 1) % daysInWeek;
+  }
 
-  mArrivalDays = mDepartureDays << CHAR_BIT - arrivalOffset;
+  mArrivalDays = mDepartureDays << (CHAR_BIT - arrivalOffset);
   mArrivalDays >>= 1;
   mArrivalDays |= mDepartureDays >> arrivalOffset;
 }
@@ -47,113 +49,116 @@ TemporalEdgeCostAttributes::transient() const -> bool
 }
 
 template<>
-int8_t
+auto
 TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::FORWARD>(
-  const weekday& startDay) const
+  const weekday& startDay) const -> int8_t
 {
   uint8_t toShift = startDay.c_encoding();
-  uint8_t lShift = mDepartureDays << toShift + 1;
+  uint8_t lShift = mDepartureDays << (toShift + 1);
   lShift >>= 1;
-  uint8_t rShift = mDepartureDays >> 7 - toShift;
+  uint8_t rShift = mDepartureDays >> (daysInWeek - toShift);
   uint8_t result = lShift | rShift;
   return std::countl_zero(result) - 1;
 }
 
 template<>
-int8_t
+auto
 TemporalEdgeCostAttributes::next_working_day<PathTraversalMode::REVERSE>(
-  const weekday& startDay) const
+  const weekday& startDay) const -> int8_t
 {
   uint8_t toShift = startDay.c_encoding();
-  uint8_t rShift = mDepartureDays >> CHAR_BIT - toShift - 2;
-  uint8_t lShift = mDepartureDays << toShift + 2;
+  uint8_t rShift = mDepartureDays >> (CHAR_BIT - toShift - 2);
+  uint8_t lShift = mDepartureDays << (toShift + 2);
   lShift >>= 1;
   uint8_t result = lShift | rShift;
   return std::countr_zero(result);
 };
 
-minutes
-TemporalEdgeCostAttributes::loading() const
+auto
+TemporalEdgeCostAttributes::loading() const -> minutes
 {
   return mLoading;
 }
 
-time_of_day
-TemporalEdgeCostAttributes::departure() const
+auto
+TemporalEdgeCostAttributes::departure() const -> time_of_day
 {
   return mDeparture;
 }
 
-time_of_day
-TemporalEdgeCostAttributes::arrival() const
+auto
+TemporalEdgeCostAttributes::arrival() const -> time_of_day
 {
   return mArrival;
 }
 
-minutes
-TemporalEdgeCostAttributes::unloading() const
+auto
+TemporalEdgeCostAttributes::unloading() const -> minutes
 {
   return mUnloading;
 }
 
-minutes
-TemporalEdgeCostAttributes::duration() const
+auto
+TemporalEdgeCostAttributes::duration() const -> minutes
 {
   return mDuration;
 }
 
 template<>
-datetime
-EdgeTraversalCost::operator()<PathTraversalMode::FORWARD>(
-  const datetime& arrival,
-  const TemporalEdgeCostAttributes& costAttrs) const
+auto
+TemporalEdgeCostAttributes::weight<PathTraversalMode::FORWARD>() const
+  -> WeightFunction
 {
-  if (costAttrs.transient())
-    return arrival;
-  auto arrivalDay = std::chrono::floor<days>(arrival);
-  auto arrivalWeekday = weekday(std::chrono::sys_days(arrivalDay));
-  time_of_day arrivalTime = arrival - arrivalDay;
-  arrivalTime += costAttrs.loading();
+  return [this](const datetime& arrival) -> datetime {
+    if (mTransient) {
+      return arrival;
+    }
+    datetime arrivalWithLoading = arrival + mLoading;
 
-  minutes timeIdle(0);
-  days baseOffset(0), daysIdle(0);
+    auto arrivalDay = std::chrono::floor<days>(arrivalWithLoading);
+    auto arrivalWeekday = weekday(std::chrono::sys_days(arrivalDay));
+    time_of_day arrivalTime = arrivalWithLoading - arrivalDay;
 
-  // If departure earlier than start time, then we need to at least wait until
-  // next day to depart. So we need to find the next available working day
-  // starting stary_day +1
-  if (arrivalTime > costAttrs.departure())
-    baseOffset = days(1);
-  daysIdle = days(costAttrs.next_working_day<PathTraversalMode::FORWARD>(
-    arrivalWeekday + baseOffset));
+    minutes timeIdle(0);
+    days baseOffset(0);
+    days daysIdle(0);
 
-  timeIdle = baseOffset + daysIdle + costAttrs.departure().to_duration() -
-             arrivalTime.to_duration();
-  return arrival + costAttrs.loading() + timeIdle + costAttrs.duration() +
-         costAttrs.unloading();
+    if (arrivalTime > mDeparture) {
+      baseOffset = days(1);
+    }
+    daysIdle = days(next_working_day<PathTraversalMode::FORWARD>(
+      arrivalWeekday + baseOffset));
+    timeIdle = baseOffset + daysIdle + mDeparture.to_duration() -
+               arrivalTime.to_duration();
+    return arrival + mLoading + timeIdle + mDuration + mUnloading;
+  };
 }
 
 template<>
-datetime
-EdgeTraversalCost::operator()<PathTraversalMode::REVERSE>(
-  const datetime& arrival,
-  const TemporalEdgeCostAttributes& costAttrs) const
+auto
+TemporalEdgeCostAttributes::weight<PathTraversalMode::REVERSE>() const
+  -> WeightFunction
 {
-  if (costAttrs.transient())
-    return arrival;
-  auto arrivalDay = std::chrono::floor<days>(arrival);
-  auto arrivalWeekday = weekday(std::chrono::sys_days(arrivalDay));
-  time_of_day arrivalTime = arrival - arrivalDay;
-  arrivalTime -= costAttrs.unloading();
+  return [this](const datetime& arrival) -> datetime {
+    if (mTransient) {
+      return arrival;
+    }
+    datetime arrivalWithUnloading = arrival - mUnloading;
+    auto arrivalDay = std::chrono::floor<days>(arrivalWithUnloading);
+    auto arrivalWeekday = weekday(std::chrono::sys_days(arrivalDay));
+    time_of_day arrivalTime = arrivalWithUnloading - arrivalDay;
 
-  minutes timeIdle(0);
-  days baseOffset(0), daysIdle(0);
+    minutes timeIdle(0);
+    days baseOffset(0);
+    days daysIdle(0);
 
-  if (arrivalTime < costAttrs.arrival())
-    baseOffset = days(1);
-  daysIdle = days(costAttrs.next_working_day<PathTraversalMode::REVERSE>(
-    arrivalWeekday - baseOffset));
-  timeIdle = baseOffset + daysIdle + arrivalTime.to_duration() -
-             costAttrs.arrival().to_duration();
-  return arrival - costAttrs.unloading() - timeIdle - costAttrs.duration() -
-         costAttrs.loading();
+    if (arrivalTime < mArrival) {
+      baseOffset = days(1);
+    }
+    daysIdle = days(next_working_day<PathTraversalMode::REVERSE>(
+      arrivalWeekday - baseOffset));
+    timeIdle = baseOffset + daysIdle + arrivalTime.to_duration() -
+               mArrival.to_duration();
+    return arrival - mUnloading - timeIdle - mDuration - mLoading;
+  };
 }

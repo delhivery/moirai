@@ -2,6 +2,7 @@
 #define moirai_edge_costs
 
 #include "date_utils.hxx"
+#include <functional>
 #include <vector>
 
 enum PathTraversalMode : std::uint8_t
@@ -10,20 +11,24 @@ enum PathTraversalMode : std::uint8_t
   REVERSE = 1,
 };
 
+using WeightFunction = std::function<datetime(const datetime&)>;
+
 class TemporalEdgeCostAttributes
 {
-private:
+protected:
   minutes mLoading;
   time_of_day mDeparture;
   time_of_day mArrival;
   minutes mUnloading;
   minutes mDuration;
   uint8_t mDepartureDays = 0;
-  uint8_t mArrivalDays = 0;
-  bool mTransient = false;
+  uint8_t mArrivalDays;
+  bool mTransient;
 
 public:
-  TemporalEdgeCostAttributes() = default;
+  static constexpr int daysInWeek = 7;
+
+  TemporalEdgeCostAttributes();
 
   TemporalEdgeCostAttributes(const minutes&,
                              const time_of_day&,
@@ -32,27 +37,22 @@ public:
                              const std::vector<uint8_t>&);
 
   template<PathTraversalMode>
-  int8_t next_working_day(const weekday&) const;
+  [[nodiscard]] auto next_working_day(const weekday&) const -> int8_t;
 
-  auto transient() const -> bool;
+  [[nodiscard]] auto transient() const -> bool;
 
-  minutes loading() const;
+  [[nodiscard]] auto loading() const -> minutes;
 
-  time_of_day departure() const;
+  [[nodiscard]] auto departure() const -> time_of_day;
 
-  time_of_day arrival() const;
+  [[nodiscard]] auto arrival() const -> time_of_day;
 
-  minutes unloading() const;
+  [[nodiscard]] auto unloading() const -> minutes;
 
-  minutes duration() const;
-};
+  [[nodiscard]] auto duration() const -> minutes;
 
-struct EdgeTraversalCost
-{
   template<PathTraversalMode>
-  datetime operator()(const datetime&, const TemporalEdgeCostAttributes&) const;
+  [[nodiscard]] auto weight() const -> WeightFunction;
 };
-
-datetime get_departure(datetime, time_of_day);
 
 #endif

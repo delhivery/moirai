@@ -24,35 +24,37 @@ void
 FileReader::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  std::ifstream load_file_stream;
-  std::ofstream clear_file_stream;
-  int last_position = 0;
+  std::ifstream loadStream;
+  std::ofstream clearStream;
+  int lastPosition = 0;
+  const uint64_t sleepFor = 200;
 
   try {
-    load_file_stream.open(load_file);
-    assert(load_file_stream.is_open());
-    assert(!load_file_stream.fail());
+    loadStream.open(load_file);
+    assert(loadStream.is_open());
+    assert(!loadStream.fail());
   } catch (const std::exception& exc) {
     app.logger().error(fmt::format("FR: Error opening file: {}", exc.what()));
   }
-  while (running) {
+  while (mRunning) {
     try {
-      Poco::Thread::sleep(200);
-      load_file_stream.seekg(0, std::ios::end);
-      auto filesize = load_file_stream.tellg();
+      Poco::Thread::sleep(sleepFor);
+      loadStream.seekg(0, std::ios::end);
+      auto filesize = loadStream.tellg();
 
-      for (auto current = last_position; current < filesize;
-           current = load_file_stream.tellg()) {
-        load_file_stream.seekg(last_position, std::ios::beg);
+      for (auto current = lastPosition; current < filesize;
+           current = loadStream.tellg()) {
+        loadStream.seekg(lastPosition, std::ios::beg);
         std::string input;
-        std::getline(load_file_stream, input);
-        last_position = load_file_stream.tellg();
+        std::getline(loadStream, input);
+        lastPosition = loadStream.tellg();
         auto payload = nlohmann::json::parse(input);
 
-        if (payload.is_object())
-          load_queue->enqueue(payload.dump());
-        else
+        if (payload.is_object()) {
+          mloadQueuePtr->enqueue(payload.dump());
+        } else {
           app.logger().error("Payload is not an object");
+        }
       }
     } catch (const std::exception& exc) {
       app.logger().error(fmt::format("FR: Error occurred: {}", exc.what()));

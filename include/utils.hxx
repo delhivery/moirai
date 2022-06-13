@@ -8,23 +8,24 @@
 #include <string>
 #include <string_view>
 
-typedef boost::bimap<std::string, std::string> StringToStringMap;
+using StringToStringMap = boost::bimap<std::string, std::string>;
 
-std::string
-indexAndTypeToPath(const std::string&, const std::string&);
+auto
+indexAndTypeToPath(const std::string&, const std::string&) -> std::string;
 
-std::string
-indexAndTypeToPath(const std::string&, const std::string&, const std::string&);
+auto
+indexAndTypeToPath(const std::string&, const std::string&, const std::string&)
+  -> std::string;
 
-std::string
-getEncodedCredentials(const std::string&, const std::string&);
+auto
+getEncodedCredentials(const std::string&, const std::string&) -> std::string;
 
 void
 to_lower(std::string&);
 
 template<typename T>
-T
-getJSONValue(const nlohmann::json& data, std::string_view key_string)
+auto
+getJSONValue(const nlohmann::json& data, std::string_view key_string) -> T
 {
   constexpr std::string_view delim{ "." };
   auto value = data;
@@ -46,8 +47,8 @@ getJSONValue(const nlohmann::json& data, std::string_view key_string)
 }
 
 template<typename T>
-T
-getJSONValue(const nlohmann::json& data, size_t index)
+auto
+getJSONValue(const nlohmann::json& data, size_t index) -> T
 {
   return data.at(index).get<T>();
 }

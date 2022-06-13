@@ -16,39 +16,31 @@ class time_of_day
 {
 private:
   minutes mTime;
-  static constexpr std::chrono::days ONE_DAY{ 1 };
+  static constexpr std::chrono::days oneDay{ 1 };
 
 public:
   time_of_day() noexcept;
 
   time_of_day(minutes _minutes) noexcept;
 
-  minutes to_duration() const noexcept;
+  [[nodiscard]] auto to_duration() const noexcept -> minutes;
 
-  time_of_day& operator+=(const time_of_day& other) noexcept;
+  auto operator+=(const time_of_day& other) noexcept -> time_of_day&;
 
-  const time_of_day operator+(const time_of_day& other) const noexcept;
+  auto operator+(const time_of_day& other) const noexcept -> time_of_day;
 
-  time_of_day& operator-=(const time_of_day& other) noexcept;
+  auto operator-=(const time_of_day& other) noexcept -> time_of_day&;
 
-  const time_of_day operator-(const time_of_day& other) const noexcept;
+  auto operator-(const time_of_day& other) const noexcept -> time_of_day;
 
-  auto operator<=>(const time_of_day& other) const = default;
+  auto operator<=>(const time_of_day& other) const
+    -> std::strong_ordering = default;
 };
 
-datetime parse_date(std::string_view);
+auto parse_time(std::string_view) -> minutes;
 
-datetime parse_datetime(std::string_view);
+auto parse_date(std::string_view) -> datetime;
 
-/*
-datetime
-iso_to_date(std::string_view, const bool);
-
-datetime
-iso_to_date(std::string_view, const time_of_day&);
-
-int64_t
-now_as_int64();
-*/
+auto parse_datetime(std::string_view) -> datetime;
 
 #endif

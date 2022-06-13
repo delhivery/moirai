@@ -9,7 +9,7 @@ set(CMAKE_GENERATOR Ninja)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fuse-ld=mold") Treat warnings
 # as errors: Werror Stop compiling on first error: Wfatal-errors
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")

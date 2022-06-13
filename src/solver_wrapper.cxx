@@ -24,27 +24,24 @@
 #include <unordered_map>
 #include <vector>
 
-constexpr uint16_t OFFSET_IST = -1 * 330 * 60;
-
 SolverWrapper::SolverWrapper(
-  moodycamel::ConcurrentQueue<std::string>* load_queue,
-  moodycamel::ConcurrentQueue<std::string>* solution_queue,
-  const std::shared_ptr<Solver> solver,
-  const std::filesystem::path& center_timings_filename)
-  : load_queue(load_queue)
-  , solution_queue(solution_queue)
-  , solver(solver)
+  moodycamel::ConcurrentQueue<std::string>* loadQueue,
+  moodycamel::ConcurrentQueue<std::string>* solutionQueue,
+  std::shared_ptr<Solver> solver)
+  : solver(solver)
+  , mLoadQueuePtr(loadQueue)
+  , mSolutionQueuePtr(solutionQueue)
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
+  // Poco::Util::Application& app = Poco::Util::Application::instance();
   running = true;
 }
 
 SolverWrapper::SolverWrapper(
-  moodycamel::ConcurrentQueue<std::string>* load_queue,
-  moodycamel::ConcurrentQueue<std::string>* solution_queue
+  moodycamel::ConcurrentQueue<std::string>* loadQueuePtr,
+  moodycamel::ConcurrentQueue<std::string>* solutionQueuePtr
 #ifdef WITH_NODE_FILE
   ,
-  std::filesystem::path& node_file
+  std::filesystem::path& nodeFile
 #else
   ,
   const std::string& node_uri,
@@ -54,17 +51,17 @@ SolverWrapper::SolverWrapper(
 #endif
 #ifdef WITH_EDGE_FILE
   ,
-  std::filesystem::path& edge_file
+  std::filesystem::path& edgeFile
 #else
   ,
   const std::string& edge_uri,
   const std::string& edge_auth
 #endif
   )
-  : load_queue(load_queue)
-  , solution_queue(solution_queue)
+  : mLoadQueuePtr(loadQueuePtr)
+  , mSolutionQueuePtr(solutionQueuePtr)
 #ifdef WITH_NODE_FILE
-  , node_file(node_file)
+  , nodeFile(nodeFile)
 #else
   , node_uri(node_uri)
   , node_idx(node_idx)
@@ -72,18 +69,17 @@ SolverWrapper::SolverWrapper(
   , node_pass(node_pass)
 #endif
 #ifdef WITH_EDGE_FILE
-  , edge_file(edge_file)
+  , edgeFile(edgeFile)
 #else
   , edge_uri(edge_uri)
   , edge_auth(edge_auth)
 #endif
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
+  // Poco::Util::Application& app = Poco::Util::Application::instance();
   solver = std::make_shared<Solver>();
   init_nodes();
   init_custody();
   init_edges();
-  app.logger().debug(fmt::format("Initialized graph: {}", solver->show()));
   running = true;
 }
 
@@ -94,7 +90,7 @@ SolverWrapper::init_nodes()
   auto data = nlohmann::json::array();
 
 #ifdef WITH_NODE_FILE
-  std::ifstream infile{ node_file, std::ios::in };
+  std::ifstream infile{ nodeFile, std::ios::in };
   infile >> data;
   infile.close();
 #else
@@ -143,49 +139,64 @@ SolverWrapper::init_nodes()
   } while (hits.size() > 0);
 #endif
 
-  std::for_each(data.begin(), data.end(), [this](auto const& facility) {
-    std::string node_id, node_name, node_lh_o, node_arrc, node_prop;
-
-    node_id = getJSONValue<std::string>(facility, "facility_code");
-    node_name = getJSONValue<std::string>(facility, "name");
-    node_lh_o = getJSONValue<std::string>(
-      facility, "facility_attributes.OutboundProcessingTime");
-    node_arrc = getJSONValue<std::string>(
-      facility, "facility_attributes.CenterArrivalCutoff");
-    node_prop = getJSONValue<std::string>(facility, "property_id");
-
-    auto node = std::make_shared<TransportCenter>(node_id, node_name);
-    node->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-      time_string_to_time(node_lh_o));
-    node->set_cutoff(time_string_to_time(node_arrc));
-    auto [vertex, has_vertex] = solver->add_node(node);
-
-    if (!node_prop.empty() && has_vertex) {
-      if (!colocated_nodes.contains(node_prop))
-        colocated_nodes[node_prop] = std::vector<Node<Graph>>{};
-      colocated_nodes[node_prop].emplace_back(vertex);
-    }
-  });
+  std::unordered_map<std::string, std::vector<Node<Graph>>> colocatedNodes;
 
   std::for_each(
-    colocated_nodes.begin(), colocated_nodes.end(), [this](const auto& entry) {
+    data.begin(), data.end(), [this, &colocatedNodes](auto const& facility) {
+      auto index = getJSONValue<std::string>(facility, "facility_code");
+      auto name = getJSONValue<std::string>(facility, "name");
+      auto outProcessTime = getJSONValue<std::string>(
+        facility, "facility_attributes.OutboundProcessingTime");
+      auto arrivalCutoff = getJSONValue<std::string>(
+        facility, "facility_attributes.CenterArrivalCutoff");
+      auto propertyId = getJSONValue<std::string>(facility, "property_id");
+
+      auto node = std::make_shared<TransportCenter>(
+        index, name, parse_time(arrivalCutoff));
+      node->template set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+        parse_time(outProcessTime));
+
+      auto [vertex, has_vertex] = solver->add_node(node);
+
+      if (not propertyId.empty() && has_vertex) {
+        if (not colocatedNodes.contains(propertyId)) {
+          colocatedNodes[propertyId] = std::vector<Node<Graph>>{};
+        }
+        colocatedNodes[propertyId].emplace_back(vertex);
+      }
+    });
+
+  std::for_each(
+    colocatedNodes.begin(),
+    colocatedNodes.end(),
+    [this, &app](const auto& entry) {
       const auto [group_id, nodes] = entry;
       for (size_t i = 0; i < nodes.size(); ++i) {
         for (size_t j = i + 1; j < nodes.size(); ++j) {
-          auto node_i = nodes[i];
-          auto node_j = nodes[j];
+          auto nodeI = nodes[i];
+          auto nodeJ = nodes[j];
+          bool added = false;
+          added = solver
+                    ->add_edge(nodeI,
+                               nodeJ,
+                               std::make_shared<TransportEdge>(
+                                 fmt::format("CUSTODY-{}-{}", nodeI, nodeJ),
+                                 fmt::format("CUSTODY-{}-{}", nodeI, nodeJ)))
+                    .second;
+          if (not added) {
+            app.logger().debug("Unable to add custody edge");
+          }
+          added = solver
+                    ->add_edge(nodeJ,
+                               nodeI,
+                               std::make_shared<TransportEdge>(
+                                 fmt::format("CUSTODY-{}-{}", nodeJ, nodeI),
+                                 fmt::format("CUSTODY-{}-{}", nodeJ, nodeI)))
+                    .second;
 
-          solver->add_edge(node_i,
-                           node_j,
-                           std::make_shared<TransportEdge>(
-                             fmt::format("CUSTODY-{}-{}", node_i, node_j),
-                             fmt::format("CUSTODY-{}-{}", node_i, node_j)));
-
-          solver->add_edge(node_j,
-                           node_i,
-                           std::make_shared<TransportEdge>(
-                             fmt::format("CUSTODY-{}-{}", node_j, node_i),
-                             fmt::format("CUSTODY-{}-{}", node_j, node_i)));
+          if (not added) {
+            app.logger().debug("Unable to add rev custody edge");
+          }
         }
       }
     });
@@ -197,7 +208,7 @@ SolverWrapper::init_edges()
   Poco::Util::Application& app = Poco::Util::Application::instance();
   auto data = nlohmann::json::array();
 #ifdef WITH_EDGE_FILE
-  std::ifstream infile{ edge_file, std::ios::in };
+  std::ifstream infile{ edgeFile, std::ios::in };
   infile >> data;
   infile.close();
 #else
@@ -229,7 +240,6 @@ SolverWrapper::init_edges()
       static_cast<uint16_t>(getJSONValue<double>(route, "reporting_time_ss")) +
       OFFSET_IST;
     auto stops = getJSONValue<nlohmann::json>(route, "halt_centers");
-    // TIME_OF_DAY offset{ reporting_time - 330 * 60 };
     uint16_t n_stops = stops.size();
 
     for (size_t idx_s = 0; idx_s < n_stops; ++idx_s)
@@ -286,22 +296,23 @@ SolverWrapper::init_edges()
 
 auto
 SolverWrapper::find_paths(
-  const std::string item,
-  const std::string item_source_idx,
-  const std::string item_target_idx,
-  const CLOCK item_start,
-  const CLOCK item_target_limit,
-  const std::vector<TransportationLoadSubItem>& subitems) const
+  const std::string& item,
+  const std::string& item_source_idx,
+  const std::string& item_target_idx,
+  const datetime item_start,
+  const datetime item_target_limit,
+  const std::vector<TransportationLoadAttributes>& subitems) const
+  -> nlohmann::json
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  CLOCK item_reach_by = item_target_limit;
+  datetime item_reach_by = item_target_limit;
   nlohmann::json response = { { "_id", item },
                               { "waybill", item },
                               { "package", item } };
 
   std::vector<Segment> item_route_e, item_route_u;
 
-  CLOCK item_target_arrival_e{ CLOCK::max() };
+  datetime item_target_arrival_e{ datetime::max() };
 
   auto [item_source, has_item_source] = solver->add_node(item_source_idx);
   auto [item_target, has_item_target] = solver->add_node(item_target_idx);
@@ -312,7 +323,7 @@ SolverWrapper::find_paths(
         item_source, item_target, item_start);
 
     if (item_route_e.size() > 0) {
-      auto item_arrival_target_e = item_route_e.back().m_distance;
+      auto item_arrival_target_e = item_route_e.back().distance();
 
       if (item_arrival_target_e < item_reach_by) {
         std::vector<std::vector<Segment>> subitems_route_u;
@@ -321,10 +332,10 @@ SolverWrapper::find_paths(
           std::min_element(subitems.begin(),
                            subitems.end(),
                            [](const auto& lhs, const auto& rhs) {
-                             return lhs.m_reach_by < rhs.m_reach_by;
+                             return lhs.reach_by() < rhs.reach_by();
                            });
 
-        if (subitems_reach_by_min->m_reach_by > item_arrival_target_e) {
+        if (subitems_reach_by_min->reach_by() > item_arrival_target_e) {
           std::for_each(
             subitems.begin(),
             subitems.end(),
@@ -345,15 +356,15 @@ SolverWrapper::find_paths(
               return lhs.back().m_distance < rhs.back().m_distance;
             });
 
-          if (subitems_depart_by_min->back().m_distance >
+          if (subitems_depart_by_min->back().mDistance >
               item_arrival_target_e) {
-            item_reach_by = subitems_depart_by_min->back().m_distance;
+            item_reach_by = subitems_depart_by_min->back().mDistance;
             item_route_u =
               solver
                 ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
                   item_target,
                   item_source,
-                  subitems_depart_by_min->back().m_distance);
+                  subitems_depart_by_min->back().mDistance);
           }
         }
       }
@@ -402,15 +413,15 @@ SolverWrapper::run()
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
 
-  while (running or load_queue->size_approx() > 0) {
+  while (running or mLoadQueuePtr->size_approx() > 0) {
     try {
       Poco::Thread::sleep(200);
 
-      if (solution_queue->size_approx() > 10000)
+      if (mSolutionQueuePtr->size_approx() > 10000)
         continue;
       std::string payloads[100];
 
-      if (size_t num_packages = load_queue->try_dequeue_bulk(payloads, 64);
+      if (size_t num_packages = mLoadQueuePtr->try_dequeue_bulk(payloads, 64);
           num_packages > 0) {
         std::for_each(
           payloads,
@@ -453,11 +464,11 @@ SolverWrapper::run()
             std::string item_src = data["location"];
             std::string item_tar = data["destination"];
             std::string item_arr = data["time"];
-            CLOCK item_reach_by;
+            datetime item_reach_by;
 
             if (data["ipdd_destination"].is_null() or
                 data["ipdd_destination"].empty())
-              item_reach_by = CLOCK::max();
+              item_reach_by = datetime::max();
             else
               item_arrive_by = date::parse(data["ipdd_destination"]);
 

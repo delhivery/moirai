@@ -3,94 +3,90 @@
 #include <Poco/Util/ServerApplication.h>
 #include <fmt/format.h>
 
-const std::string KafkaReader::consumer_group = "CLOTHO";
+const std::string KafkaReader::consumerGroup = "CLOTHO";
 
-KafkaReader::KafkaReader(const std::string& broker_url,
-                         const uint16_t batch_size,
+KafkaReader::KafkaReader(const std::string& brokerUrl,
+                         const uint16_t batchSize,
                          const uint16_t timeout,
-                         const StringToStringMap& topic_map,
-                         moodycamel::ConcurrentQueue<std::string>* node_queue,
-                         moodycamel::ConcurrentQueue<std::string>* edge_queue,
-                         moodycamel::ConcurrentQueue<std::string>* load_queue)
-  : ScanReader(load_queue)
-  , broker_url(broker_url)
-  , batch_size(batch_size)
+                         std::string topic,
+                         moodycamel::ConcurrentQueue<std::string>* nodeQueuePtr,
+                         moodycamel::ConcurrentQueue<std::string>* edgeQueuePtr,
+                         moodycamel::ConcurrentQueue<std::string>* loadQueuePtr)
+  : ScanReader(loadQueuePtr)
+  , mBrokerUrl(brokerUrl)
+  , mConsumerPtr(nullptr)
+  , batchSize(batchSize)
   , timeout(timeout)
-  , topic_map(topic_map)
-  , node_queue(node_queue)
-  , edge_queue(edge_queue)
-  , consumer(nullptr)
+  , mTopic(std::move(topic))
+  , mNodeQueuePtr(nodeQueuePtr)
+  , mEdgeQueuePtr(edgeQueuePtr)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   app.logger().debug("Configuring kafka reader");
   RdKafka::Conf* config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 
-  std::string error_string;
+  std::string errorString;
 
-  if (config->set("enable.partition.eof", "false", error_string) !=
+  if (config->set("enable.partition.eof", "false", errorString) !=
       RdKafka::Conf::CONF_OK) {
     app.logger().error(
-      fmt::format("Error enabling partition eof: {}", error_string));
-    throw Poco::ApplicationException(error_string);
+      fmt::format("Error enabling partition eof: {}", errorString));
+    throw Poco::ApplicationException(errorString);
   }
 
-  if (config->set("group.id", consumer_group, error_string) !=
+  if (config->set("group.id", consumerGroup, errorString) !=
       RdKafka::Conf ::CONF_OK) {
-    app.logger().error(fmt::format("Error setting group id: {}", error_string));
-    throw Poco::ApplicationException(error_string);
+    app.logger().error(fmt::format("Error setting group id: {}", errorString));
+    throw Poco::ApplicationException(errorString);
   }
 
-  if (config->set("bootstrap.servers", broker_url, error_string) !=
+  if (config->set("bootstrap.servers", brokerUrl, errorString) !=
       RdKafka::Conf::CONF_OK) {
     app.logger().error(
-      fmt::format("Error bootstrapping servers. {}", error_string));
-    throw Poco::ApplicationException(error_string);
+      fmt::format("Error bootstrapping servers. {}", errorString));
+    throw Poco::ApplicationException(errorString);
   }
 
-  if (config->set("auto.offset.reset", "smallest", error_string) !=
+  if (config->set("auto.offset.reset", "smallest", errorString) !=
       RdKafka::Conf::CONF_OK) {
-    app.logger().error(fmt::format("Error setting offset: {}", error_string));
+    app.logger().error(fmt::format("Error setting offset: {}", errorString));
   }
-  consumer = RdKafka::KafkaConsumer::create(config, error_string);
+  mConsumerPtr = RdKafka::KafkaConsumer::create(config, errorString);
 
-  if (!consumer) {
-    app.logger().error(
-      fmt::format("Error creating consumer. {}", error_string));
-    throw Poco::ApplicationException(error_string);
+  if (mConsumerPtr == nullptr) {
+    app.logger().error(fmt::format("Error creating consumer. {}", errorString));
+    throw Poco::ApplicationException(errorString);
   }
 
   delete config;
 
-  for (auto const& topic_entry : topic_map.left) {
-    topics.push_back(topic_entry.second);
+  if (RdKafka::ErrorCode errorCode = mConsumerPtr->subscribe({ mTopic });
+      errorCode) {
+    app.logger().error(fmt::format("Error subscribing to topic<{}>: {}",
+                                   mTopic,
+                                   RdKafka::err2str(errorCode)));
+    throw Poco::ApplicationException(RdKafka::err2str(errorCode));
   }
-
-  if (RdKafka::ErrorCode error_code = consumer->subscribe(topics); error_code) {
-    app.logger().error(fmt::format("Error subscribing to {} topics: {}",
-                                   topics.size(),
-                                   RdKafka::err2str(error_code)));
-    throw Poco::ApplicationException(RdKafka::err2str(error_code));
-  }
-  running = true;
+  mRunning = true;
 }
 
 KafkaReader::~KafkaReader()
 {
-  consumer->close();
-  delete consumer;
+  mConsumerPtr->close();
+  delete mConsumerPtr;
 }
 
-std::vector<RdKafka::Message*>
-KafkaReader::consume_batch(size_t batch_size, int timeout)
+auto
+KafkaReader::consume_batch(size_t batchSize, int maxWaitMS)
+  -> std::vector<RdKafka::Message*>
 {
   std::vector<RdKafka::Message*> messages;
-  messages.reserve(batch_size);
-  int64_t end = now_as_int64() + timeout;
-  int remaining_time = timeout;
+  messages.reserve(batchSize);
+
   Poco::Util::Application& app = Poco::Util::Application::instance();
 
-  while (messages.size() < batch_size) {
-    RdKafka::Message* message = consumer->consume(remaining_time);
+  while (messages.size() < batchSize) {
+    RdKafka::Message* message = mConsumerPtr->consume(maxWaitMS);
 
     switch (message->err()) {
       case RdKafka::ERR__TIMED_OUT:
@@ -102,15 +98,10 @@ KafkaReader::consume_batch(size_t batch_size, int timeout)
       default:
         app.logger().error(
           fmt::format("%% Consumer error: {}", message->errstr()));
-        running = false;
+        mRunning = false;
         delete message;
         return messages;
     }
-
-    remaining_time = end - now_as_int64();
-
-    if (remaining_time < 0)
-      break;
   }
 
   return messages;
@@ -120,17 +111,22 @@ void
 KafkaReader::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
+  const uint64_t sleepFor = 200;
+  const uint64_t maxRecords = 10240;
 
-  while (running) {
-    Poco::Thread::sleep(200);
+  while (mRunning) {
+    Poco::Thread::sleep(sleepFor);
 
-    if (load_queue->size_approx() > 10240)
+    if (mloadQueuePtr->size_approx() > maxRecords) {
       continue;
+    }
 
-    auto messages = consume_batch(batch_size, timeout);
-    if (messages.size() > 0)
+    auto messages = consume_batch(batchSize, timeout);
+
+    if (not messages.empty()) {
       app.logger().debug(
         fmt::format("Accumulated {} messages", messages.size()));
+    }
 
     for (auto& message : messages) {
       app.logger().debug(fmt::format("Message in {} [{}] at offset {}",
@@ -138,17 +134,7 @@ KafkaReader::run()
                                      message->partition(),
                                      message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
-      std::string topic_name = topic_map.right.at(message->topic_name());
-      if (topic_name == "load") {
-        load_queue->enqueue(data);
-      } else if (topic_name == "edge") {
-        edge_queue->enqueue(data);
-      } else if (topic_name == "node") {
-        node_queue->enqueue(data);
-      } else {
-        app.logger().error(fmt::format(
-          "Unsupported topic: {}", topic_map.right.at(message->topic_name())));
-      }
+      mloadQueuePtr->enqueue(data);
       delete message;
     }
   }
