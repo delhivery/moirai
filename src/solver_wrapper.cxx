@@ -28,12 +28,12 @@ SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* loadQueue,
   moodycamel::ConcurrentQueue<std::string>* solutionQueue,
   std::shared_ptr<Solver> solver)
-  : solver(solver)
+  : solver(std::move(solver))
   , mLoadQueuePtr(loadQueue)
   , mSolutionQueuePtr(solutionQueue)
 {
   // Poco::Util::Application& app = Poco::Util::Application::instance();
-  running = true;
+  mRunning = true;
 }
 
 SolverWrapper::SolverWrapper(
@@ -61,7 +61,7 @@ SolverWrapper::SolverWrapper(
   : mLoadQueuePtr(loadQueuePtr)
   , mSolutionQueuePtr(solutionQueuePtr)
 #ifdef WITH_NODE_FILE
-  , nodeFile(nodeFile)
+  , mNodeFile(nodeFile)
 #else
   , node_uri(node_uri)
   , node_idx(node_idx)
@@ -69,7 +69,7 @@ SolverWrapper::SolverWrapper(
   , node_pass(node_pass)
 #endif
 #ifdef WITH_EDGE_FILE
-  , edgeFile(edgeFile)
+  , mEdgeFile(edgeFile)
 #else
   , edge_uri(edge_uri)
   , edge_auth(edge_auth)
@@ -80,7 +80,7 @@ SolverWrapper::SolverWrapper(
   init_nodes();
   init_custody();
   init_edges();
-  running = true;
+  mRunning = true;
 }
 
 void
@@ -90,7 +90,7 @@ SolverWrapper::init_nodes()
   auto data = nlohmann::json::array();
 
 #ifdef WITH_NODE_FILE
-  std::ifstream infile{ nodeFile, std::ios::in };
+  std::ifstream infile{ mNodeFile, std::ios::in };
   infile >> data;
   infile.close();
 #else
@@ -151,11 +151,12 @@ SolverWrapper::init_nodes()
         facility, "facility_attributes.CenterArrivalCutoff");
       auto propertyId = getJSONValue<std::string>(facility, "property_id");
 
-      auto node = std::make_shared<TransportCenter>(
-        index, name, parse_time(arrivalCutoff));
-      node->template set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-        parse_time(outProcessTime));
-
+      auto node = std::make_shared<TransportCenter>(index,
+                                                    name,
+                                                    parse_time(arrivalCutoff),
+                                                    MovementType::LINEHAUL,
+                                                    ProcessType::OUTBOUND,
+                                                    parse_time(outProcessTime));
       auto [vertex, has_vertex] = solver->add_node(node);
 
       if (not propertyId.empty() && has_vertex) {
@@ -205,10 +206,9 @@ SolverWrapper::init_nodes()
 void
 SolverWrapper::init_edges()
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
   auto data = nlohmann::json::array();
 #ifdef WITH_EDGE_FILE
-  std::ifstream infile{ edgeFile, std::ios::in };
+  std::ifstream infile{ mEdgeFile, std::ios::in };
   infile >> data;
   infile.close();
 #else
@@ -231,66 +231,130 @@ SolverWrapper::init_edges()
                                         "data");
   }
 #endif
+  load_edges(data);
+}
 
-  std::for_each(data.begin(), data.end(), [this](auto const& route) {
-    auto edge_id = getJSONValue<std::string>(route, "route_schedule_uuid");
-    auto edge_name = getJSONValue<std::string>(route, "name");
-    auto edge_type = getJSONValue<std::string>(route, "route_type");
-    auto offset =
-      static_cast<uint16_t>(getJSONValue<double>(route, "reporting_time_ss")) +
-      OFFSET_IST;
-    auto stops = getJSONValue<nlohmann::json>(route, "halt_centers");
-    uint16_t n_stops = stops.size();
+auto
+parse_route(const nlohmann::json& routeData)
+{
+  auto eUUID = getJSONValue<std::string>(routeData, "route_schedule_uuid");
+  auto eName = getJSONValue<std::string>(routeData, "name");
+  auto eType = getJSONValue<std::string>(routeData, "route_type");
+  auto eStop = getJSONValue<nlohmann::json>(routeData, "halt_centers");
+  auto eDays = getJSONValue<nlohmann::json>(routeData, "days_of_week");
+  std::vector<uint8_t> eWorkingDays;
+  eWorkingDays.reserve(eDays.size());
 
-    for (size_t idx_s = 0; idx_s < n_stops; ++idx_s)
-      for (size_t idx_t = idx_s + 1; idx_t < n_stops; ++idx_t) {
-        auto source = stops[idx_s];
-        auto target = stops[idx_t];
+  for (auto& eDay : eDays) {
+    eWorkingDays.emplace_back(static_cast<uint8_t>(eDay));
+  }
 
-        auto source_rel_arr =
-          static_cast<uint16_t>(getJSONValue<double>(source, "rel_eta_ss"));
-        auto source_rel_dep =
-          static_cast<uint16_t>(getJSONValue<double>(source, "rel_etd_ss"));
-        auto target_rel_arr =
-          static_cast<uint16_t>(getJSONValue<double>(target, "rel_eta_ss"));
-        auto target_rel_dep =
-          static_cast<uint16_t>(getJSONValue<double>(target, "rel_etd_ss"));
+  auto eInit = (uint16_t)getJSONValue<double>(routeData, "reporting_time_ss");
+  auto base = [](size_t idx, size_t sIdx, size_t n) -> size_t {
+    size_t offset = idx * n - (idx * idx - idx) / 2;
+    return offset + sIdx - idx - 1;
+  };
 
-        // auto terminal = idx_t == stops.size() - 1;
+  size_t numRoutes = eStop.size();
+  numRoutes *= eStop.size() - 1;
+  numRoutes /= 2;
+  std::vector<std::tuple<std::string,
+                         VehicleType,
+                         MovementType,
+                         minutes,
+                         time_of_day,
+                         minutes,
+                         minutes,
+                         std::vector<uint8_t>,
+                         std::string,
+                         std::string>>
+    subRoutes;
+  subRoutes.reserve(numRoutes);
 
-        auto edge_dep = offset + source_rel_dep;
-        auto edge_dur = target_rel_arr - source_rel_dep;
-        auto edge_loading = source_rel_dep - source_rel_arr;
-        auto edge_unloading = target_rel_dep - target_rel_arr;
+  for (size_t idxS = 0; idxS < eStop.size(); ++idxS) {
+    for (size_t idxT = idxS + 1; idxT < eStop.size(); ++idxT) {
+      auto sNode = eStop[idxS];
+      auto tNode = eStop[idxT];
 
-        auto source_node_code = getJSONValue(source, "center_code");
-        auto target_node_code = getJSONValue(target, "center_code");
+      auto sRelArr = (uint16_t)getJSONValue<double>(sNode, "rel_eta_ss");
+      auto tRelArr = (uint16_t)getJSONValue<double>(tNode, "rel_eta_ss");
+      auto sRelDep = (uint16_t)getJSONValue<double>(sNode, "rel_etd_ss");
+      auto tRelDep = (uint16_t)getJSONValue<double>(tNode, "rel_etd_ss");
+      auto sNodeId = getJSONValue<std::string>(sNode, "center_code");
+      auto tNodeId = getJSONValue<std::string>(tNode, "center_code");
 
-        auto [source_node, has_source] = solver->add_node(source_node_code);
-        auto [target_node, has_target] = solver->add_node(target_node_code);
-        // start = NX - (N^2 - N)/2
-        auto base = [](size_t idx, size_t n) {
-          return idx * n - (idx * idx - idx) / 2;
-        };
+      auto eDep = eInit + sRelDep;
+      auto eDur = tRelArr - sRelDep;
+      auto eOut = sRelDep - sRelArr;
+      auto eInb = tRelDep - tRelArr;
 
-        auto edge = std::make_shared<TransportEdge>(
-          fmt::format(
-            "{}.{}", edge_id, base(idx_s, n_stops - 1) + idx_t - idx_s - 1),
-          edge_name,
-          edge_dep,
-          edge_dur,
-          edge_loading,
-          edge_unloading,
-          edge_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
-          edge_type == "carting" ? MovementType::CARTING
-                                 : MovementType::LINEHAUL,
-          idx_t == stops.size() - 1);
-
-        assert(edge_dep > 0 and edge_dur > 0);
-
-        if (has_source and has_target)
-          solver->add_edge(source_node, target_node, edge);
+      if (idxS > 0) {
+        eOut /= 2;
       }
+
+      if (idxT == eStop.size() - 1) {
+        eInb /= 2;
+      }
+      subRoutes.emplace_back(
+        fmt::format("{}.{}", eUUID, base(idxS, idxT, eStop.size())),
+        eType == "air" ? VehicleType::AIR : VehicleType::SURFACE,
+        eType == "carting" ? MovementType::CARTING : MovementType::LINEHAUL,
+        eOut,
+        eDep,
+        eDur,
+        eInb,
+        eWorkingDays,
+        sNodeId,
+        tNodeId);
+    }
+  }
+  return subRoutes;
+}
+
+void
+SolverWrapper::load_edges(const nlohmann::json& data)
+{
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+
+  std::for_each(data.begin(), data.end(), [this, &app](auto const& route) {
+    auto subRoutes = parse_route(route);
+
+    for (const auto& subRoute : subRoutes) {
+      auto [eIdx,
+            eVehicle,
+            eMovement,
+            eOut,
+            eDep,
+            eDur,
+            eInb,
+            eWorkingDays,
+            eSNode,
+            eTNode] = subRoute;
+      auto [sNodeDesc, hasSNode] = solver->add_node(eSNode);
+      auto [tNodeDesc, hasTNode] = solver->add_node(eTNode);
+
+      if (hasSNode and hasTNode) {
+        std::shared_ptr<TransportCenter> sNodeAttr =
+          solver->get_node(sNodeDesc);
+        auto tNodeAttr = solver->get_node(tNodeDesc);
+        auto edge = std::make_shared<TransportEdge>(
+          eIdx,
+          eVehicle,
+          eMovement,
+          sNodeAttr->latency(eMovement, ProcessType::OUTBOUND),
+          tNodeAttr->latency(eMovement, ProcessType::INBOUND),
+          eDep,
+          eDur,
+          eOut,
+          eInb,
+          eWorkingDays);
+        auto [edgeDesc, eAdded] = solver->add_edge(sNodeDesc, tNodeDesc, edge);
+
+        if (!eAdded) {
+          app.logger().debug("Unable to add edge");
+        }
+      }
+    }
   });
 }
 
@@ -304,105 +368,96 @@ SolverWrapper::find_paths(
   const std::vector<TransportationLoadAttributes>& subitems) const
   -> nlohmann::json
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
-  datetime item_reach_by = item_target_limit;
+  // Poco::Util::Application& app = Poco::Util::Application::instance();
+  // datetime mustReachBy = item_target_limit;
   nlohmann::json response = { { "_id", item },
                               { "waybill", item },
                               { "package", item } };
 
-  std::vector<Segment> item_route_e, item_route_u;
+  // std::vector<Segment> fRoute;
+  // std::vector<Segment> cRoute;
 
-  datetime item_target_arrival_e{ datetime::max() };
+  // datetime tArrival{ datetime::max() };
 
-  auto [item_source, has_item_source] = solver->add_node(item_source_idx);
-  auto [item_target, has_item_target] = solver->add_node(item_target_idx);
+  // auto [sNodeDesc, hasSNode] = solver->add_node(item_source_idx);
+  // auto [tNodeDesc, hasTNode] = solver->add_node(item_target_idx);
 
-  if (has_item_source and has_item_target) {
-    item_route_e =
+  /*
+  if (hasSNode and hasTNode) {
+    fRoute =
       solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
-        item_source, item_target, item_start);
+        sNodeDesc, tNodeDesc, item_start);
 
-    if (item_route_e.size() > 0) {
-      auto item_arrival_target_e = item_route_e.back().distance();
+    if (not fRoute.empty()) {
+      auto fRouteTArr = fRoute.back().distance();
 
-      if (item_arrival_target_e < item_reach_by) {
-        std::vector<std::vector<Segment>> subitems_route_u;
-        subitems_route_u.reserve(subitems.size());
-        auto subitems_reach_by_min =
-          std::min_element(subitems.begin(),
-                           subitems.end(),
-                           [](const auto& lhs, const auto& rhs) {
-                             return lhs.reach_by() < rhs.reach_by();
-                           });
+      if (fRouteTArr < mustReachBy) {
+        auto cSubRoutes =
+          subitems | std::ranges::filter([&fRouteTArr](auto const& subItem) {
+            return subItem.reach_by() > fRouteTArr;
+          }) |
+          std::ranges::filter([this](const auto& subItem) {
+            return solver->add_node(subItem.target()).second;
+          }) |
+          std::ranges::transform([&tNodeDesc, this](const auto& subItem) {
+            return solver
+              ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+                solver->add_node(subItem.target()).first,
+                tNodeDesc,
+                subItem.reach_by());
+          }) |
+          std::ranges::filter(
+            [](auto const& cSubRoute) { return not cSubRoute.empty(); });
+        auto cSubRoute = std::min_element(cSubRoutes.begin(),
+                                          cSubRoutes.end(),
+                                          [](const auto& lhs, const auto& rhs) {
+                                            return lhs.back().distance() <
+                                                   rhs.back().distance();
+                                          });
 
-        if (subitems_reach_by_min->reach_by() > item_arrival_target_e) {
-          std::for_each(
-            subitems.begin(),
-            subitems.end(),
-            [&item_target, &subitems_route_u, this](auto& subitem) {
-              const auto [subitem_target, has_subitem_target] =
-                solver->add_node(subitem.m_target_idx);
-
-              if (has_subitem_target)
-                subitems_route_u.push_back(
-                  find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-                    subitem_target, item_target, subitem.m_reach_by));
-            });
-
-          auto subitems_depart_by_min = std::min_element(
-            subitems_route_u.begin(),
-            subitems_route_u.end(),
-            [](auto const& lhs, auto const& rhs) {
-              return lhs.back().m_distance < rhs.back().m_distance;
-            });
-
-          if (subitems_depart_by_min->back().mDistance >
-              item_arrival_target_e) {
-            item_reach_by = subitems_depart_by_min->back().mDistance;
-            item_route_u =
-              solver
-                ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-                  item_target,
-                  item_source,
-                  subitems_depart_by_min->back().mDistance);
-          }
+        if (cSubRoute.back().distance() > fRouteTArr) {
+          cRoute =
+            solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+              tNodeDesc, sNodeDesc, mustReachBy);
         }
       }
     }
+  }
+  */
+  /*
 
-    if (item_route_e.size() > 0) {
-      auto item_path_e = parse_path(item_route_e);
-      response["earliest"] = { { "locations", item_path_e },
-                               { "first", item_path_e.front() } };
+  if (fRoute.size() > 0) {
+    auto item_path_e = parse_path(fRoute);
+    response["earliest"] = { { "locations", item_path_e },
+                             { "first", item_path_e.front() } };
 
-      if (item_route_e.size() > 1)
-        response["earliest"]["second"] = item_path_e[1];
-    } else {
-      response["error"] =
-        fmt::format("No route to destination found from {} to {}",
-                    item_source_idx,
-                    item_target_idx);
-    }
+    if (fRoute.size() > 1)
+      response["earliest"]["second"] = item_path_e[1];
+  } else {
+    response["error"] =
+      fmt::format("No route to destination found from {} to {}",
+                  item_source_idx,
+                  item_target_idx);
+  }
 
-    if (item_route_u.size() > 0) {
-      auto item_path_u = parse_path(item_route_u);
-      response["ultimate"] = { { "locations", item_path_u },
-                               { "first", item_path_u.front() } };
+  if (cRoute.size() > 0) {
+    auto item_path_u = parse_path(cRoute);
+    response["ultimate"] = { { "locations", item_path_u },
+                             { "first", item_path_u.front() } };
 
-      if (item_route_u.size() > 1)
-        response["ultimate"]["second"] = item_path_u[1];
-    }
-  } else
-    response["error"] = fmt::format(
-      "{}{}{}",
-      has_item_source ? "" : fmt::format("Unknown source<{}>", item_source_idx),
-      has_item_source or has_item_target ? "" : ", ",
-      has_item_target ? ""
-                      : fmt::format("Unknown target<{}>", item_target_idx));
+    if (cRoute.size() > 1)
+      response["ultimate"]["second"] = item_path_u[1];
+  }
+}
+else response["error"] = fmt::format(
+  "{}{}{}",
+  hasSNode ? "" : fmt::format("Unknown source<{}>", item_source_idx),
+  hasSNode or hasTNode ? "" : ", ",
+  hasTNode ? "" : fmt::format("Unknown target<{}>", item_target_idx));
 
-  response["pdd"] = date::format("%D %T", item_reach_by);
-  response["pdd_ts"] = item_reach_by.time_since_epoch().count();
-
+response["pdd"] = date::format("%D %T", mustReachBy);
+response["pdd_ts"] = mustReachBy.time_since_epoch().count();
+*/
   return response;
 }
 
@@ -413,29 +468,31 @@ SolverWrapper::run()
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
 
-  while (running or mLoadQueuePtr->size_approx() > 0) {
+  constexpr uint sleepFor = 200;
+  constexpr uint batchSize = 64;
+
+  while (mRunning or mLoadQueuePtr->size_approx() > 0) {
     try {
-      Poco::Thread::sleep(200);
+      Poco::Thread::sleep(sleepFor);
 
-      if (mSolutionQueuePtr->size_approx() > 10000)
-        continue;
-      std::string payloads[100];
+      std::vector<std::string> payloads;
+      payloads.reserve(batchSize);
 
-      if (size_t num_packages = mLoadQueuePtr->try_dequeue_bulk(payloads, 64);
-          num_packages > 0) {
+      if (size_t nItems = mLoadQueuePtr->try_dequeue_bulk(payloads, batchSize);
+          nItems > 0) {
         std::for_each(
-          payloads,
-          payloads + num_packages,
+          payloads.begin(),
+          payloads.end(),
           [&app, this](const std::string& payload) {
             nlohmann::json data = nlohmann::json::parse(payload);
 
-            std::list<std::string> item_required_fields{
+            std::list<std::string> requiredFields{
               "id", "location", "destination", "time"
             };
 
             auto isNull =
-              std::any_of(item_required_fields.begin(),
-                          item_required_fields.end(),
+              std::any_of(requiredFields.begin(),
+                          requiredFields.end(),
                           [&data](const std::string& key) {
                             return data[key].is_null() || data[key].empty();
                           });
@@ -452,42 +509,45 @@ SolverWrapper::run()
                            item["ipdd_destination"].is_null() or
                            item["cn"].is_null());
               }) |
-              std::views::transform([](const auto& item) {
-                return TransportationLoadSubItem{
-                  item["id"].template get<std::string>(),
-                  item["ipdd_destination"].template get<std::string>(),
-                  item["cn"].template get<std::string>()
-                };
-              }) |
+              std::views::transform(
+                [](const auto& item) -> TransportationLoadAttributes {
+                  return { item["id"].template get<std::string>(),
+                           item["ipdd_destination"].template get<std::string>(),
+                           item["cn"].template get<std::string>() };
+                }) |
               std::views::to_vector;
-            std::string item_idx = data["id"];
-            std::string item_src = data["location"];
-            std::string item_tar = data["destination"];
-            std::string item_arr = data["time"];
-            datetime item_reach_by;
+            std::string iIdx = data["id"];
+            std::string iSrc = data["location"];
+            std::string iTar = data["destination"];
+            std::string iArr = data["time"];
+            datetime iReachBy;
 
             if (data["ipdd_destination"].is_null() or
-                data["ipdd_destination"].empty())
-              item_reach_by = datetime::max();
-            else
-              item_arrive_by = date::parse(data["ipdd_destination"]);
+                data["ipdd_destination"].empty()) {
+              iReachBy = datetime::max();
+            } else {
+              iReachBy =
+                parse_datetime(data["ipdd_destination"].get<std::string>());
+            }
 
-            auto solution = find_paths(
-              item_idx, item_src, item_tar, item_arr, item_arr_by, subItems);
+            auto solution =
+              find_paths(iIdx, iSrc, iTar, iArr, iReachBy, subItems);
 
-            auto cs_slid = data["cs_slid"];
-            auto cs_act = data["cs_act"];
-            auto pid = data["pid"];
+            auto rawCSlid = data["cs_slid"];
+            auto rawCSAct = data["cs_act"];
+            auto rawPid = data["pid"];
 
-            if (not(cs_slid.empty() or cs_slid.is_null()))
-              solution["cs_slid"] = cs_slid;
+            if (not(rawCSlid.empty() or rawCSlid.is_null())) {
+              solution["cs_slid"] = rawCSlid;
+            }
 
-            if (not(cs_act.empty() or cs_act.is_null()))
-              solution["cs_act"] = cs_act;
+            if (not(rawCSAct.empty() or rawCSAct.is_null())) {
+              solution["cs_act"] = rawCSAct;
+            }
 
-            if (not(pid.empty() or pid.is_null()))
-              solution["pid"] = pid;
-            solution_queue->enqueue(solution.dump());
+            if (not(rawPid.empty() or rawPid.is_null()))
+              solution["pid"] = rawPid;
+            mSolutionQueuePtr->enqueue(solution.dump());
           });
       }
     } catch (const std::exception& exc) {

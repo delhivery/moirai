@@ -11,19 +11,19 @@ class Moirai : public Poco::Util::ServerApplication
 {
 private:
 #ifdef WITH_NODE_FILE
-  std::filesystem::path nodeFile;
+  std::filesystem::path mNodeFile;
 #else
   std::string node_sync_uri, node_sync_idx, node_sync_user, node_sync_pass;
 #endif
 
 #ifdef WITH_EDGE_FILE
-  std::filesystem::path edgeFile;
+  std::filesystem::path mEdgeFile;
 #else
   std::string edge_uri, edge_token;
 #endif
 
 #ifdef WITH_LOAD_FILE
-  std::filesystem::path file_loads;
+  std::filesystem::path mLoadFile;
 #else
   // StringToStringMap topic_map;
   std::string load_topic;
@@ -35,7 +35,7 @@ private:
   std::string sync_uri, sync_idx, sync_user, sync_pass;
 #endif
 
-  bool help_requested = false;
+  bool mHelpRequested = false;
 
 public:
   Moirai() = default;
@@ -46,7 +46,7 @@ private:
   void display_help();
 
 protected:
-  void initialize(Poco::Util::Application& application) override;
+  void initialize(Poco::Util::Application& self) override;
 
   void uninitialize() override;
 

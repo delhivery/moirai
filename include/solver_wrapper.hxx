@@ -22,21 +22,21 @@ private:
   moodycamel::ConcurrentQueue<std::string>* mSolutionQueuePtr;
 
 #ifdef WITH_NODE_FILE
-  std::filesystem::path nodeFile;
+  std::filesystem::path mNodeFile;
 #else
   Poco::URI node_uri;
   std::string node_idx, node_user, node_pass;
 #endif
 
 #ifdef WITH_EDGE_FILE
-  std::filesystem::path edgeFile;
+  std::filesystem::path mEdgeFile;
 #else
   Poco::URI edge_uri;
   std::string edge_auth;
 #endif
 
 public:
-  std::atomic<bool> running;
+  std::atomic<bool> mRunning;
 
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
@@ -69,6 +69,8 @@ public:
   void init_custody();
 
   void init_edges();
+
+  void load_edges(const nlohmann::json&);
 
   auto read_nodes(const std::filesystem::path&)
     -> std::vector<std::shared_ptr<TransportCenter>>;

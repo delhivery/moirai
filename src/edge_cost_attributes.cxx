@@ -2,6 +2,11 @@
 #include <bit>
 #include <climits>
 
+TemporalEdgeCostAttributes::TemporalEdgeCostAttributes()
+  : mTransient(true)
+{
+}
+
 TemporalEdgeCostAttributes::TemporalEdgeCostAttributes(
   const minutes& loading,
   const time_of_day& departure,

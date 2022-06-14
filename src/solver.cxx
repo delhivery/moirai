@@ -11,6 +11,21 @@
 #include <numeric>
 #include <string> // for string
 
+Segment::Segment(std::shared_ptr<TransportCenter> from,
+                 std::shared_ptr<TransportEdge> via,
+                 datetime distance)
+  : mNode(std::move(from))
+  , mOutbound(std::move(via))
+  , mDistance(distance)
+{
+}
+
+auto
+Segment::distance() const -> datetime
+{
+  return mDistance;
+}
+
 auto
 Solver::add_node(const std::string& nodeCodeOrName) const
   -> std::pair<Node<Graph>, bool>

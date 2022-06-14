@@ -50,16 +50,15 @@ public:
 
   [[nodiscard]] auto code() const -> std::string;
 
-  template<MovementType M, ProcessType P>
-  void set_latency(Latency<M, P> latency);
   /*
   {
     mLatencies[std::make_pair(M, P)] = latency;
   }
   */
 
-  template<MovementType M, ProcessType P>
-  auto get_latency() -> Latency<M, P>;
+  void latency(MovementType, ProcessType, minutes);
+
+  [[nodiscard]] auto latency(MovementType, ProcessType) const -> minutes;
   /*
   {
     auto const key = std::make_pair(M, P);
@@ -67,7 +66,7 @@ public:
     return mLatencies.contains(key) ? mLatencies[key] : Latency<M, P>(0);
   }
   */
-  auto cutoff() -> time_of_day; // { return mCutoff; }
+  [[nodiscard]] auto cutoff() const -> time_of_day; // { return mCutoff; }
 };
 
 class TransportEdge : public TemporalEdgeCostAttributes
@@ -113,6 +112,10 @@ public:
   TransportationLoadAttributes();
 
   TransportationLoadAttributes(std::string, std::string, datetime);
+
+  [[nodiscard]] auto idx() const -> std::string;
+
+  [[nodiscard]] auto target() const -> std::string;
 
   [[nodiscard]] auto reach_by() const -> datetime;
 };

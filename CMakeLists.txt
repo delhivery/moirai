@@ -9,7 +9,7 @@ set(CMAKE_GENERATOR Ninja)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fuse-ld=mold") Treat warnings
 # as errors: Werror Stop compiling on first error: Wfatal-errors
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
@@ -77,16 +77,19 @@ add_executable(
   src/date_utils.cxx
   src/edge_cost_attributes.cxx
   src/graph_helpers.cxx
-  src/transportation.cxx
-  src/solver.cxx
   src/utils.cxx
+  src/transportation.cxx
+  src/scan_reader.cxx
+  src/search_writer.cxx
+  src/solver.cxx
   src/scan_reader.cxx
   src/kafka_reader.cxx
   src/search_writer.cxx
   src/file_reader.cxx
   src/processor.cxx
-  src/solver_wrapper.cxx
-  src/server.cxx)
+  src/solver_wrapper.cxx)
+
+# src/server.cxx)
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 

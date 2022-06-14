@@ -16,12 +16,12 @@
 void
 Moirai::display_help()
 {
-  Poco::Util::HelpFormatter help_formatter(options());
-  help_formatter.setCommand(commandName());
-  help_formatter.setUsage("OPTIONS");
-  help_formatter.setHeader(
+  Poco::Util::HelpFormatter helpFormatter(options());
+  helpFormatter.setCommand(commandName());
+  helpFormatter.setUsage("OPTIONS");
+  helpFormatter.setHeader(
     "System directed path prediction for transportation systems");
-  help_formatter.format(std::cout);
+  helpFormatter.format(std::cout);
 }
 
 void
@@ -40,11 +40,6 @@ Moirai::uninitialize()
 }
 
 void
-Moirai::reinitialize()
-{
-}
-
-void
 Moirai::defineOptions(Poco::Util::OptionSet& options)
 {
   options.addOption(
@@ -57,13 +52,12 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
 
 #ifdef WITH_NODE_FILE
   options.addOption(Poco::Util::Option("nodes-file", "n", "Nodes data file")
-      .required(true)
-      .repeatable(false)
-      .argument("<filepath>", true)
-      .group("node")
-      .callback(Poco::Util::OptionCallback<Moirai>(
-          this, &Moirai::set_node_file
-      ));
+                      .required(true)
+                      .repeatable(false)
+                      .argument("<filepath>", true)
+                      .group("node")
+                      .callback(Poco::Util::OptionCallback<Moirai>(
+                        this, &Moirai::set_node_file)));
 #else
   options.addOption(Poco::Util::Option("nodes-uri", "n", "Nodes data API")
                       .required(true)
@@ -169,28 +163,34 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
       .repeatable(false)
       .argument("<uri>", true)
       .group("sync")
-      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_uri)));
+      .callback(
+        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_uri)));
   options.addOption(
     Poco::Util::Option("sync-index", "si", "ES index to sync output to")
       .required(true)
       .repeatable(false)
       .argument("<index>", true)
       .group("sync")
-      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_idx)));
+      .callback(
+        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_idx)));
   options.addOption(
-    Poco::Util::Option("sync-username", "su", "Username credentials to ES to sync output to")
+    Poco::Util::Option(
+      "sync-username", "su", "Username credentials to ES to sync output to")
       .required(true)
       .repeatable(false)
       .argument("<username>", true)
       .group("sync")
-      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_user)));
+      .callback(
+        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_user)));
   options.addOption(
-    Poco::Util::Option("sync-password", "sp", "Password credentials to ES to sync output to")
+    Poco::Util::Option(
+      "sync-password", "sp", "Password credentials to ES to sync output to")
       .required(true)
       .repeatable(false)
       .argument("<password>", true)
       .group("sync")
-      .callback(Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_pass)));
+      .callback(
+        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_sync_pass)));
 #endif
 }
 
@@ -198,7 +198,7 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
 void
 Moirai::set_node_file(const std::string& name, const std::string& value)
 {
-  file_nodes = value;
+  mNodeFile = value;
 }
 #else
 void
@@ -230,7 +230,7 @@ Moirai::set_node_pass(const std::string& name, const std::string& value)
 void
 Moirai::set_edge_file(const std::string& name, const std::string& value)
 {
-  file_edges = value;
+  mEdgeFile = value;
 }
 #else
 void
@@ -250,7 +250,7 @@ Moirai::set_edge_auth(const std::string& name, const std::string& value)
 void
 Moirai::set_load_file(const std::string& name, const std::string& value)
 {
-  file_loads = value;
+  mLoadFile = value;
 }
 #else
 void
@@ -308,44 +308,46 @@ Moirai::set_sync_pass(const std::string& name, const std::string& value)
 void
 Moirai::handle_help(const std::string& name, const std::string& value)
 {
-  help_requested = true;
+  mHelpRequested = true;
   display_help();
   stopOptionsProcessing();
 }
 
-int
-Moirai::main(const ArgVec& arg)
+auto
+Moirai::main(const ArgVec& arg) -> int
 {
 
   logger().information("Starting main");
-  if (!help_requested) {
-    moodycamel::ConcurrentQueue<std::string>* load_queue =
-      new moodycamel::ConcurrentQueue<std::string>();
-    moodycamel::ConcurrentQueue<std::string>* solution_queue =
-      new moodycamel::ConcurrentQueue<std::string>();
+  if (!mHelpRequested) {
+    auto* loadQueuePtr = new moodycamel::ConcurrentQueue<std::string>();
+    auto* solQueuePtr = new moodycamel::ConcurrentQueue<std::string>();
     {
-      SolverWrapper wrapper(load_queue,
-                            solution_queue,
+      SolverWrapper wrapper(loadQueuePtr,
+                            solQueuePtr
 #ifdef WITH_NODE_FILE
-                            file_nodes,
+                            ,
+                            mNodeFile
 #else
+                            ,
                             node_sync_uri,
                             node_sync_idx,
                             node_sync_user,
-                            node_sync_pass,
+                            node_sync_pass
 #endif
 #ifdef WITH_EDGE_FILE
-                            file_edges,
+                            ,
+                            mEdgeFile
 #else
+                            ,
                             edge_uri,
-                            edge_token,
+                            edge_token
 #endif
       );
 
       std::shared_ptr<ScanReader> reader = nullptr;
 
 #ifdef WITH_LOAD_FILE
-      reader = std::make_shared<FileReader>(file_loads, load_queue);
+      reader = std::make_shared<FileReader>(mLoadFile, loadQueuePtr);
 #else
       reader = std::make_shared<KafkaReader>(
         std::accumulate(
@@ -367,19 +369,19 @@ Moirai::main(const ArgVec& arg)
       writer = std::make_shared<SearchWriter>(
         Poco::URI(sync_uri), sync_idx, sync_user, sync_pass, solution_queue);
 #endif
-      int16_t num_threads = std::thread::hardware_concurrency();
-      num_threads = num_threads < 3 ? 3 : num_threads;
-      std::vector<Poco::Thread> threads(num_threads);
+      int16_t nThreads = std::thread::hardware_concurrency();
+      nThreads = nThreads < 3 ? 3 : nThreads;
+      std::vector<Poco::Thread> threads(nThreads);
       std::vector<std::shared_ptr<SolverWrapper>> secondary;
-      secondary.reserve(num_threads - 3);
+      secondary.reserve(nThreads - 3);
 
       try {
         threads[0].start(*reader);
         threads[1].start(*writer);
         threads[2].start(wrapper);
 
-        for (int idx = 3; idx < num_threads; ++idx) {
-          secondary.emplace_back(load_queue, solution_queue, wrapper);
+        for (int idx = 3; idx < nThreads; ++idx) {
+          secondary.emplace_back(loadQueuePtr, solQueuePtr, wrapper);
           threads[idx].start(*secondary[idx - 3]);
         }
       } catch (const std::exception& exc) {
@@ -387,24 +389,30 @@ Moirai::main(const ArgVec& arg)
       }
       waitForTerminationRequest();
       logger().information("Termination requested");
-      reader->running = false;
-      writer.running = false;
-      wrapper.running = false;
+      reader->mRunning = false;
+      writer->running = false;
+      wrapper.mRunning = false;
 
-      for (auto& secondary_wrapper : secondary) {
-        secondary_wrapper->running = false;
+      for (auto& wrapper : secondary) {
+        wrapper->mRunning = false;
       }
 
-      for (auto& thread : threads)
+      for (auto& thread : threads) {
         thread.join();
+      }
     }
 
-    delete node_queue;
-    delete edge_queue;
-    delete load_queue;
-    delete solution_queue;
+    delete loadQueuePtr;
+    delete loadQueuePtr;
+    delete loadQueuePtr;
+    delete solQueuePtr;
   }
   return Poco::Util::Application::EXIT_OK;
 }
 
-POCO_SERVER_MAIN(Moirai);
+auto
+main(int argc, char** argv) -> int
+{
+  Moirai app;
+  return app.run(argc, argv);
+}
