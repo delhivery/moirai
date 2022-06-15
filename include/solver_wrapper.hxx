@@ -1,6 +1,14 @@
 #ifndef MOIRAI_SOLVER_WRAPPER
 #define MOIRAI_SOLVER_WRAPPER
 
+#ifndef JSON_HAS_CPP_20
+#define JSON_HAS_CPP_20
+#endif
+
+#ifndef JSON_HAS_RANGES
+#define JSON_HAS_RANGES 1
+#endif
+
 #include "concurrentqueue.h"
 #include "date_utils.hxx"
 #include "solver.hxx"
@@ -9,6 +17,7 @@
 #include <Poco/URI.h>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <ranges>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -17,7 +26,7 @@
 class SolverWrapper : public Poco::Runnable
 {
 private:
-  std::shared_ptr<Solver> solver;
+  std::shared_ptr<Solver> mSolverPtr;
   moodycamel::ConcurrentQueue<std::string>* mLoadQueuePtr;
   moodycamel::ConcurrentQueue<std::string>* mSolutionQueuePtr;
 
@@ -66,8 +75,6 @@ public:
 
   void init_nodes();
 
-  void init_custody();
-
   void init_edges();
 
   void load_edges(const nlohmann::json&);
@@ -80,8 +87,7 @@ public:
                   const std::string&,
                   datetime,
                   datetime,
-                  const std::vector<TransportationLoadAttributes>&) const
-    -> nlohmann::json;
+                  auto&) const -> nlohmann::json;
 
   void run() override;
 };

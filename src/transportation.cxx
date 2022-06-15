@@ -91,6 +91,15 @@ TransportEdge::vehicle() const -> VehicleType
   return mVehicle;
 }
 
+TransportationLoadAttributes::TransportationLoadAttributes(std::string idx,
+                                                           std::string target,
+                                                           datetime reachBy)
+  : mIdx(std::move(idx))
+  , mTargetIdx(std::move(target))
+  , mReachBy(std::move(reachBy))
+{
+}
+
 auto
 TransportationLoadAttributes::idx() const -> std::string
 {

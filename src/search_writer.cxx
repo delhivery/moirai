@@ -1,3 +1,11 @@
+#ifndef JSON_HAS_CPP_20
+#define JSON_HAS_CPP_20
+#endif
+
+#ifndef JSON_HAS_RANGES
+#define JSON_HAS_RANGES 1
+#endif
+
 #include "search_writer.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>

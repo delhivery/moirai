@@ -92,6 +92,8 @@ add_executable(
 # src/server.cxx)
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
+# add_compile_definitions(JSON_HAS_CPP_20)
+# add_compile_definitions(JSON_HAS_RANGES)
 
 if(NODE_FILE)
   add_compile_definitions(WITH_NODE_FILE)
