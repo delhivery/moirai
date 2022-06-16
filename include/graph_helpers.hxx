@@ -1,12 +1,10 @@
 #ifndef moirai_graph_helpers
 #define moirai_graph_helpers
 
-#include <cstring> // for memset
-
+#include "date_utils.hxx"
+#include "transportation.hxx"
 #include <boost/graph/graph_traits.hpp> // for graph_traits
-
-#include "date_utils.hxx"     // for CLOCK
-#include "transportation.hxx" // for PathTraversalMode, VehicleType
+#include <cstring>                      // for memset
 
 static const char emptyChar = 0xFF;
 
@@ -28,12 +26,6 @@ struct FilterByVehicleType
     auto edgeProps = (*graph)[edge];
     return edgeProps->vehicle() <= V;
   }
-};
-
-template<PathTraversalMode>
-struct Compare
-{
-  auto operator()(datetime, datetime) const -> bool;
 };
 
 template<typename E>

@@ -1,15 +1,9 @@
 #include "solver.hxx"
-#include "date_utils.hxx"                        // for datetime
-#include "graph_helpers.hxx"                     // for FilterByVehicleType
-#include "transportation.hxx"                    // for VehicleType, AIR
-#include <boost/graph/detail/adjacency_list.hpp> // for get, num_vertices
-#include <boost/graph/detail/edge.hpp>           // for operator!=, operator==
-#include <boost/graph/filtered_graph.hpp>        // for filtered_graph
-#include <boost/graph/reverse_graph.hpp>         // for get, make_reverse_g...
-#include <boost/iterator/iterator_facade.hpp>    // for operator!=, operator++
-#include <fmt/format.h>
-#include <numeric>
-#include <string> // for string
+#include "graph_helpers.hxx"
+#include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/graph/filtered_graph.hpp>
+#include <boost/graph/reverse_graph.hpp>
+#include <boost/property_map/transform_value_property_map.hpp>
 
 Segment::Segment(std::shared_ptr<TransportCenter> from,
                  std::shared_ptr<TransportEdge> via,

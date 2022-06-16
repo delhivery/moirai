@@ -2,13 +2,13 @@
 #define MOIRAI_SCAN_READER
 
 #include "concurrentqueue.h"
-#include "utils.hxx"
 #include <Poco/Runnable.h>
 #include <atomic>
-#include <filesystem>
-#include <librdkafka/rdkafkacpp.h>
 #include <string>
-#include <vector>
+// #include "utils.hxx"
+// #include <filesystem>
+// #include <librdkafka/rdkafkacpp.h>
+// #include <vector>
 
 class ScanReader : public Poco::Runnable
 {

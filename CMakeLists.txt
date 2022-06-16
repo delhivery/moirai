@@ -74,20 +74,19 @@ find_package(RdKafkaCPP REQUIRED)
 
 add_executable(
   ${PROJECT_NAME}
-  src/date_utils.cxx
-  src/edge_cost_attributes.cxx
-  src/graph_helpers.cxx
-  src/utils.cxx
-  src/transportation.cxx
-  src/scan_reader.cxx
-  src/search_writer.cxx
+  src/solver_wrapper.cxx
+  src/processor.cxx
   src/solver.cxx
-  src/scan_reader.cxx
+  src/transportation.cxx
+  src/edge_cost_attributes.cxx
+  src/date_utils.cxx
+  src/search_writer.cxx
+  src/utils.cxx
   src/kafka_reader.cxx
+  src/scan_reader.cxx
   src/search_writer.cxx
   src/file_reader.cxx
-  src/processor.cxx
-  src/solver_wrapper.cxx)
+  src/server.cxx)
 
 # src/server.cxx)
 

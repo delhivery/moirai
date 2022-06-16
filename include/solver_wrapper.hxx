@@ -10,18 +10,11 @@
 #endif
 
 #include "concurrentqueue.h"
-#include "date_utils.hxx"
 #include "solver.hxx"
-#include "transportation.hxx"
 #include <Poco/Runnable.h>
 #include <Poco/URI.h>
 #include <filesystem>
 #include <nlohmann/json.hpp>
-#include <ranges>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
 
 class SolverWrapper : public Poco::Runnable
 {
@@ -50,6 +43,8 @@ public:
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
                 std::shared_ptr<Solver>);
+
+  SolverWrapper(const SolverWrapper&);
 
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*

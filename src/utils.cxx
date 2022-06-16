@@ -1,7 +1,10 @@
 #include "utils.hxx"
 #include <Poco/Base64Encoder.h>
-#include <fmt/format.h>
+#include <algorithm>
+#include <sstream>
+// #include <fmt/format.h>
 
+/*
 std::string
 indexAndTypeToPath(const std::string& search_index, const std::string& doc_type)
 {
@@ -15,16 +18,18 @@ indexAndTypeToPath(const std::string& search_index,
 {
   return fmt::format("/{}/{}/{}/", search_index, doc_type, doc_id);
 }
+*/
 
-std::string
-getEncodedCredentials(const std::string& username, const std::string& password)
+auto
+getEncodedCredentials(std::string_view username, std::string_view password)
+  -> std::string
 {
-  std::ostringstream out_stringstream;
-  Poco::Base64Encoder encoder(out_stringstream);
+  std::ostringstream stringStream;
+  Poco::Base64Encoder encoder(stringStream);
   encoder.rdbuf()->setLineLength(0);
   encoder << username << ":" << password;
   encoder.close();
-  return out_stringstream.str();
+  return stringStream.str();
 }
 
 void

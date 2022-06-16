@@ -11,7 +11,7 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Net/HTTPSClientSession.h>
-#include <Poco/Thread.h>
+// #include <Poco/Thread.h>
 #include <Poco/Util/ServerApplication.h>
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -92,8 +92,8 @@ SearchWriter::run()
           app.logger().debug(fmt::format("Pushed {} records", num_records));
         } else {
           app.logger().error(fmt::format("Error uploading data: <{}>: {}",
-                                            response.getStatus(),
-                                            response_raw.str()));
+                                         response.getStatus(),
+                                         response_raw.str()));
           app.logger().error(fmt::format("Raw data: {}", stringified));
         }
       } catch (const std::exception& exc) {

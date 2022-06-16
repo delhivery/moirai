@@ -4,8 +4,6 @@
 #include "utils.hxx"
 #include <Poco/Util/ServerApplication.h>
 #include <filesystem>
-#include <string>
-#include <vector>
 
 class Moirai : public Poco::Util::ServerApplication
 {
@@ -13,26 +11,34 @@ private:
 #ifdef WITH_NODE_FILE
   std::filesystem::path mNodeFile;
 #else
-  std::string node_sync_uri, node_sync_idx, node_sync_user, node_sync_pass;
+  std::string mNodeUri;
+  std::string mNodeIndex;
+  std::string mNodeAuthUser;
+  std::string mNodeAuthPass;
 #endif
 
 #ifdef WITH_EDGE_FILE
   std::filesystem::path mEdgeFile;
 #else
-  std::string edge_uri, edge_token;
+  std::string mEdgeUri;
+  std::string mEdgeToken;
 #endif
 
 #ifdef WITH_LOAD_FILE
   std::filesystem::path mLoadFile;
 #else
   // StringToStringMap topic_map;
-  std::string load_topic;
-  std::vector<std::string> load_broker_uris;
-  uint8_t load_batch_size, load_consumer_timeout;
+  std::string mLoadTopic;
+  std::vector<std::string> mLoadBrokerUris;
+  uint8_t mLoadBatchSize;
+  uint8_t mLoadConsumerTimeout;
 #endif
 
 #ifdef ENABLE_SYNC
-  std::string sync_uri, sync_idx, sync_user, sync_pass;
+  std::string mSyncUri;
+  std::string mSyncIndex;
+  std::string mSyncAuthUser;
+  std::string mSyncAuthPass;
 #endif
 
   bool mHelpRequested = false;

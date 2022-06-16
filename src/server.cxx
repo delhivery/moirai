@@ -137,8 +137,8 @@ Moirai::defineOptions(Poco::Util::OptionSet& options)
       .repeatable(false)
       .argument("<int>", true)
       .group("load")
-      .callback(
-        Poco::Util::OptionCallback<Moirai>(this, &Moirai::set_load_broker_sz)));
+      .callback(Poco::Util::OptionCallback<Moirai>(
+        this, &Moirai::set_load_broker_size)));
   options.addOption(
     Poco::Util::Option("load-timeout", "ls", "Load consumer timeout")
       .required(false)
@@ -204,25 +204,25 @@ Moirai::set_node_file(const std::string& name, const std::string& value)
 void
 Moirai::set_node_uri(const std::string& name, const std::string& value)
 {
-  node_sync_uri = value;
+  mNodeUri = value;
 }
 
 void
 Moirai::set_node_idx(const std::string& name, const std::string& value)
 {
-  node_sync_idx = value;
+  mNodeIndex = value;
 }
 
 void
 Moirai::set_node_user(const std::string& name, const std::string& value)
 {
-  node_sync_user = value;
+  mNodeAuthUser = value;
 }
 
 void
 Moirai::set_node_pass(const std::string& name, const std::string& value)
 {
-  node_sync_pass = value;
+  mNodeAuthPass = value;
 }
 #endif
 
@@ -236,13 +236,13 @@ Moirai::set_edge_file(const std::string& name, const std::string& value)
 void
 Moirai::set_edge_uri(const std::string& name, const std::string& value)
 {
-  edge_uri = value;
+  mEdgeUri = value;
 }
 
 void
 Moirai::set_edge_auth(const std::string& name, const std::string& value)
 {
-  edge_token = value;
+  mEdgeToken = value;
 }
 #endif
 
@@ -256,26 +256,26 @@ Moirai::set_load_file(const std::string& name, const std::string& value)
 void
 Moirai::set_load_broker_uri(const std::string& name, const std::string& value)
 {
-  load_broker_uris.emplace_back(value);
+  mLoadBrokerUris.emplace_back(value);
 }
 
 void
 Moirai::set_load_broker_size(const std::string& name, const std::string& value)
 {
-  load_batch_size = std::atoi(value.c_str());
+  mLoadBatchSize = std::atoi(value.c_str());
 }
 
 void
 Moirai::set_load_broker_timeout(const std::string& name,
                                 const std::string& value)
 {
-  load_consumer_timeout = std::atoi(value.c_str());
+  mLoadConsumerTimeout = std::atoi(value.c_str());
 }
 
 void
 Moirai::set_load_topic(const std::string& name, const std::string& value)
 {
-  load_topic = value;
+  mLoadTopic = value;
 }
 #endif
 
@@ -283,25 +283,25 @@ Moirai::set_load_topic(const std::string& name, const std::string& value)
 void
 Moirai::set_sync_uri(const std::string& name, const std::string& value)
 {
-  sync_uri = value;
+  mSyncUri = value;
 }
 
 void
 Moirai::set_sync_idx(const std::string& name, const std::string& value)
 {
-  sync_idx = value;
+  mSyncIndex = value;
 }
 
 void
 Moirai::set_sync_user(const std::string& name, const std::string& value)
 {
-  sync_user = value;
+  mSyncAuthUser = value;
 }
 
 void
 Moirai::set_sync_pass(const std::string& name, const std::string& value)
 {
-  sync_pass = value;
+  mSyncAuthPass = value;
 }
 #endif
 
@@ -329,18 +329,18 @@ Moirai::main(const ArgVec& arg) -> int
                             mNodeFile
 #else
                             ,
-                            node_sync_uri,
-                            node_sync_idx,
-                            node_sync_user,
-                            node_sync_pass
+                            mNodeUri,
+                            mNodeIndex,
+                            mNodeAuthUser,
+                            mNodeAuthPass
 #endif
 #ifdef WITH_EDGE_FILE
                             ,
                             mEdgeFile
 #else
                             ,
-                            edge_uri,
-                            edge_token
+                            mEdgeUri,
+                            mEdgeToken
 #endif
       );
 
@@ -351,23 +351,26 @@ Moirai::main(const ArgVec& arg) -> int
 #else
       reader = std::make_shared<KafkaReader>(
         std::accumulate(
-          load_broker_uris.begin(),
-          load_broker_uris.end(),
+          mLoadBrokerUris.begin(),
+          mLoadBrokerUris.end(),
           std::string{},
-          [](const std::string& acc, const std::string& broker_uri) {
-            return acc.empty() ? broker_uri
-                               : fmt::format("{},{}", acc, broker_uri);
+          [](const std::string& acc, const std::string& brokerUri) {
+            return acc.empty() ? brokerUri
+                               : fmt::format("{},{}", acc, brokerUri);
           }),
-        load_batch_size,
-        load_consumer_timeout,
-        load_topic,
-        load_queue);
+        mLoadBatchSize,
+        mLoadConsumerTimeout,
+        mLoadTopic,
+        loadQueuePtr);
 #endif
       std::shared_ptr<SearchWriter> writer = nullptr;
 
 #ifdef ENABLE_SYNC
-      writer = std::make_shared<SearchWriter>(
-        Poco::URI(sync_uri), sync_idx, sync_user, sync_pass, solution_queue);
+      writer = std::make_shared<SearchWriter>(Poco::URI(mSyncUri),
+                                              mSyncIndex,
+                                              mSyncAuthPass,
+                                              mSyncAuthPass,
+                                              solQueuePtr);
 #endif
       int16_t nThreads = std::thread::hardware_concurrency();
       nThreads = nThreads < 3 ? 3 : nThreads;
@@ -381,7 +384,7 @@ Moirai::main(const ArgVec& arg) -> int
         threads[2].start(wrapper);
 
         for (int idx = 3; idx < nThreads; ++idx) {
-          secondary.emplace_back(loadQueuePtr, solQueuePtr, wrapper);
+          secondary.emplace_back(std::make_shared<SolverWrapper>(wrapper));
           threads[idx].start(*secondary[idx - 3]);
         }
       } catch (const std::exception& exc) {

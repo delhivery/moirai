@@ -1,9 +1,10 @@
 #ifndef moirai_edge_costs
 #define moirai_edge_costs
 
+#include "concepts.hxx"
 #include "date_utils.hxx"
+#include <climits>
 #include <functional>
-#include <vector>
 
 enum PathTraversalMode : std::uint8_t
 {
@@ -30,11 +31,45 @@ public:
 
   TemporalEdgeCostAttributes();
 
-  TemporalEdgeCostAttributes(const minutes&,
-                             const time_of_day&,
-                             const minutes&,
-                             const minutes&,
-                             const std::vector<uint8_t>&);
+  template<range_of<uint8_t> range_t>
+  TemporalEdgeCostAttributes(const minutes& loading,
+                             const time_of_day& departure,
+                             const minutes& duration,
+                             const minutes& unloading,
+                             const range_t& departureDays)
+    : mLoading(loading)
+    , mDeparture(departure)
+    , mUnloading(unloading)
+    , mDuration(duration)
+    , mTransient(false)
+  {
+    static_assert(sizeof(mDepartureDays) == 1);
+    static_assert(sizeof(mArrivalDays) == 1);
+
+    mArrival = mDeparture + mDuration;
+
+    for (const auto& departureDay : departureDays) {
+      mDepartureDays |= 1 << (CHAR_BIT - departureDay - 2);
+    }
+    mArrivalDays = mDepartureDays;
+
+    uint8_t arrivalOffset = 0;
+    auto cDuration = mDuration;
+
+    while (cDuration > days(1)) {
+      arrivalOffset++;
+      arrivalOffset %= daysInWeek;
+      cDuration -= days(1);
+    }
+
+    if (mArrival < mDeparture) {
+      arrivalOffset = (arrivalOffset + 1) % daysInWeek;
+    }
+
+    mArrivalDays = mDepartureDays << (CHAR_BIT - arrivalOffset);
+    mArrivalDays >>= 1;
+    mArrivalDays |= mDepartureDays >> arrivalOffset;
+  }
 
   template<PathTraversalMode>
   [[nodiscard]] auto next_working_day(const weekday&) const -> int8_t;

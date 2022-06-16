@@ -1,7 +1,7 @@
 #include "kafka_reader.hxx"
-#include "date_utils.hxx"
 #include <Poco/Util/ServerApplication.h>
 #include <fmt/format.h>
+// #include "date_utils.hxx"
 
 const std::string KafkaReader::consumerGroup = "CLOTHO";
 
@@ -9,8 +9,6 @@ KafkaReader::KafkaReader(const std::string& brokerUrl,
                          const uint16_t batchSize,
                          const uint16_t timeout,
                          std::string topic,
-                         moodycamel::ConcurrentQueue<std::string>* nodeQueuePtr,
-                         moodycamel::ConcurrentQueue<std::string>* edgeQueuePtr,
                          moodycamel::ConcurrentQueue<std::string>* loadQueuePtr)
   : ScanReader(loadQueuePtr)
   , mBrokerUrl(brokerUrl)
@@ -18,8 +16,6 @@ KafkaReader::KafkaReader(const std::string& brokerUrl,
   , batchSize(batchSize)
   , timeout(timeout)
   , mTopic(std::move(topic))
-  , mNodeQueuePtr(nodeQueuePtr)
-  , mEdgeQueuePtr(edgeQueuePtr)
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
   app.logger().debug("Configuring kafka reader");

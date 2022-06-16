@@ -1,29 +1,13 @@
 #include "solver_wrapper.hxx"
-#include "date_utils.hxx"
-#include "generator.hxx"
-#include "processor.hxx"
-#include "transportation.hxx"
 #include "utils.hxx"
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Net/HTTPSClientSession.h>
-#include <Poco/URI.h>
 #include <Poco/Util/ServerApplication.h>
-#include <algorithm>
-#include <coroutine>
-#include <cstddef>
-#include <execution>
-#include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <fstream>
-#include <istream>
-#include <list>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
+
+#include <iostream>
 
 SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* loadQueue,
@@ -33,8 +17,14 @@ SolverWrapper::SolverWrapper(
   , mLoadQueuePtr(loadQueue)
   , mSolutionQueuePtr(solutionQueue)
 {
-  // Poco::Util::Application& app = Poco::Util::Application::instance();
   mRunning = true;
+}
+
+SolverWrapper::SolverWrapper(const SolverWrapper& other)
+  : mSolverPtr(other.mSolverPtr)
+  , mLoadQueuePtr(other.mLoadQueuePtr)
+  , mSolutionQueuePtr(other.mSolutionQueuePtr)
+{
 }
 
 SolverWrapper::SolverWrapper(
@@ -45,18 +35,18 @@ SolverWrapper::SolverWrapper(
   std::filesystem::path& nodeFile
 #else
   ,
-  const std::string& node_uri,
-  const std::string& node_idx,
-  const std::string& node_user,
-  const std::string& node_pass
+  std::string& node_uri,
+  std::string& node_idx,
+  std::string& node_user,
+  std::string& node_pass
 #endif
 #ifdef WITH_EDGE_FILE
   ,
   std::filesystem::path& edgeFile
 #else
   ,
-  const std::string& edge_uri,
-  const std::string& edge_auth
+  std::string& edge_uri,
+  std::string& edge_auth
 #endif
   )
   : mLoadQueuePtr(loadQueuePtr)
@@ -139,26 +129,42 @@ SolverWrapper::init_nodes()
 
   std::unordered_map<std::string, std::vector<Node<Graph>>> colocatedNodes;
 
-  std::for_each(
-    data.begin(), data.end(), [this, &colocatedNodes](auto const& facility) {
-      auto node = std::make_shared<TransportCenter>(
-        facility["facility_code"],
-        facility["name"],
-        parse_time(facility["facility_attributes.CenterArrivalCutoff"]),
-        MovementType::LINEHAUL,
-        ProcessType::OUTBOUND,
-        parse_time(facility["facility_attributes.OutboundProcessingTime"]));
-      auto [vertex, has_vertex] = mSolverPtr->add_node(node);
-      auto propertyId = facility["property_id"];
+  std::for_each(data.begin(),
+                data.end(),
+                [this, &colocatedNodes](auto const& facilityWithSource) {
+                  auto facility = facilityWithSource["_source"];
+                  auto facilityAttrs = facility["facility_attributes"];
+                  auto cutoffString = facilityAttrs["CenterArrivalCutoff"];
+                  auto processingTimeString =
+                    facilityAttrs["OutboundProcessingTime"];
 
-      if (not propertyId.empty() && has_vertex) {
+                  time_of_day cutoffDefault{ minutes(540) };
+                  minutes outProcessTime{ 0 };
 
-        if (not colocatedNodes.contains(propertyId)) {
-          colocatedNodes[propertyId] = std::vector<Node<Graph>>{};
-        }
-        colocatedNodes[propertyId].emplace_back(vertex);
-      }
-    });
+                  if (not cutoffString.empty())
+                    cutoffDefault = parse_time(cutoffString);
+
+                  if (not processingTimeString.empty())
+                    outProcessTime = parse_time(processingTimeString);
+
+                  auto node =
+                    std::make_shared<TransportCenter>(facility["facility_code"],
+                                                      facility["name"],
+                                                      cutoffDefault,
+                                                      MovementType::LINEHAUL,
+                                                      ProcessType::OUTBOUND,
+                                                      outProcessTime);
+                  auto [vertex, has_vertex] = mSolverPtr->add_node(node);
+                  auto propertyId = facility["property_id"];
+
+                  if (not propertyId.empty() && has_vertex) {
+
+                    if (not colocatedNodes.contains(propertyId)) {
+                      colocatedNodes[propertyId] = std::vector<Node<Graph>>{};
+                    }
+                    colocatedNodes[propertyId].emplace_back(vertex);
+                  }
+                });
 
   std::for_each(
     colocatedNodes.begin(),
@@ -226,44 +232,30 @@ SolverWrapper::init_edges()
   load_edges(data);
 }
 
-generator<int> squires(int max) {
-  for (int i = 0; i < max; i++) {
-        co_yield i * i;
-  }
-}
-
 auto
 parse_route(const nlohmann::json& routeData)
 {
-  using RouteInfo = std::tuple<std::string,
-                               VehicleType,
-                               MovementType,
-                               minutes,
-                               time_of_day,
-                               minutes,
-                               minutes,
-                               std::vector<uint8_t>,
-                               std::string,
-                               std::string>;
   auto eUUID = routeData["route_schedule_uuid"];
   auto eName = routeData["name"];
   auto eType = routeData["route_type"];
   auto eStop = routeData["halt_centers"];
-  auto eDays =
-    routeData["days_of_week"] | std::views::transform([](const auto& eDay) {
-      return static_cast<uint8_t>(eDay);
-    });
+  auto eDays = routeData["days_of_week"] |
+               std::views::transform([](const auto& eDay) -> uint8_t {
+                 return static_cast<uint8_t>(eDay);
+               });
+  uint16_t eInit = (double)routeData["reporting_time_ss"];
 
-  auto eInit = (uint16_t)getJSONValue<double>(routeData, "reporting_time_ss");
-  auto base = [](size_t idx, size_t sIdx, size_t n) -> size_t {
-    size_t offset = idx * n - (idx * idx - idx) / 2;
+  auto base = [](size_t idx, size_t sIdx, size_t size) -> size_t {
+    size_t offset = idx * size - (idx * idx - idx) / 2;
     return offset + sIdx - idx - 1;
   };
 
   size_t numRoutes = eStop.size();
   numRoutes *= eStop.size() - 1;
   numRoutes /= 2;
-  std::vector<RouteInfo> subRoutes;
+
+  std::vector<TransportationEdgeAttributes<decltype(eDays)>> subRoutes;
+
   subRoutes.reserve(numRoutes);
 
   for (size_t idxS = 0; idxS < eStop.size(); ++idxS) {
@@ -271,12 +263,12 @@ parse_route(const nlohmann::json& routeData)
       auto sNode = eStop[idxS];
       auto tNode = eStop[idxT];
 
-      auto sRelArr = (uint16_t)getJSONValue<double>(sNode, "rel_eta_ss");
-      auto tRelArr = (uint16_t)getJSONValue<double>(tNode, "rel_eta_ss");
-      auto sRelDep = (uint16_t)getJSONValue<double>(sNode, "rel_etd_ss");
-      auto tRelDep = (uint16_t)getJSONValue<double>(tNode, "rel_etd_ss");
-      auto sNodeId = getJSONValue<std::string>(sNode, "center_code");
-      auto tNodeId = getJSONValue<std::string>(tNode, "center_code");
+      uint16_t sRelArr = (double)sNode["rel_eta_ss"];
+      uint16_t tRelArr = (double)tNode["rel_eta_ss"];
+      uint16_t sRelDep = (double)sNode["rel_etd_ss"];
+      uint16_t tRelDep = (double)tNode["rel_etd_ss"];
+      std::string sNodeId = sNode["center_code"];
+      std::string tNodeId = tNode["center_code"];
 
       time_of_day eDep(minutes(eInit + sRelDep));
       auto eDur = minutes(tRelArr - sRelDep);
@@ -291,7 +283,7 @@ parse_route(const nlohmann::json& routeData)
         eInb /= 2;
       }
 
-      auto routeInfo = std::make_tuple(
+      subRoutes.emplace_back(
         fmt::format("{}.{}", eUUID, base(idxS, idxT, eStop.size())),
         eName,
         eType == "air" ? VehicleType::AIR : VehicleType::SURFACE,
@@ -303,7 +295,6 @@ parse_route(const nlohmann::json& routeData)
         eDays,
         sNodeId,
         tNodeId);
-      subRoutes.push_back(routeInfo);
     }
   }
   return subRoutes;
@@ -318,35 +309,25 @@ SolverWrapper::load_edges(const nlohmann::json& data)
     auto subRoutes = parse_route(route);
 
     for (const auto& subRoute : subRoutes) {
-      auto [eIdx,
-            eVehicle,
-            eMovement,
-            eOut,
-            eDep,
-            eDur,
-            eInb,
-            eDays,
-            eSNode,
-            eTNode] = subRoute;
-      auto [sNodeDesc, hasSNode] = mSolverPtr->add_node(eSNode);
-      auto [tNodeDesc, hasTNode] = mSolverPtr->add_node(eTNode);
+      auto [sNodeDesc, hasSNode] = mSolverPtr->add_node(subRoute.source());
+      auto [tNodeDesc, hasTNode] = mSolverPtr->add_node(subRoute.target());
 
       if (hasSNode and hasTNode) {
         std::shared_ptr<TransportCenter> sNodeAttr =
           mSolverPtr->get_node(sNodeDesc);
         auto tNodeAttr = mSolverPtr->get_node(tNodeDesc);
         auto edge = std::make_shared<TransportEdge>(
-          eIdx,
-          eIdx,
-          eVehicle,
-          eMovement,
-          sNodeAttr->latency(eMovement, ProcessType::OUTBOUND),
-          tNodeAttr->latency(eMovement, ProcessType::INBOUND),
-          eOut,
-          eDep,
-          eDur,
-          eInb,
-          eDays);
+          subRoute.code(),
+          subRoute.name(),
+          subRoute.vehicle(),
+          subRoute.movement(),
+          sNodeAttr->latency(subRoute.movement(), ProcessType::OUTBOUND),
+          tNodeAttr->latency(subRoute.movement(), ProcessType::INBOUND),
+          subRoute.out_source(),
+          subRoute.departure(),
+          subRoute.duration(),
+          subRoute.in_target(),
+          subRoute.working_days());
         auto [edgeDesc, eAdded] =
           mSolverPtr->add_edge(sNodeDesc, tNodeDesc, edge);
 

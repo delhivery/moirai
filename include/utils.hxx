@@ -9,27 +9,38 @@
 #define JSON_HAS_RANGES 1
 #endif
 
-#include <boost/bimap.hpp>
-#include <nlohmann/json.hpp>
-#include <numeric>
-#include <ranges>
+// #include <boost/bimap.hpp>
+// #include <nlohmann/json.hpp>
+// #include <numeric>
+// #include <ranges>
 #include <string>
 #include <string_view>
 
-using StringToStringMap = boost::bimap<std::string, std::string>;
+// using StringToStringMap = boost::bimap<std::string, std::string>;
 
+/*
 auto
 indexAndTypeToPath(const std::string&, const std::string&) -> std::string;
 
 auto
 indexAndTypeToPath(const std::string&, const std::string&, const std::string&)
   -> std::string;
+*/
 
-auto
-getEncodedCredentials(const std::string&, const std::string&) -> std::string;
+auto getEncodedCredentials(std::string_view, std::string_view) -> std::string;
 
 void
 to_lower(std::string&);
+
+/*
+template<std::ranges::range range_t>
+constexpr auto
+to_vector(range_t&& range)
+  -> std::vector<std::decay_t<std::ranges::range_value_t<range_t>>>
+{
+  using value_t = std::decay_t<std::ranges::range_value_t<range_t>>;
+  return std::vector<value_t>(range.begin(), range.end());
+}
 
 template<typename T>
 auto
@@ -52,6 +63,7 @@ getJSONValue(const nlohmann::json& data, std::string_view key_string) -> T
       });
     return value.get<T>();
   */
+/*
 }
 
 template<typename T>
@@ -60,5 +72,6 @@ getJSONValue(const nlohmann::json& data, size_t index) -> T
 {
   return data.at(index).get<T>();
 }
+*/
 
 #endif
