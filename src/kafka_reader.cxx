@@ -18,39 +18,37 @@ KafkaReader::KafkaReader(const std::string& brokerUrl,
   , mTopic(std::move(topic))
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  app.logger().debug("Configuring kafka reader");
+  mLogger.debug("Configuring kafka reader");
   RdKafka::Conf* config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 
   std::string errorString;
 
   if (config->set("enable.partition.eof", "false", errorString) !=
       RdKafka::Conf::CONF_OK) {
-    app.logger().error(
-      fmt::format("Error enabling partition eof: {}", errorString));
+    mLogger.error(fmt::format("Error enabling partition eof: {}", errorString));
     throw Poco::ApplicationException(errorString);
   }
 
   if (config->set("group.id", consumerGroup, errorString) !=
       RdKafka::Conf ::CONF_OK) {
-    app.logger().error(fmt::format("Error setting group id: {}", errorString));
+    mLogger.error(fmt::format("Error setting group id: {}", errorString));
     throw Poco::ApplicationException(errorString);
   }
 
   if (config->set("bootstrap.servers", brokerUrl, errorString) !=
       RdKafka::Conf::CONF_OK) {
-    app.logger().error(
-      fmt::format("Error bootstrapping servers. {}", errorString));
+    mLogger.error(fmt::format("Error bootstrapping servers. {}", errorString));
     throw Poco::ApplicationException(errorString);
   }
 
   if (config->set("auto.offset.reset", "smallest", errorString) !=
       RdKafka::Conf::CONF_OK) {
-    app.logger().error(fmt::format("Error setting offset: {}", errorString));
+    mLogger.error(fmt::format("Error setting offset: {}", errorString));
   }
   mConsumerPtr = RdKafka::KafkaConsumer::create(config, errorString);
 
   if (mConsumerPtr == nullptr) {
-    app.logger().error(fmt::format("Error creating consumer. {}", errorString));
+    mLogger.error(fmt::format("Error creating consumer. {}", errorString));
     throw Poco::ApplicationException(errorString);
   }
 
@@ -58,9 +56,9 @@ KafkaReader::KafkaReader(const std::string& brokerUrl,
 
   if (RdKafka::ErrorCode errorCode = mConsumerPtr->subscribe({ mTopic });
       errorCode) {
-    app.logger().error(fmt::format("Error subscribing to topic<{}>: {}",
-                                   mTopic,
-                                   RdKafka::err2str(errorCode)));
+    mLogger.error(fmt::format("Error subscribing to topic<{}>: {}",
+                              mTopic,
+                              RdKafka::err2str(errorCode)));
     throw Poco::ApplicationException(RdKafka::err2str(errorCode));
   }
   mRunning = true;
@@ -92,8 +90,7 @@ KafkaReader::consume_batch(size_t batchSize, int maxWaitMS)
         messages.push_back(message);
         break;
       default:
-        app.logger().error(
-          fmt::format("%% Consumer error: {}", message->errstr()));
+        mLogger.error(fmt::format("%% Consumer error: {}", message->errstr()));
         mRunning = false;
         delete message;
         return messages;
@@ -120,15 +117,14 @@ KafkaReader::run()
     auto messages = consume_batch(batchSize, timeout);
 
     if (not messages.empty()) {
-      app.logger().debug(
-        fmt::format("Accumulated {} messages", messages.size()));
+      mLogger.debug(fmt::format("Accumulated {} messages", messages.size()));
     }
 
     for (auto& message : messages) {
-      app.logger().debug(fmt::format("Message in {} [{}] at offset {}",
-                                     message->topic_name(),
-                                     message->partition(),
-                                     message->offset()));
+      mLogger.debug(fmt::format("Message in {} [{}] at offset {}",
+                                message->topic_name(),
+                                message->partition(),
+                                message->offset()));
       std::string data(static_cast<const char*>(message->payload()));
       mloadQueuePtr->enqueue(data);
       delete message;

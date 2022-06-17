@@ -1,6 +1,7 @@
 #ifndef MOIRAI_SOLVER_WRAPPER
 #define MOIRAI_SOLVER_WRAPPER
 
+#include <Poco/Logger.h>
 #ifndef JSON_HAS_CPP_20
 #define JSON_HAS_CPP_20
 #endif
@@ -19,6 +20,7 @@
 class SolverWrapper : public Poco::Runnable
 {
 private:
+  Poco::Logger& mLogger = Poco::Logger::get("solver-wrapper");
   std::shared_ptr<Solver> mSolverPtr;
   moodycamel::ConcurrentQueue<std::string>* mLoadQueuePtr;
   moodycamel::ConcurrentQueue<std::string>* mSolutionQueuePtr;

@@ -7,8 +7,6 @@
 #include <fmt/format.h>
 #include <fstream>
 
-#include <iostream>
-
 SolverWrapper::SolverWrapper(
   moodycamel::ConcurrentQueue<std::string>* loadQueue,
   moodycamel::ConcurrentQueue<std::string>* solutionQueue,
@@ -66,10 +64,14 @@ SolverWrapper::SolverWrapper(
   , edge_auth(edge_auth)
 #endif
 {
-  // Poco::Util::Application& app = Poco::Util::Application::instance();
+  Poco::Util::Application& app = Poco::Util::Application::instance();
+  // auto logger = app.logger().create("solver_wrapper");
   mSolverPtr = std::make_shared<Solver>();
+  mLogger.debug("Wrapper: Initialized dijkstra");
   init_nodes();
+  mLogger.debug("Wrapper: Initialized nodes");
   init_edges();
+  mLogger.debug("Wrapper: Initialized edges");
   mRunning = true;
 }
 
@@ -147,9 +149,11 @@ SolverWrapper::init_nodes()
                   if (not processingTimeString.empty())
                     outProcessTime = parse_time(processingTimeString);
 
+                  std::string fcode = facility["facility_code"];
+                  std::string fname = facility["name"];
                   auto node =
                     std::make_shared<TransportCenter>(facility["facility_code"],
-                                                      facility["name"],
+                                                      fname,
                                                       cutoffDefault,
                                                       MovementType::LINEHAUL,
                                                       ProcessType::OUTBOUND,
@@ -184,7 +188,7 @@ SolverWrapper::init_nodes()
                                  fmt::format("CUSTODY-{}-{}", nodeI, nodeJ)))
                     .second;
           if (not added) {
-            app.logger().debug("Unable to add custody edge");
+            mLogger.debug("Unable to add custody edge");
           }
           added = mSolverPtr
                     ->add_edge(nodeJ,
@@ -195,7 +199,7 @@ SolverWrapper::init_nodes()
                     .second;
 
           if (not added) {
-            app.logger().debug("Unable to add rev custody edge");
+            mLogger.debug("Unable to add rev custody edge");
           }
         }
       }
@@ -226,10 +230,10 @@ SolverWrapper::init_edges()
   std::istream& response_stream = session.receiveResponse(response);
 
   if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK) {
-    data = nlohmann::json::parse(response_stream)["data"];
+    data = nlohmann::json::parse(response_stream);
   }
 #endif
-  load_edges(data);
+  load_edges(data["data"]);
 }
 
 auto
@@ -332,7 +336,7 @@ SolverWrapper::load_edges(const nlohmann::json& data)
           mSolverPtr->add_edge(sNodeDesc, tNodeDesc, edge);
 
         if (!eAdded) {
-          app.logger().debug("Unable to add edge");
+          mLogger.debug("Unable to add edge");
         }
       }
     }
@@ -444,8 +448,8 @@ void
 SolverWrapper::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
-  app.logger().debug("Initializing solver");
-  app.logger().debug("Processing loads");
+  mLogger.debug("Initializing solver");
+  mLogger.debug("Processing loads");
 
   constexpr uint sleepFor = 200;
   constexpr uint batchSize = 64;
@@ -453,13 +457,13 @@ SolverWrapper::run()
   while (mRunning or mLoadQueuePtr->size_approx() > 0) {
     try {
       Poco::Thread::sleep(sleepFor);
-
       std::vector<std::string> payloads;
       payloads.reserve(batchSize);
 
       if (size_t nItems =
             mLoadQueuePtr->try_dequeue_bulk(payloads.begin(), batchSize);
           nItems > 0) {
+        mLogger.debug("Got payload. Finding path");
         std::for_each(
           payloads.begin(),
           payloads.end(),
@@ -478,7 +482,7 @@ SolverWrapper::run()
                           });
 
             if (isNull) {
-              app.logger().debug(fmt::format(
+              mLogger.debug(fmt::format(
                 "Null data against mandatory fields. {}", data.dump()));
               return;
             }
@@ -536,7 +540,7 @@ SolverWrapper::run()
           });
       }
     } catch (const std::exception& exc) {
-      app.logger().error(fmt::format("Exception occurred: {}", exc.what()));
+      mLogger.error(fmt::format("Exception occurred: {}", exc.what()));
     }
   }
 }

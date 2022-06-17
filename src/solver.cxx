@@ -39,7 +39,7 @@ Solver::add_node(const std::shared_ptr<TransportCenter>& center)
   if (created.second) {
     return created;
   }
-  Node<Graph> node = boost::add_vertex(center, graph);
+  Node<Graph> node = boost::add_vertex(center, mGraph);
   mNamedVertexMap[center->code()] = node;
   return { node, true };
 }
@@ -48,7 +48,7 @@ auto
 Solver::get_node(const Node<Graph> node) const
   -> std::shared_ptr<TransportCenter>
 {
-  return graph[node];
+  return mGraph[node];
 }
 
 auto
@@ -70,7 +70,7 @@ Solver::add_edge(const Node<Graph>& source,
   if (mNamedEdgeMap.contains(edge->code())) {
     return { mNamedEdgeMap.at(edge->code()), true };
   }
-  return boost::add_edge(source, target, edge, graph);
+  return boost::add_edge(source, target, edge, mGraph);
 }
 
 template<typename FilteredGraph>
@@ -140,8 +140,8 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
   using FilterType = FilterByVehicleType<Graph, VehicleType::AIR>;
   using FilteredGraph = boost::filtered_graph<Graph, FilterType>;
 
-  FilterType filter{ &graph };
-  FilteredGraph fGraph(graph, filter);
+  FilterType filter{ &mGraph };
+  FilteredGraph fGraph(mGraph, filter);
   return solve(source,
                target,
                start,
@@ -165,8 +165,8 @@ Solver::find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
   using FilterType = FilterByVehicleType<Graph, VehicleType::SURFACE>;
   using FilteredGraph = boost::filtered_graph<Graph, FilterType>;
 
-  FilterType filter{ &graph };
-  FilteredGraph fGraph(graph, filter);
+  FilterType filter{ &mGraph };
+  FilteredGraph fGraph(mGraph, filter);
   return solve(source,
                target,
                start,
@@ -191,7 +191,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
   using FilterType = FilterByVehicleType<ReversedGraph, VehicleType::AIR>;
   using FilteredGraph = boost::filtered_graph<ReversedGraph, FilterType>;
 
-  ReversedGraph revGraph = boost::make_reverse_graph(graph);
+  ReversedGraph revGraph = boost::make_reverse_graph(mGraph);
   FilterType filter{ &revGraph };
   FilteredGraph fGraph(revGraph, filter);
   return solve(source,
@@ -218,7 +218,7 @@ Solver::find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
   using FilterType = FilterByVehicleType<ReversedGraph, VehicleType::SURFACE>;
   using FilteredGraph = boost::filtered_graph<ReversedGraph, FilterType>;
 
-  ReversedGraph revGraph = boost::make_reverse_graph(graph);
+  ReversedGraph revGraph = boost::make_reverse_graph(mGraph);
   FilterType filter{ &revGraph };
   FilteredGraph fGraph(revGraph, filter);
   return solve(source,

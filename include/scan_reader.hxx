@@ -2,8 +2,7 @@
 #define MOIRAI_SCAN_READER
 
 #include "concurrentqueue.h"
-#include <Poco/Runnable.h>
-#include <atomic>
+#include "runnable.hxx"
 #include <string>
 // #include "utils.hxx"
 // #include <filesystem>
@@ -13,7 +12,7 @@
 class ScanReader : public Poco::Runnable
 {
 protected:
-  moodycamel::ConcurrentQueue<std::string>* mloadQueuePtr;
+  moodycamel::ConcurrentQueue<std::string>* mQueuePtr;
 
 public:
   std::atomic<bool> mRunning;

@@ -32,6 +32,7 @@ void
 FileReader::run()
 {
   Poco::Util::Application& app = Poco::Util::Application::instance();
+  mLogger.debug("FR: run invoked");
   std::ifstream loadStream;
   std::ofstream clearStream;
   int lastPosition = 0;
@@ -42,8 +43,10 @@ FileReader::run()
     assert(loadStream.is_open());
     assert(!loadStream.fail());
   } catch (const std::exception& exc) {
-    app.logger().error(fmt::format("FR: Error opening file: {}", exc.what()));
+    mLogger.error(fmt::format("FR: Error opening file: {}", exc.what()));
   }
+
+  mLogger.debug("FR: Starting file reader");
   while (mRunning) {
     try {
       Poco::Thread::sleep(sleepFor);
@@ -60,12 +63,14 @@ FileReader::run()
 
         if (payload.is_object()) {
           mloadQueuePtr->enqueue(payload.dump());
+          mLogger.debug("Enqueued: {}", payload.dump());
         } else {
-          app.logger().error("Payload is not an object");
+          mLogger.error("Payload is not an object");
         }
       }
+      mLogger.debug("Read file");
     } catch (const std::exception& exc) {
-      app.logger().error(fmt::format("FR: Error occurred: {}", exc.what()));
+      mLogger.error(fmt::format("FR: Error occurred: {}", exc.what()));
     }
   }
 }

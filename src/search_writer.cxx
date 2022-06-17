@@ -69,7 +69,7 @@ SearchWriter::run()
                                    : fmt::format("{}\n{}", acc, row.dump());
                         });
       stringified += "\n";
-      app.logger().information(stringified);
+      mLogger.information(stringified);
       try {
         Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
                                        "/_bulk",
@@ -87,17 +87,17 @@ SearchWriter::run()
 
         if (response.getStatus() == Poco::Net::HTTPResponse::HTTP_OK or
             response.getStatus() == Poco::Net::HTTPResponse::HTTP_CREATED) {
-          app.logger().debug(fmt::format(
-            "Got successful response from ES Host: {}", response_raw.str()));
-          app.logger().debug(fmt::format("Pushed {} records", num_records));
+          mLogger.debug(fmt::format("Got successful response from ES Host: {}",
+                                    response_raw.str()));
+          mLogger.debug(fmt::format("Pushed {} records", num_records));
         } else {
-          app.logger().error(fmt::format("Error uploading data: <{}>: {}",
-                                         response.getStatus(),
-                                         response_raw.str()));
-          app.logger().error(fmt::format("Raw data: {}", stringified));
+          mLogger.error(fmt::format("Error uploading data: <{}>: {}",
+                                    response.getStatus(),
+                                    response_raw.str()));
+          mLogger.error(fmt::format("Raw data: {}", stringified));
         }
       } catch (const std::exception& exc) {
-        app.logger().error(fmt::format(
+        mLogger.error(fmt::format(
           "Error pushing data: {}. Data: {}", exc.what(), stringified));
       }
     }

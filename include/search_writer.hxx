@@ -2,6 +2,7 @@
 #define MOIRAI_SEARCH_WRITER
 
 #include "concurrentqueue.h"
+#include <Poco/Logger.h>
 #include <Poco/Runnable.h>
 #include <Poco/URI.h>
 #include <string>
@@ -9,6 +10,7 @@
 class SearchWriter : public Poco::Runnable
 {
 private:
+  Poco::Logger& mLogger = Poco::Logger::get("search-writer");
   Poco::URI uri;
   const std::string username;
   const std::string password;

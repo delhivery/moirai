@@ -11,6 +11,12 @@ TransportCenter::TransportCenter(std::string code,
   , mName(std::move(name))
   , mCutoff(cutoff)
 {
+
+  constexpr auto hashLatencies = [](const LatencyType& latency) -> size_t {
+    return latency.first << sizeof(MovementType) * CHAR_BIT | latency.second;
+  };
+
+  mLatencies = LatencyMap(0, hashLatencies);
   mLatencies[std::make_pair(movement, process)] = duration;
 }
 

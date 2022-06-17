@@ -37,10 +37,6 @@ using LatencyType = std::pair<MovementType, ProcessType>;
 
 using LatencyHash = std::function<size_t(const LatencyType&)>;
 
-constexpr auto hashLatencies = [](const LatencyType& latency) -> size_t {
-  return latency.first << sizeof(MovementType) * CHAR_BIT | latency.second;
-};
-
 using LatencyMap = std::unordered_map<LatencyType, minutes, LatencyHash>;
 
 class TransportCenter

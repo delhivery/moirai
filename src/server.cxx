@@ -316,40 +316,40 @@ Moirai::handle_help(const std::string& name, const std::string& value)
 auto
 Moirai::main(const ArgVec& arg) -> int
 {
-
   logger().information("Starting main");
   if (!mHelpRequested) {
     auto* loadQueuePtr = new moodycamel::ConcurrentQueue<std::string>();
     auto* solQueuePtr = new moodycamel::ConcurrentQueue<std::string>();
     {
-      SolverWrapper wrapper(loadQueuePtr,
-                            solQueuePtr
+      auto solverWrapperPtr = std::make_shared<SolverWrapper>(loadQueuePtr,
+                                                              solQueuePtr
 #ifdef WITH_NODE_FILE
-                            ,
-                            mNodeFile
+                                                              ,
+                                                              mNodeFile
 #else
-                            ,
-                            mNodeUri,
-                            mNodeIndex,
-                            mNodeAuthUser,
-                            mNodeAuthPass
+                                                              ,
+                                                              mNodeUri,
+                                                              mNodeIndex,
+                                                              mNodeAuthUser,
+                                                              mNodeAuthPass
 #endif
 #ifdef WITH_EDGE_FILE
-                            ,
-                            mEdgeFile
+                                                              ,
+                                                              mEdgeFile
 #else
-                            ,
-                            mEdgeUri,
-                            mEdgeToken
+                                                              ,
+                                                              mEdgeUri,
+                                                              mEdgeToken
 #endif
       );
+      logger().information("Solver loaded");
 
-      std::shared_ptr<ScanReader> reader = nullptr;
+      std::shared_ptr<ScanReader> scanReaderPtr = nullptr;
 
 #ifdef WITH_LOAD_FILE
-      reader = std::make_shared<FileReader>(mLoadFile, loadQueuePtr);
+      scanReaderPtr = std::make_shared<FileReader>(mLoadFile, loadQueuePtr);
 #else
-      reader = std::make_shared<KafkaReader>(
+      scanReaderPtr = std::make_shared<KafkaReader>(
         std::accumulate(
           mLoadBrokerUris.begin(),
           mLoadBrokerUris.end(),
@@ -363,41 +363,47 @@ Moirai::main(const ArgVec& arg) -> int
         mLoadTopic,
         loadQueuePtr);
 #endif
-      std::shared_ptr<SearchWriter> writer = nullptr;
+      logger().information("Filereader loaded");
+      std::shared_ptr<SearchWriter> searchWriterPtr = nullptr;
 
 #ifdef ENABLE_SYNC
-      writer = std::make_shared<SearchWriter>(Poco::URI(mSyncUri),
-                                              mSyncIndex,
-                                              mSyncAuthPass,
-                                              mSyncAuthPass,
-                                              solQueuePtr);
+      searchWriterPtr = std::make_shared<SearchWriter>(Poco::URI(mSyncUri),
+                                                       mSyncIndex,
+                                                       mSyncAuthPass,
+                                                       mSyncAuthPass,
+                                                       solQueuePtr);
 #endif
+      logger().information("SearchWriter loaded");
       int16_t nThreads = std::thread::hardware_concurrency();
-      nThreads = nThreads < 3 ? 3 : nThreads;
+      nThreads = 3;
       std::vector<Poco::Thread> threads(nThreads);
       std::vector<std::shared_ptr<SolverWrapper>> secondary;
-      secondary.reserve(nThreads - 3);
 
       try {
-        threads[0].start(*reader);
-        threads[1].start(*writer);
-        threads[2].start(wrapper);
+        size_t tIdx = 0;
+        threads[tIdx++].start(*scanReaderPtr);
+#ifdef ENABLE_SYNC
+        threads[tIdx++].start(*searchWriterPtr);
+#endif
+        threads[tIdx++].start(*solverWrapperPtr);
 
-        for (int idx = 3; idx < nThreads; ++idx) {
-          secondary.emplace_back(std::make_shared<SolverWrapper>(wrapper));
-          threads[idx].start(*secondary[idx - 3]);
+        for (size_t sIdx = 0; tIdx < nThreads; ++tIdx, ++sIdx) {
+          secondary.emplace_back(solverWrapperPtr);
+          threads[tIdx].start(*secondary[sIdx]);
         }
       } catch (const std::exception& exc) {
         logger().error(fmt::format("MAIN: Error occurred: {}", exc.what()));
       }
       waitForTerminationRequest();
       logger().information("Termination requested");
-      reader->mRunning = false;
-      writer->running = false;
-      wrapper.mRunning = false;
+      scanReaderPtr->mRunning = false;
+#ifdef ENABLE_SYNC
+      searchWriterPtr->running = false;
+#endif
+      solverWrapperPtr->mRunning = false;
 
-      for (auto& wrapper : secondary) {
-        wrapper->mRunning = false;
+      for (auto& wrapperPtr : secondary) {
+        wrapperPtr->mRunning = false;
       }
 
       for (auto& thread : threads) {

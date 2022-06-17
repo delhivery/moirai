@@ -37,7 +37,7 @@ class Solver
 {
 
 private:
-  Graph graph;
+  Graph mGraph;
   std::map<std::string, Node<Graph>> mNamedVertexMap;
   std::map<std::string, Edge<Graph>> mNamedEdgeMap;
 
