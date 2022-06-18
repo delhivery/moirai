@@ -11,53 +11,55 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Net/HTTPSClientSession.h>
-// #include <Poco/Thread.h>
-#include <Poco/Util/ServerApplication.h>
+#include <execution>
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-SearchWriter::SearchWriter(
-  const Poco::URI& uri,
-  const std::string& search_user,
-  const std::string& search_pass,
-  const std::string& search_index,
-  moodycamel::ConcurrentQueue<std::string>* solution_queue)
+SearchWriter::SearchWriter(const Poco::URI& uri,
+                           const std::string& search_user,
+                           const std::string& search_pass,
+                           const std::string& search_index,
+                           queue_t* qPtr,
+                           size_t batchSize)
   : uri(uri)
   , username(search_user)
   , password(search_pass)
-  , search_index(search_index)
+  , mIndex(search_index)
   , solution_queue(solution_queue)
   , running(true)
+  , Consumer(qPtr, batchSize)
 {
+  mSession = Poco::Net::HTTPSClientSession(uri.getHost(), uri.getPort();
+}
+
+void
+SearchWriter::push(const json_t& records, size_t nRecords)
+{
+  auto entries =
+    records | std::views::filter([](const auto& record) {
+      return not record["_id"].is_null();
+    }) |
+    std::views::transform([](const auto& record) {
+      nlohmann::json entry = record;
+      entry.erase("_id");
+      return nlohmann::json::array{
+        { "index", { { "_index", mIndex }, { "_id", record["_id"] } } }
+      };
+    }) |
+    std::views::join;
+
+  Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST,
+                                 "/_bulk",
+                                 Poco::Net::HTTPMessage::HTTP_1_1);
 }
 
 void
 SearchWriter::run()
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
-  Poco::Net::HTTPSClientSession session(uri.getHost(), uri.getPort());
-
   while (running or solution_queue->size_approx() > 0) {
-    Poco::Thread::sleep(2000);
     std::string results[1024];
     if (size_t num_records = solution_queue->try_dequeue_bulk(results, 1024);
         num_records > 0) {
-      std::vector<nlohmann::json> dataset = {};
-
-      std::for_each(
-        results,
-        results + num_records,
-        [this, &dataset](const std::string& result) {
-          auto package = nlohmann::json::parse(result);
-          if (package["_id"].is_null())
-            return;
-          dataset.push_back(nlohmann::json{
-            { "index",
-              { { "_index", search_index },
-                { "_id", package["_id"].template get<std::string>() } } } });
-          package.erase("_id");
-          dataset.push_back(package);
-        });
 
       std::string stringified =
         std::accumulate(dataset.begin(),

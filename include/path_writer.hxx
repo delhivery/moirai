@@ -6,8 +6,11 @@
 
 class PathWriter
 {
+  using json = nlohmann::json;
+  using queue = moodycamel::ConcurrentQueue<json>;
+
 protected:
-  moodycamel::ConcurrentQueue<nlohmann::json>* mQueuePtr;
+  queue* mQueuePtr;
 
 public:
   PathWriter(moodycamel::ConcurrentQueue<nlohmann::json>*);

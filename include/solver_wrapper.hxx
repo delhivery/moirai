@@ -11,19 +11,20 @@
 #endif
 
 #include "concurrentqueue.h"
+#include "runnable.hxx"
 #include "solver.hxx"
 #include <Poco/Runnable.h>
 #include <Poco/URI.h>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
-class SolverWrapper : public Poco::Runnable
+class SolverWrapper : public Runnable
 {
 private:
-  Poco::Logger& mLogger = Poco::Logger::get("solver-wrapper");
+  // Poco::Logger& mLogger = Poco::Logger::get("solver-wrapper");
   std::shared_ptr<Solver> mSolverPtr;
   moodycamel::ConcurrentQueue<std::string>* mLoadQueuePtr;
-  moodycamel::ConcurrentQueue<std::string>* mSolutionQueuePtr;
+  moodycamel::ConcurrentQueue<nlohmann::json>* mSolutionQueuePtr;
 
 #ifdef WITH_NODE_FILE
   std::filesystem::path mNodeFile;
@@ -40,8 +41,6 @@ private:
 #endif
 
 public:
-  std::atomic<bool> mRunning;
-
   SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
                 moodycamel::ConcurrentQueue<std::string>*,
                 std::shared_ptr<Solver>);

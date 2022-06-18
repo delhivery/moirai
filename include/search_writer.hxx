@@ -1,32 +1,29 @@
 #ifndef MOIRAI_SEARCH_WRITER
 #define MOIRAI_SEARCH_WRITER
 
-#include "concurrentqueue.h"
-#include <Poco/Logger.h>
-#include <Poco/Runnable.h>
+#include "consumer.hxx"
 #include <Poco/URI.h>
 #include <string>
 
-class SearchWriter : public Poco::Runnable
+class SearchWriter : public Consumer
 {
 private:
-  Poco::Logger& mLogger = Poco::Logger::get("search-writer");
-  Poco::URI uri;
+  // Poco::Logger& mLogger = Poco::Logger::get("search-writer");
   const std::string username;
   const std::string password;
-  const std::string search_index;
-  moodycamel::ConcurrentQueue<std::string>* solution_queue;
+  const std::string mIndex;
+
+  Poco::Net::HTTPSClientSession mSession;
 
 public:
-  std::atomic<bool> running;
-
   SearchWriter(const Poco::URI&,
                const std::string&,
                const std::string&,
                const std::string&,
-               moodycamel::ConcurrentQueue<std::string>*);
+               queue_t*,
+               size_t);
 
-  void run() override;
+  void push(const json_t&, size_t) override;
 };
 
 #endif

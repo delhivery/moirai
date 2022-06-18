@@ -9,17 +9,13 @@
 // #include <librdkafka/rdkafkacpp.h>
 // #include <vector>
 
-class ScanReader : public Poco::Runnable
+class ScanReader : public Runnable
 {
 protected:
   moodycamel::ConcurrentQueue<std::string>* mQueuePtr;
 
 public:
-  std::atomic<bool> mRunning;
-
   ScanReader(moodycamel::ConcurrentQueue<std::string>*);
-
-  void run() override = 0;
 };
 
 #endif
