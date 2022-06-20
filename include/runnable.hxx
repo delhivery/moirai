@@ -6,14 +6,17 @@
 
 class Runnable : public Poco::Runnable
 {
+private:
+  std::atomic<bool> mStop;
+
 protected:
   static constexpr uint16_t POLL_INTERVAL = 256;
 
-  std::atomic<bool> mStop = false;
-
-  Poco::Logger& mLogger;
+  auto stop() const -> bool;
 
 public:
   void stop(bool);
-}
+
+  virtual auto logger() const -> Poco::Logger& = 0;
+};
 #endif

@@ -83,9 +83,11 @@ add_executable(
   src/search_writer.cxx
   src/utils.cxx
   src/kafka_reader.cxx
-  src/scan_reader.cxx
   src/search_writer.cxx
   src/file_reader.cxx
+  src/producer.cxx
+  src/consumer.cxx
+  src/runnable.cxx
   src/server.cxx)
 
 # src/server.cxx)

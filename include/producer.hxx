@@ -7,13 +7,24 @@
 
 class Producer : public Runnable
 {
+protected:
   using json_t = nlohmann::json;
   using queue_t = moodycamel::ConcurrentQueue<json_t>;
 
-protected:
   queue_t* mQueuePtr;
 
-  Producer(queue_t*);
+  size_t mBatchSize;
+
+  Producer(queue_t*, size_t);
+
+  Producer(const Producer&);
+
+  virtual auto fetch() -> nlohmann::json = 0;
+
+public:
+  Producer();
+
+  void run() override;
 };
 
 #endif

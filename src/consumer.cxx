@@ -7,6 +7,12 @@ Consumer::Consumer()
 {
 }
 
+Consumer::Consumer(const Consumer& other)
+  : mQueuePtr(other.mQueuePtr)
+  , mBatchSize(other.mBatchSize)
+{
+}
+
 Consumer::Consumer(queue_t* qPtr, size_t batchSize = 1024)
   : mQueuePtr(qPtr)
   , mBatchSize(batchSize)
@@ -16,13 +22,18 @@ Consumer::Consumer(queue_t* qPtr, size_t batchSize = 1024)
 void
 Consumer::run()
 {
+  stop(false);
 
   if (mQueuePtr != nullptr) {
-    while (not mStop) {
+    while (not stop()) {
       Poco::Thread::sleep(POLL_INTERVAL);
       json_t results[mBatchSize];
       auto nRecords = mQueuePtr->try_dequeue_bulk(mBatchSize, results);
-      push(results, nRecords);
+      try {
+        push(results, nRecords);
+      } catch (const auto& exc) {
+        mLogger.error(exc.what());
+      }
     }
   }
 }

@@ -2,6 +2,7 @@
 #define MOIRAI_SEARCH_WRITER
 
 #include "consumer.hxx"
+#include <Poco/Net/HTTPSClientSession.h>
 #include <Poco/URI.h>
 #include <string>
 
@@ -9,8 +10,8 @@ class SearchWriter : public Consumer
 {
 private:
   // Poco::Logger& mLogger = Poco::Logger::get("search-writer");
-  const std::string username;
-  const std::string password;
+  const std::string mUser;
+  const std::string mPass;
   const std::string mIndex;
 
   Poco::Net::HTTPSClientSession mSession;

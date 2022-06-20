@@ -1,6 +1,8 @@
 #ifndef MOIRAI_SOLVER_WRAPPER
 #define MOIRAI_SOLVER_WRAPPER
 
+#include "consumer.hxx"
+#include "producer.hxx"
 #include <Poco/Logger.h>
 #ifndef JSON_HAS_CPP_20
 #define JSON_HAS_CPP_20
@@ -18,13 +20,17 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
-class SolverWrapper : public Runnable
+class SolverWrapper
+  : public Consumer
+  , public Producer
 {
+  using consumer_base_t = ::Consumer;
+  using producer_base_t = ::Producer;
+
 private:
-  // Poco::Logger& mLogger = Poco::Logger::get("solver-wrapper");
-  std::shared_ptr<Solver> mSolverPtr;
-  moodycamel::ConcurrentQueue<std::string>* mLoadQueuePtr;
-  moodycamel::ConcurrentQueue<nlohmann::json>* mSolutionQueuePtr;
+  bool mRunning;
+
+  Solver* mSolverPtr;
 
 #ifdef WITH_NODE_FILE
   std::filesystem::path mNodeFile;
@@ -41,14 +47,17 @@ private:
 #endif
 
 public:
-  SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
-                moodycamel::ConcurrentQueue<std::string>*,
-                std::shared_ptr<Solver>);
+  SolverWrapper(Solver*,
+                producer_base_t::queue_t*,
+                consumer_base_t::queue_t*,
+                size_t);
 
   SolverWrapper(const SolverWrapper&);
 
-  SolverWrapper(moodycamel::ConcurrentQueue<std::string>*,
-                moodycamel::ConcurrentQueue<std::string>*
+  SolverWrapper(Solver*,
+                producer_base_t::queue_t*,
+                consumer_base_t::queue_t*,
+                size_t
 #ifdef WITH_NODE_FILE
                 ,
                 std::filesystem::path&
@@ -69,14 +78,15 @@ public:
 #endif
   );
 
+  auto logger() const -> Poco::Logger& override;
+
+  void stop(bool);
+
   void init_nodes();
 
   void init_edges();
 
   void load_edges(const nlohmann::json&);
-
-  auto read_nodes(const std::filesystem::path&)
-    -> std::vector<std::shared_ptr<TransportCenter>>;
 
   auto find_paths(const std::string&,
                   const std::string&,
@@ -85,6 +95,6 @@ public:
                   datetime,
                   auto&) const -> nlohmann::json;
 
-  void run() override;
+  void run() override final;
 };
 #endif

@@ -4,7 +4,7 @@
 #include "file_reader.hxx"
 #include "graph_helpers.hxx"
 #include "kafka_reader.hxx"
-#include "scan_reader.hxx"
+#include "console_writer.hxx"
 #include "search_writer.hxx"
 #include "solver_wrapper.hxx"
 #include "transportation.hxx"
@@ -344,7 +344,7 @@ Moirai::main(const ArgVec& arg) -> int
       );
       logger().information("Solver loaded");
 
-      std::shared_ptr<ScanReader> scanReaderPtr = nullptr;
+      std::shared_ptr<Producer> scanReaderPtr = nullptr;
 
 #ifdef WITH_LOAD_FILE
       scanReaderPtr = std::make_shared<FileReader>(mLoadFile, loadQueuePtr);
@@ -364,7 +364,7 @@ Moirai::main(const ArgVec& arg) -> int
         loadQueuePtr);
 #endif
       logger().information("Filereader loaded");
-      std::shared_ptr<SearchWriter> searchWriterPtr = nullptr;
+      std::shared_ptr<Consumer> searchWriterPtr = nullptr;
 
 #ifdef ENABLE_SYNC
       searchWriterPtr = std::make_shared<SearchWriter>(Poco::URI(mSyncUri),
@@ -372,6 +372,8 @@ Moirai::main(const ArgVec& arg) -> int
                                                        mSyncAuthPass,
                                                        mSyncAuthPass,
                                                        solQueuePtr);
+#else
+      searchWriterPtr = std::make_shared<ConsoleWriter>(solQueuePtr);
 #endif
       logger().information("SearchWriter loaded");
       int16_t nThreads = std::thread::hardware_concurrency();

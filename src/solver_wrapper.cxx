@@ -3,52 +3,53 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Net/HTTPSClientSession.h>
-#include <Poco/Util/ServerApplication.h>
 #include <fmt/format.h>
 #include <fstream>
 
-SolverWrapper::SolverWrapper(
-  moodycamel::ConcurrentQueue<std::string>* loadQueue,
-  moodycamel::ConcurrentQueue<std::string>* solutionQueue,
-  std::shared_ptr<Solver> solver)
-  : mSolverPtr(std::move(solver))
-  , mLoadQueuePtr(loadQueue)
-  , mSolutionQueuePtr(solutionQueue)
+SolverWrapper::SolverWrapper(Solver* solverPtr,
+                             consumer_base_t::queue_t* sQPtr,
+                             producer_base_t::queue_t* lQPtr,
+                             size_t batchSize)
+  : mSolverPtr(solverPtr)
+  , Consumer(sQPtr, batchSize)
+  , Producer(lQPtr, batchSize)
 {
-  mRunning = true;
 }
 
 SolverWrapper::SolverWrapper(const SolverWrapper& other)
-  : mSolverPtr(other.mSolverPtr)
-  , mLoadQueuePtr(other.mLoadQueuePtr)
-  , mSolutionQueuePtr(other.mSolutionQueuePtr)
+  : Consumer(other)
+  , Producer(other)
+  , mSolverPtr(other.mSolverPtr)
 {
 }
 
-SolverWrapper::SolverWrapper(
-  moodycamel::ConcurrentQueue<std::string>* loadQueuePtr,
-  moodycamel::ConcurrentQueue<std::string>* solutionQueuePtr
+SolverWrapper::SolverWrapper(Solver* solverPtr,
+                             producer_base_t::queue_t* sQPtr,
+                             consumer_base_t::queue_t* lQPtr,
+                             size_t batchSize
+
 #ifdef WITH_NODE_FILE
-  ,
-  std::filesystem::path& nodeFile
+                             ,
+                             std::filesystem::path& nodeFile
 #else
-  ,
-  std::string& node_uri,
-  std::string& node_idx,
-  std::string& node_user,
-  std::string& node_pass
+                             ,
+                             std::string& node_uri,
+                             std::string& node_idx,
+                             std::string& node_user,
+                             std::string& node_pass
 #endif
 #ifdef WITH_EDGE_FILE
-  ,
-  std::filesystem::path& edgeFile
+                             ,
+                             std::filesystem::path& edgeFile
 #else
-  ,
-  std::string& edge_uri,
-  std::string& edge_auth
+                             ,
+                             std::string& edge_uri,
+                             std::string& edge_auth
 #endif
-  )
-  : mLoadQueuePtr(loadQueuePtr)
-  , mSolutionQueuePtr(solutionQueuePtr)
+                             )
+  : mSolverPtr(solverPtr)
+  , Producer(lQPtr, batchSize)
+  , Consumer(sQPtr, batchSize)
 #ifdef WITH_NODE_FILE
   , mNodeFile(nodeFile)
 #else
@@ -64,21 +65,26 @@ SolverWrapper::SolverWrapper(
   , edge_auth(edge_auth)
 #endif
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
-  // auto logger = app.logger().create("solver_wrapper");
-  mSolverPtr = std::make_shared<Solver>();
-  mLogger.debug("Wrapper: Initialized dijkstra");
   init_nodes();
-  mLogger.debug("Wrapper: Initialized nodes");
   init_edges();
-  mLogger.debug("Wrapper: Initialized edges");
-  mRunning = true;
+}
+
+auto
+SolverWrapper::logger() const -> Poco::Logger&
+{
+  return Poco::Logger::get("solver-wapper");
+}
+
+void
+SolverWrapper::stop(bool stop)
+{
+  ::Consumer::stop(stop);
+  ::Producer::stop(stop);
 }
 
 void
 SolverWrapper::init_nodes()
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
   auto data = nlohmann::json::array();
 
 #ifdef WITH_NODE_FILE
@@ -143,11 +149,15 @@ SolverWrapper::init_nodes()
                   time_of_day cutoffDefault{ minutes(540) };
                   minutes outProcessTime{ 0 };
 
-                  if (not cutoffString.empty())
-                    cutoffDefault = parse_time(cutoffString);
+                  if (not cutoffString.empty()) {
+                    std::string coS = cutoffString;
+                    cutoffDefault = parse_time(coS);
+                  }
 
-                  if (not processingTimeString.empty())
-                    outProcessTime = parse_time(processingTimeString);
+                  if (not processingTimeString.empty()) {
+                    std::string poS = processingTimeString;
+                    outProcessTime = parse_time(poS);
+                  }
 
                   std::string fcode = facility["facility_code"];
                   std::string fname = facility["name"];
@@ -171,9 +181,7 @@ SolverWrapper::init_nodes()
                 });
 
   std::for_each(
-    colocatedNodes.begin(),
-    colocatedNodes.end(),
-    [this, &app](const auto& entry) {
+    colocatedNodes.begin(), colocatedNodes.end(), [this](const auto& entry) {
       const auto [group_id, nodes] = entry;
       for (size_t i = 0; i < nodes.size(); ++i) {
         for (size_t j = i + 1; j < nodes.size(); ++j) {
@@ -188,7 +196,7 @@ SolverWrapper::init_nodes()
                                  fmt::format("CUSTODY-{}-{}", nodeI, nodeJ)))
                     .second;
           if (not added) {
-            mLogger.debug("Unable to add custody edge");
+            logger().debug("Unable to add custody edge");
           }
           added = mSolverPtr
                     ->add_edge(nodeJ,
@@ -199,7 +207,7 @@ SolverWrapper::init_nodes()
                     .second;
 
           if (not added) {
-            mLogger.debug("Unable to add rev custody edge");
+            logger().debug("Unable to add rev custody edge");
           }
         }
       }
@@ -307,9 +315,7 @@ parse_route(const nlohmann::json& routeData)
 void
 SolverWrapper::load_edges(const nlohmann::json& data)
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
-
-  std::for_each(data.begin(), data.end(), [this, &app](auto const& route) {
+  std::for_each(data.begin(), data.end(), [this](auto const& route) {
     auto subRoutes = parse_route(route);
 
     for (const auto& subRoute : subRoutes) {
@@ -336,7 +342,7 @@ SolverWrapper::load_edges(const nlohmann::json& data)
           mSolverPtr->add_edge(sNodeDesc, tNodeDesc, edge);
 
         if (!eAdded) {
-          mLogger.debug("Unable to add edge");
+          logger().debug("Unable to add edge");
         }
       }
     }
@@ -351,7 +357,6 @@ SolverWrapper::find_paths(const std::string& item,
                           const datetime item_target_limit,
                           auto& subItems) const -> nlohmann::json
 {
-  // Poco::Util::Application& app = Poco::Util::Application::instance();
   datetime mustReachBy = item_target_limit;
   nlohmann::json response = { { "_id", item },
                               { "waybill", item },
@@ -447,7 +452,14 @@ response["pdd_ts"] = mustReachBy.time_since_epoch().count();
 void
 SolverWrapper::run()
 {
-  Poco::Util::Application& app = Poco::Util::Application::instance();
+  ::Consumer::run();
+  ::Producer::run();
+}
+
+/*
+void
+SolverWrapper::run()
+{
   mLogger.debug("Initializing solver");
   mLogger.debug("Processing loads");
 
@@ -544,3 +556,4 @@ SolverWrapper::run()
     }
   }
 }
+*/

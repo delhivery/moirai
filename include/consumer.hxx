@@ -7,15 +7,17 @@
 
 class Consumer : public Runnable
 {
+protected:
   using json_t = nlohmann::json;
   using queue_t = moodycamel::ConcurrentQueue<json_t>;
 
-protected:
   queue_t* mQueuePtr;
 
   size_t mBatchSize;
 
   Consumer(queue_t*, size_t);
+
+  Consumer(const Consumer&);
 
   virtual void push(const json_t&, size_t) = 0;
 
