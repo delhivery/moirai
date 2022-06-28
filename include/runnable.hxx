@@ -1,22 +1,24 @@
 #ifndef MOIRAI_RUNNABLE
 #define MOIRAI_RUNNABLE
 
-#include <Poco/Logger.h>
-#include <Poco/Runnable.h>
+#include <atomic>
+#include <chrono>
+#include <spdlog/logger.h>
 
-class Runnable : public Poco::Runnable
-{
+class Runnable {
 private:
   std::atomic<bool> mStop;
 
 protected:
-  static constexpr uint16_t POLL_INTERVAL = 256;
+  static constexpr std::chrono::milliseconds POLL_INTERVAL{256};
 
   auto stop() const -> bool;
+
+  virtual auto logger() const -> std::shared_ptr<spdlog::logger> = 0;
 
 public:
   void stop(bool);
 
-  virtual auto logger() const -> Poco::Logger& = 0;
+  virtual auto run() -> int = 0;
 };
 #endif

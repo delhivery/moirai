@@ -1,39 +1,30 @@
 #ifndef moirai_graph_helpers
 #define moirai_graph_helpers
 
-#include "date_utils.hxx"
-#include "transportation.hxx"
-#include <boost/graph/graph_traits.hpp> // for graph_traits
-#include <cstring>                      // for memset
+#include "transport.hxx"
+#include <boost/graph/graph_traits.hpp>
+#include <cstring>
 
-static const char emptyChar = 0xFF;
+static const char EMPTY_CHAR = 0xFF;
 
-template<class G, VehicleType V>
-struct FilterByVehicleType
-{
-  const G* graph;
+template <class G, Vehicle V> struct FilterByVehicle {
+  using EdgeDescriptor = typename boost::graph_traits<G>::edge_descriptor;
 
-  FilterByVehicleType() = default;
+  const G *graph;
 
-  FilterByVehicleType(const G* graph)
-    : graph(graph)
-  {
-  }
+  FilterByVehicle() = default;
 
-  auto operator()(
-    const typename boost::graph_traits<G>::edge_descriptor& edge) const -> bool
-  {
+  FilterByVehicle(const G *graph) : graph(graph) {}
+
+  auto operator()(const EdgeDescriptor &edge) const -> bool {
     auto edgeProps = (*graph)[edge];
     return edgeProps->vehicle() <= V;
   }
 };
 
-template<typename E>
-static auto
-null_edge() -> E
-{
+template <typename E> static auto null_edge() -> E {
   E nullEdge;
-  memset((char*)&nullEdge, emptyChar, sizeof(E));
+  memset((char *)&nullEdge, EMPTY_CHAR, sizeof(E));
   return nullEdge;
 }
 #endif
