@@ -12,7 +12,9 @@
 #include <cstddef>
 #include <format>
 #include <fstream>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -30,6 +32,30 @@ const auto DEFAULT_FACILITY_CUTOFF =
 
 using FacilityTimings =
   std::tuple<int16_t, int16_t, int16_t, int16_t, TIME_OF_DAY>;
+
+auto parse_facility_latency_minutes(const moirai::Json& object,
+                                    const char* key) -> std::optional<int16_t>
+{
+  if (const auto parsed_integer =
+        moirai::find_integer_member<int16_t>(object, key);
+      parsed_integer.has_value()) {
+    return parsed_integer;
+  }
+
+  const auto string_value = moirai::find_string_member(object, key);
+  if (!string_value.has_value() || string_value->find(':') == std::string_view::npos) {
+    return std::nullopt;
+  }
+
+  const auto duration = time_string_to_time(*string_value);
+  const auto minutes = duration.count();
+  if (minutes < std::numeric_limits<int16_t>::min() ||
+      minutes > std::numeric_limits<int16_t>::max()) {
+    return std::nullopt;
+  }
+
+  return static_cast<int16_t>(minutes);
+}
 
 } // namespace
 
@@ -91,14 +117,10 @@ SolverWrapper::init_timings(
 
   for (const auto& facility_timing_entry : *facility_timings_json) {
     const auto code = moirai::find_string_member(facility_timing_entry, "code");
-    const auto ci =
-      moirai::find_integer_member<int16_t>(facility_timing_entry, "ci");
-    const auto co =
-      moirai::find_integer_member<int16_t>(facility_timing_entry, "co");
-    const auto li =
-      moirai::find_integer_member<int16_t>(facility_timing_entry, "li");
-    const auto lo =
-      moirai::find_integer_member<int16_t>(facility_timing_entry, "lo");
+    const auto ci = parse_facility_latency_minutes(facility_timing_entry, "ci");
+    const auto co = parse_facility_latency_minutes(facility_timing_entry, "co");
+    const auto li = parse_facility_latency_minutes(facility_timing_entry, "li");
+    const auto lo = parse_facility_latency_minutes(facility_timing_entry, "lo");
     const auto cut = moirai::find_string_member(facility_timing_entry, "cut");
     if (!code.has_value() || !ci.has_value() || !co.has_value() ||
         !li.has_value() || !lo.has_value() || !cut.has_value()) {
