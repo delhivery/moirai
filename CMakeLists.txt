@@ -1,121 +1,104 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
+
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
 
 project(moirai)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_GENERATOR Ninja)
+# ASAN set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}
+# -fno-omit-frame-pointer -fsanitize=address")
 
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fuse-ld=mold") Treat warnings
-# as errors: Werror Stop compiling on first error: Wfatal-errors
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors")
+# TSAN set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}
+# -fno-omit-frame-pointer -Wthread-safety -fsanitize=thread")
+
+# MSAN set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}
+# -fno-omit-frame-pointer -fsanitize=memory")
+
+# UBSAN set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}
+# -fno-omit-frame-pointer -fsanitize=undefined") set(CMAKE_GCC_FLAGS
+# "${CMAKE_CXX_FLAGS} -floop-nest-optimize")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Werror")
 
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "Debug")
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(SANITIZE
-      "off"
-      CACHE STRING "Enable sanitizer")
-  set_property(CACHE SANITIZE PROPERTY STRINGS "off" "address" "thread"
-                                       "memory" "undefined")
-  get_property(
-    SANITIZE_STRINGS
-    CACHE SANITIZE
-    PROPERTY STRINGS)
-
-  if(NOT SANITIZE IN_LIST SANITIZE_STRINGS)
-    message(FATAL_ERROR "Wrong value for sanitization")
-  endif()
-
-  if(NOT SANITIZE STREQUAL "off")
-    set(CMAKE_CXX_FLAGS_DEBUG
-        "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZE}"
-    )
-    if(SANITIZE STREQUAL "thread")
-      set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wthread-safety")
-    endif()
-  endif()
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")
+  set(CMAKE_BUILD_TYPE Debug)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS
-        "${CMAKE_CXX_FLAGS} -fwhole-program -flto=auto -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fno-plt"
-    )
+        "${CMAKE_CXX_FLAGS} -fwhole-program -flto=auto -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fno-plt -fuse-ld=mold")
+
+    # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+    # set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}
+    # -fuse-ld=mold") set(CMAKE_STATIC_LINKER_FLAGS
+    # "${CMAKE_STATIC_LINKER_FLAGS} -fuse-ld=mold")
+    # set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS}
+    # -fuse-ld=mold")
+    message(STATUS "Compiling with gcc")
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # set(CMAKE_CXX_FLAGS "-flto")
+
+    # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+    # set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}
+    # -fuse-ld=mold") set(CMAKE_STATIC_LINKER_FLAGS
+    # "${CMAKE_STATIC_LINKER_FLAGS} -fuse-ld=mold")
+    # set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS}
+    # -fuse-ld=mold")
+    message(STATUS "Compiling with clang")
   else()
-    message(FATAL_ERROR "Unsupported compiler")
+    message(FATAL "Unsupported compiler. Supported compilers are gcc and clang.
+    Found ${CMAKE_CXX_COMPILER_ID}")
   endif()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-option(NODE_FILE "Load `nodes` from file" OFF)
-option(EDGE_FILE "Load `edges` from file" OFF)
-option(LOAD_FILE "Load `loads` from file" OFF)
-option(SYNC_OFF "Disable sync to elasticsearch" OFF)
-option(LINT "Verify codebase for styling errors" OFF)
+option(ANALYZE "Analyze codebase for improvements" OFF)
+option(LOCAL "Run EP locally with production dataset" OFF)
+
+if(ANALYZE)
+  message(STATUS "Analysis on")
+  find_program(IWYU_PATH NAMES include-what-you-use iwyu REQUIRED)
+  find_program(TIDY_PATH NAMES clang-tidy REQUIRED)
+endif()
 
 find_package(Boost COMPONENTS graph)
 find_package(TBB REQUIRED)
-find_package(fmt REQUIRED)
-find_package(TBB REQUIRED)
-find_package(Poco REQUIRED Util Foundation Net NetSSL)
+find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(RdKafkaCPP REQUIRED)
+find_package(PkgConfig REQUIRED)
+find_package(RdKafkaCPP QUIET)
+
+if(RdKafkaCPP_FOUND)
+  set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
+else()
+  pkg_check_modules(RDKAFKA REQUIRED IMPORTED_TARGET rdkafka++)
+  add_library(RdKafkaCPP::RdKafkaCPP ALIAS PkgConfig::RDKAFKA)
+  set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
+endif()
 
 add_executable(
   ${PROJECT_NAME}
-  src/solver_wrapper.cxx
-  src/processor.cxx
-  src/solver.cxx
-  src/transportation.cxx
-  src/edge_cost_attributes.cxx
   src/date_utils.cxx
-  src/search_writer.cxx
+  src/graph_helpers.cxx
+  src/transportation.cxx
+  src/solver.cxx
   src/utils.cxx
+  src/scan_reader.cxx
   src/kafka_reader.cxx
   src/search_writer.cxx
   src/file_reader.cxx
-  src/producer.cxx
-  src/consumer.cxx
-  src/runnable.cxx
+  src/processor.cxx
+  src/http.cxx
+  src/solver_wrapper.cxx
   src/server.cxx)
-
-# src/server.cxx)
-
 target_include_directories(${PROJECT_NAME} PUBLIC include)
-# add_compile_definitions(JSON_HAS_CPP_20)
-# add_compile_definitions(JSON_HAS_RANGES)
 
-if(NODE_FILE)
-  add_compile_definitions(WITH_NODE_FILE)
-endif()
-
-if(EDGE_FILE)
-  add_compile_definitions(WITH_EDGE_FILE)
-endif()
-
-if(LOAD_FILE)
-  add_compile_definitions(WITH_LOAD_FILE)
-endif()
-
-if(NOT SYNC_OFF)
-  add_compile_definitions(ENABLE_SYNC)
-endif()
-
-if(LINT)
-  find_program(IWYU_PATH NAMES include-what-you-use iwyu REQUIRED)
-  find_program(TIDY_PATH NAMES clang-tidy REQUIRED)
-
+if(ANALYZE)
   set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_INCLUDE_WHAT_YOU_USE
                                                ${IWYU_PATH})
   set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
@@ -124,10 +107,8 @@ endif()
 target_link_libraries(
   ${PROJECT_NAME}
   PRIVATE Boost::graph
-          Poco::Foundation
-          Poco::Util
-          Poco::Net
-          Poco::NetSSL
-          RdKafkaCPP::RdKafkaCPP
+          CURL::libcurl
+          ${MOIRAI_RDKAFKA_TARGET}
           TBB::tbb
-          fmt::fmt-header-only)
+          OpenSSL::SSL
+          OpenSSL::Crypto)

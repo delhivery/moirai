@@ -1,100 +1,77 @@
-#ifndef MOIRAI_SOLVER_WRAPPER
-#define MOIRAI_SOLVER_WRAPPER
+#pragma once
 
-#include "consumer.hxx"
-#include "producer.hxx"
-#include <Poco/Logger.h>
-#ifndef JSON_HAS_CPP_20
-#define JSON_HAS_CPP_20
-#endif
-
-#ifndef JSON_HAS_RANGES
-#define JSON_HAS_RANGES 1
-#endif
-
-#include "concurrentqueue.h"
-#include "runnable.hxx"
+#include "blocking_queue.hxx"
+#include "date_utils.hxx"
+#include "http.hxx"
 #include "solver.hxx"
-#include <Poco/Runnable.h>
-#include <Poco/URI.h>
+#include "transportation.hxx"
 #include <filesystem>
-#include <nlohmann/json.hpp>
+#include <stop_token>
+#include <string>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
 
-class SolverWrapper
-  : public Consumer
-  , public Producer
-{
-  using consumer_base_t = ::Consumer;
-  using producer_base_t = ::Producer;
+class SolverWrapper {
+public:
+  struct RuntimeQueues {
+    BlockingQueue<std::string> *node;
+    BlockingQueue<std::string> *edge;
+    BlockingQueue<std::string> *load;
+    BlockingQueue<std::string> *solution;
+  };
+
+  struct InitEndpoints {
+    std::string node_uri;
+    std::string node_token;
+    std::string edge_uri;
+    std::string edge_token;
+  };
 
 private:
-  bool mRunning;
+  std::shared_ptr<Solver> m_solver;
 
-  Solver* mSolverPtr;
+  moirai::Uri m_node_init_uri;
+  std::string m_node_init_auth_token;
 
-#ifdef WITH_NODE_FILE
-  std::filesystem::path mNodeFile;
-#else
-  Poco::URI node_uri;
-  std::string node_idx, node_user, node_pass;
-#endif
+  moirai::Uri m_edge_init_uri;
+  std::string m_edge_init_auth_token;
 
-#ifdef WITH_EDGE_FILE
-  std::filesystem::path mEdgeFile;
-#else
-  Poco::URI edge_uri;
-  std::string edge_auth;
-#endif
+  std::unordered_map<
+      std::string, std::tuple<int16_t, int16_t, int16_t, int16_t, TIME_OF_DAY>>
+      m_facility_timings_map;
+
+  std::unordered_map<std::string, std::vector<std::string>> m_facility_groups;
+
+  BlockingQueue<std::string> *m_node_queue{nullptr};
+  BlockingQueue<std::string> *m_edge_queue{nullptr};
+  BlockingQueue<std::string> &m_load_queue;
+  BlockingQueue<std::string> &m_solution_queue;
 
 public:
-  SolverWrapper(Solver*,
-                producer_base_t::queue_t*,
-                consumer_base_t::queue_t*,
-                size_t);
+  SolverWrapper(RuntimeQueues queues, const std::shared_ptr<Solver> &solver,
+                const std::filesystem::path &center_timings_filename);
 
-  SolverWrapper(const SolverWrapper&);
+  SolverWrapper(RuntimeQueues queues, InitEndpoints endpoints,
+                const std::filesystem::path &center_timings_filename);
 
-  SolverWrapper(Solver*,
-                producer_base_t::queue_t*,
-                consumer_base_t::queue_t*,
-                size_t
-#ifdef WITH_NODE_FILE
-                ,
-                std::filesystem::path&
-#else
-                ,
-                std::string&,
-                std::string&,
-                std::string&,
-                std::string&
-#endif
-#ifdef WITH_EDGE_FILE
-                ,
-                std::filesystem::path&
-#else
-                ,
-                std::string&,
-                std::string&
-#endif
-  );
+  void init_timings(const std::filesystem::path &facility_timings_filename);
 
-  auto logger() const -> Poco::Logger& override;
+  void init_nodes(int16_t page = 1);
 
-  void stop(bool);
-
-  void init_nodes();
+  void init_custody();
 
   void init_edges();
 
-  void load_edges(const nlohmann::json&);
+  auto read_vertices(const std::filesystem::path &path)
+      -> std::vector<std::shared_ptr<TransportCenter>>;
 
-  auto find_paths(const std::string&,
-                  const std::string&,
-                  const std::string&,
-                  datetime,
-                  datetime,
-                  auto&) const -> nlohmann::json;
+  [[nodiscard]] auto get_solver() const -> std::shared_ptr<Solver>;
 
-  void run() override final;
+  auto find_paths(std::string bag, std::string bag_source,
+                  std::string bag_target, int32_t bag_start, CLOCK bag_end,
+                  std::vector<std::tuple<std::string, int32_t, std::string>>
+                      &packages) const;
+
+  void run(const std::stop_token &stop_token);
 };
-#endif

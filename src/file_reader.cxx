@@ -1,52 +1,65 @@
-#ifndef JSON_HAS_CPP_20
-#define JSON_HAS_CPP_20
-#endif
-
-#ifndef JSON_HAS_RANGES
-#define JSON_HAS_RANGES 1
-#endif
-
 #include "file_reader.hxx"
-#include <fmt/format.h>
-// #include "date_utils.hxx"
-// #include <exception>
-// #include <string>
-// #include <sys/inotify.h>
-// #include <sys/types.h>
-// #include <unistd.h>
+#include "app.hxx"
+#include "json_utils.hxx"
+#include <exception>
+#include <fstream>
+#include <string>
 
-#define EVENT_SIZE (sizeof(struct inotify_event))
-#define EVENT_BUF_LEN (1024 * (EVENT_SIZE + 16))
-
-FileReader::FileReader(const std::string& dataFile,
-                       queue_t* loadQueue,
-                       size_t batchSize)
-  : Producer(loadQueue, batchSize)
-  , nPos(0)
-{
-  mInFile = std::ifstream(dataFile);
-  mLogger = Poco::Logger::get("file-reader");
+namespace {
+constexpr auto FILE_POLL_INTERVAL = std::chrono::milliseconds{200};
 }
 
-auto
-FileReader::fetch() -> nlohmann::json::array
-{
-  mInFile.seekg(0, std::ios::end);
-  auto fileSize = mInFile.tellg();
+FileReader::FileReader(const std::string &datafile,
+                       BlockingQueue<std::string> *load_queue)
+    : ScanReader(load_queue), m_load_file(datafile) {}
 
-  if (fileSize < nPos) {
-    nPos = 0;
+void FileReader::run(std::stop_token stop_token) {
+  auto &app = moirai::Application::instance();
+  std::ifstream load_file_stream(m_load_file);
+  std::streampos last_position = 0;
+
+  if (!load_file_stream.is_open() || load_file_stream.fail()) {
+    app.logger().error("FR: Error opening file: {}", m_load_file.string());
+    return;
   }
 
-  nlohmann::json::array entries;
+  while (!stop_token.stop_requested()) {
+    try {
+      load_file_stream.seekg(0, std::ios::end);
+      auto filesize = load_file_stream.tellg();
 
-  for (size_t lineN = 0; nPos < fileSize and lineN < mBatchSize;
-       ++lineN, nPos = mInFile.tellg()) {
-    mInFile.seekg(nPos, std::ios::beg);
-    nlohmann::json entry;
-    infile >> entry;
-    entries.push_back(entry);
+      for (auto current = last_position; current < filesize;
+           current = load_file_stream.tellg()) {
+        load_file_stream.seekg(last_position, std::ios::beg);
+        std::string input;
+        if (!std::getline(load_file_stream, input)) {
+          load_file_stream.clear();
+          break;
+        }
+        last_position = load_file_stream.tellg();
+        if (last_position == std::streampos{-1}) {
+          load_file_stream.clear();
+          load_file_stream.seekg(0, std::ios::end);
+          last_position = load_file_stream.tellg();
+        }
+        const auto payload = moirai::parse_json(input);
+        if (!payload.has_value()) {
+          app.logger().error("Payload is not valid JSON");
+          continue;
+        }
+
+        if (payload->is_object()) {
+          if (!m_load_queue.wait_enqueue(input, stop_token)) {
+            return;
+          }
+        } else {
+          app.logger().error("Payload is not an object");
+        }
+      }
+    } catch (const std::exception &exc) {
+      app.logger().error("FR: Error occurred: {}", exc.what());
+    }
+
+    moirai::wait_for(stop_token, FILE_POLL_INTERVAL);
   }
-
-  return entries;
 }

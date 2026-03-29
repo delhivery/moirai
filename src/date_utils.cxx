@@ -1,78 +1,166 @@
 #include "date_utils.hxx"
-#include <date/date.h>
+#include "transportation.hxx"
+#include <charconv>
+#include <cstdint>
+#include <format>
+#include <stdexcept>
+#include <string_view>
 
-time_of_day::time_of_day() noexcept
-  : mTime(minutes::zero())
-{
+namespace {
+
+constexpr auto MINUTES_PER_HOUR = 60;
+constexpr auto HOURS_PER_DAY = 24;
+constexpr auto MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;
+constexpr auto IST_OFFSET_MINUTES = 330;
+constexpr auto ISO_DATETIME_LENGTH = 19U;
+constexpr auto DATE_DASH_2_OFFSET = 4U;
+constexpr auto DATE_DASH_3_OFFSET = 7U;
+constexpr auto DATE_TIME_SEPARATOR_OFFSET = 10U;
+constexpr auto TIME_HOUR_SEPARATOR_OFFSET = 13U;
+constexpr auto TIME_MINUTE_SEPARATOR_OFFSET = 16U;
+constexpr auto DATE_ONLY_LENGTH = 10U;
+
+auto parse_int(std::string_view input) -> int {
+  int value = 0;
+  const auto *begin = input.data();
+  const auto *end = begin + input.size();
+  const auto [ptr, error] = std::from_chars(begin, end, value);
+  if (error != std::errc{} || ptr != end) {
+    throw std::runtime_error(
+        std::format("Failed to parse integer '{}'", input));
+  }
+
+  return value;
 }
 
-time_of_day::time_of_day(minutes _minutes) noexcept
-  : mTime(_minutes % oneDay)
-{
+auto parse_iso_datetime(std::string_view input) -> CLOCK {
+  if (input.size() < ISO_DATETIME_LENGTH || input[DATE_DASH_2_OFFSET] != '-' ||
+      input[DATE_DASH_3_OFFSET] != '-' ||
+      input[DATE_TIME_SEPARATOR_OFFSET] != ' ' ||
+      input[TIME_HOUR_SEPARATOR_OFFSET] != ':' ||
+      input[TIME_MINUTE_SEPARATOR_OFFSET] != ':') {
+    throw std::runtime_error("Failed to parse date string");
+  }
+
+  const auto year = std::chrono::year{parse_int(input.substr(0, 4))};
+  const auto month =
+      std::chrono::month{static_cast<unsigned>(parse_int(input.substr(5, 2)))};
+  const auto day =
+      std::chrono::day{static_cast<unsigned>(parse_int(input.substr(8, 2)))};
+  const auto hour = parse_int(input.substr(11, 2));
+  const auto minute = parse_int(input.substr(14, 2));
+  const auto second = parse_int(input.substr(17, 2));
+
+  const std::chrono::year_month_day ymd{year, month, day};
+  if (!ymd.ok()) {
+    throw std::runtime_error("Failed to parse date string");
+  }
+
+  const auto day_point = std::chrono::sys_days{ymd};
+  const auto time_point = day_point + std::chrono::hours{hour} +
+                          std::chrono::minutes{minute} +
+                          std::chrono::seconds{second};
+  return std::chrono::time_point_cast<CLOCK::duration>(time_point);
 }
 
-auto
-time_of_day::operator+=(const time_of_day& other) noexcept -> time_of_day&
-{
-  mTime += other.mTime;
-  mTime %= oneDay;
-  // mTime = (mTime.to_duration() + other.mTime.to_duration()) % oneDay;
-  return *this;
+} // namespace
+
+auto datemod(DURATION lhs, DURATION rhs) -> std::uint16_t {
+  std::int16_t count_lhs = lhs.count();
+  std::int16_t count_rhs = rhs.count();
+
+  return ((count_lhs % count_rhs) + count_rhs) % count_rhs;
 }
 
-auto
-time_of_day::to_duration() const noexcept -> minutes
-{
-  return mTime;
+template <>
+auto CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(
+    CLOCK start, COST cost) const -> CLOCK {
+  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max()) {
+    return start;
+  }
+  TIME_OF_DAY minutes_start{start -
+                            std::chrono::floor<std::chrono::days>(start)};
+  DURATION wait_time{datemod(cost.first - minutes_start, std::chrono::days{1})};
+  return start + wait_time + cost.second;
 }
 
-auto
-time_of_day::operator+(const time_of_day& other) const noexcept -> time_of_day
-{
-  time_of_day result = *this;
-  result += other;
-  return result;
+template <>
+auto CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(
+    CLOCK start, COST cost) const -> CLOCK {
+  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max()) {
+    return start;
+  }
+  TIME_OF_DAY minutes_start{start -
+                            std::chrono::floor<std::chrono::days>(start)};
+  DURATION wait_time{datemod(minutes_start - cost.first, std::chrono::days{1})};
+  return start - wait_time - cost.second;
 }
 
-auto
-time_of_day::operator-=(const time_of_day& other) noexcept -> time_of_day&
-{
-  mTime -= other.mTime;
-  mTime %= oneDay;
-  return *this;
+auto iso_to_date(const std::string &date_string) -> CLOCK {
+  return parse_iso_datetime(date_string);
 }
 
-auto
-time_of_day::operator-(const time_of_day& other) const noexcept -> time_of_day
-{
-  time_of_day result = *this;
-  result -= other;
-  return result;
+auto iso_to_date(const std::string &date_string, const bool is_offset)
+    -> CLOCK {
+  std::string formatted_string{date_string};
+
+  if (is_offset) {
+    formatted_string = std::format(
+        "{} {}", date_string.substr(0, DATE_ONLY_LENGTH), "04:00:00");
+  }
+
+  return parse_iso_datetime(formatted_string);
 }
 
-auto
-parse_time(std::string_view timeString) -> minutes
-{
-  minutes result{ 0 };
-  std::stringstream timeStream(std::string(timeString), std::ios_base::in);
-  timeStream >> date::parse("%R", result);
-  return result;
+auto iso_to_date(const std::string &date_string, const TIME_OF_DAY &cutoff)
+    -> CLOCK {
+  const std::string formatted_string =
+      std::format("{} {}", date_string.substr(0, DATE_ONLY_LENGTH), "00:00:00");
+  return parse_iso_datetime(formatted_string) + cutoff -
+         DURATION{IST_OFFSET_MINUTES};
 }
 
-auto
-parse_date(std::string_view dateString) -> datetime
-{
-  datetime result;
-  std::stringstream dateStream(std::string(dateString), std::ios_base::in);
-  dateStream >> date::parse("%F", result);
-  return result;
+auto now_as_int64() -> int64_t {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
 }
 
-auto
-parse_datetime(std::string_view dateString) -> datetime
-{
-  datetime result;
-  std::stringstream dateStream(std::string(dateString), std::ios_base::in);
-  dateStream >> date::parse("%F %R", result);
-  return result;
+auto format_clock(const CLOCK &timestamp) -> std::string {
+  return std::format("{:%m/%d/%y %H:%M:%S}", timestamp);
+}
+
+auto time_string_to_time(std::string_view input) -> std::chrono::minutes {
+  int day_minutes = 0;
+
+  if (const auto comma_position = input.find(',');
+      comma_position != std::string_view::npos) {
+    const auto day_part = input.substr(0, comma_position);
+    const auto day_end = day_part.find(' ');
+    if (day_end != std::string_view::npos) {
+      day_minutes = parse_int(day_part.substr(0, day_end)) * MINUTES_PER_DAY;
+    }
+    input = input.substr(comma_position + 1);
+  }
+
+  while (!input.empty() && input.front() == ' ') {
+    input.remove_prefix(1);
+  }
+
+  const auto separator = input.find(':');
+  if (separator == std::string_view::npos) {
+    throw std::runtime_error("Failed to parse time string");
+  }
+
+  const auto hours = parse_int(input.substr(0, separator));
+  const auto minutes = parse_int(input.substr(separator + 1, 2));
+  return std::chrono::minutes(day_minutes + (hours * MINUTES_PER_HOUR) +
+                              minutes);
+}
+
+auto get_departure(CLOCK start, TIME_OF_DAY departure) -> CLOCK {
+  TIME_OF_DAY minutes_start{start -
+                            std::chrono::floor<std::chrono::days>(start)};
+  DURATION wait_time{datemod(departure - minutes_start, std::chrono::days{1})};
+  return start + wait_time;
 }

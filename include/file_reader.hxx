@@ -1,21 +1,15 @@
-#ifndef MOIRAI_FILE_READER
-#define MOIRAI_FILE_READER
+#pragma once
 
-#include "producer.hxx"
+#include "scan_reader.hxx"
 #include <filesystem>
 
-class FileReader : public Producer
-{
+class FileReader : public ScanReader {
 private:
-  // Poco::Logger& mLogger = Poco::Logger::get("file-reader");
-  std::ifstream mInFile;
-  size_t nPos;
-
-  auto fetch() -> nlohmann::json::array override;
+  std::filesystem::path m_load_file;
 
 public:
-  FileReader(const std::string&, queue_t*, size_t);
+  FileReader(const std::string &datafile,
+             BlockingQueue<std::string> *load_queue);
 
-  void run() override;
+  void run(std::stop_token /*unused*/) override;
 };
-#endif

@@ -1,44 +1,41 @@
-#ifndef moirai_date_utils
-#define moirai_date_utils
+#pragma once
 
-#include <chrono>
+#include <chrono>  // for duration, system_clock, time_point
+#include <cstdint> // for int16_t, int32_t, uint8_t
+#include <ratio>   // for ratio
+#include <string>
 #include <string_view>
+#include <utility> // for pair
 
-using datetime =
-  std::chrono::time_point<std::chrono::system_clock, std::chrono::minutes>;
-using days = std::chrono::days;
-using minutes = std::chrono::minutes;
-using weekday = std::chrono::weekday;
+inline constexpr std::intmax_t SECONDS_PER_MINUTE = 60;
+using minute_ratio = std::ratio<SECONDS_PER_MINUTE>;
+using DURATION = std::chrono::duration<std::int16_t, minute_ratio>;
+using TIME_OF_DAY = DURATION;
+using CLOCK =
+    std::chrono::time_point<std::chrono::system_clock,
+                            std::chrono::duration<std::uint32_t, minute_ratio>>;
+using COST = std::pair<TIME_OF_DAY, DURATION>;
 
-class time_of_day
-{
-private:
-  minutes mTime;
-  static constexpr std::chrono::days oneDay{ 1 };
+enum PathTraversalMode : std::uint8_t;
 
-public:
-  time_of_day() noexcept;
-
-  time_of_day(minutes _minutes) noexcept;
-
-  [[nodiscard]] auto to_duration() const noexcept -> minutes;
-
-  auto operator+=(const time_of_day& other) noexcept -> time_of_day&;
-
-  auto operator+(const time_of_day& other) const noexcept -> time_of_day;
-
-  auto operator-=(const time_of_day& other) noexcept -> time_of_day&;
-
-  auto operator-(const time_of_day& other) const noexcept -> time_of_day;
-
-  auto operator<=>(const time_of_day& other) const
-    -> std::strong_ordering = default;
+struct CalcualateTraversalCost {
+  template <PathTraversalMode>
+  auto operator()(CLOCK start, COST cost) const -> CLOCK;
 };
 
-auto parse_time(std::string_view) -> minutes;
+auto datemod(DURATION lhs, DURATION rhs) -> uint16_t;
 
-auto parse_date(std::string_view) -> datetime;
+auto iso_to_date(const std::string &date_string) -> CLOCK;
 
-auto parse_datetime(std::string_view) -> datetime;
+auto iso_to_date(const std::string &date_string, bool is_offset) -> CLOCK;
 
-#endif
+auto iso_to_date(const std::string &date_string, const TIME_OF_DAY &cutoff)
+    -> CLOCK;
+
+auto now_as_int64() -> int64_t;
+
+auto time_string_to_time(std::string_view time_string) -> std::chrono::minutes;
+
+auto get_departure(CLOCK start, TIME_OF_DAY departure) -> CLOCK;
+
+auto format_clock(const CLOCK &timestamp) -> std::string;

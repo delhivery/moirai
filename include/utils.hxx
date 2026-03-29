@@ -1,77 +1,34 @@
-#ifndef MOIRAI_UTILS
-#define MOIRAI_UTILS
+#pragma once
 
-#ifndef JSON_HAS_CPP_20
-#define JSON_HAS_CPP_20
-#endif
-
-#ifndef JSON_HAS_RANGES
-#define JSON_HAS_RANGES 1
-#endif
-
-// #include <boost/bimap.hpp>
-// #include <nlohmann/json.hpp>
-// #include <numeric>
-// #include <ranges>
 #include <string>
-#include <string_view>
+#include <unordered_map>
+#include <vector>
 
-// using StringToStringMap = boost::bimap<std::string, std::string>;
+struct TopicMap {
+  auto insert(const std::string &role, const std::string &topic) -> bool;
 
-/*
-auto
-indexAndTypeToPath(const std::string&, const std::string&) -> std::string;
+  [[nodiscard]] auto contains_role(const std::string &role) const -> bool;
+  [[nodiscard]] auto contains_topic(const std::string &topic) const -> bool;
 
-auto
-indexAndTypeToPath(const std::string&, const std::string&, const std::string&)
-  -> std::string;
-*/
+  [[nodiscard]] auto topic_for(const std::string &role) const
+      -> const std::string &;
+  [[nodiscard]] auto role_for(const std::string &topic) const
+      -> const std::string &;
+  [[nodiscard]] auto topics() const -> std::vector<std::string>;
 
-auto getEncodedCredentials(std::string_view, std::string_view) -> std::string;
+private:
+  std::unordered_map<std::string, std::string> m_role_to_topic;
+  std::unordered_map<std::string, std::string> m_topic_to_role;
+};
 
-void
-to_lower(std::string&);
+auto index_and_type_to_path(const std::string &index_name,
+                            const std::string &type_name) -> std::string;
 
-/*
-template<std::ranges::range range_t>
-constexpr auto
-to_vector(range_t&& range)
-  -> std::vector<std::decay_t<std::ranges::range_value_t<range_t>>>
-{
-  using value_t = std::decay_t<std::ranges::range_value_t<range_t>>;
-  return std::vector<value_t>(range.begin(), range.end());
-}
+auto index_and_type_to_path(const std::string &index_name,
+                            const std::string &type_name,
+                            const std::string &document_id) -> std::string;
 
-template<typename T>
-auto
-getJSONValue(const nlohmann::json& data, std::string_view key_string) -> T
-{
-  constexpr std::string_view delim{ "." };
-  auto value = data;
+auto get_encoded_credentials(const std::string &username,
+                             const std::string &password) -> std::string;
 
-  for (const auto token : std::views::split(key_string, delim)) {
-    std::string key(token.begin(), token.end());
-    value = value[key];
-  }
-
-  return value.template get<T>();
-  /*
-    const auto value = std::accumulate(
-      keys.begin(), keys.end(), data, [](const auto data, const auto iter_key) {
-        std::string_view key{ iter_key.begin(), iter_key.end() };
-        return data[key];
-      });
-    return value.get<T>();
-  */
-/*
-}
-
-template<typename T>
-auto
-getJSONValue(const nlohmann::json& data, size_t index) -> T
-{
-  return data.at(index).get<T>();
-}
-*/
-
-#endif
+void to_lower(std::string &value);

@@ -3,10 +3,10 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+
 namespace moirai {
 class ClusterMetadata;
-class ClusterConfig
-{
+class ClusterConfig {
 private:
   uint64_t m_flags;
   std::string m_brokers;
@@ -28,8 +28,7 @@ private:
   mutable std::shared_ptr<ClusterMetadata> m_metadata;
 
 public:
-  enum flags_t : uint8_t
-  {
+  enum flags_t : uint8_t {
     NONE = 0b0000,
     KAFKA = 0b0001,
     SCHEMA_REGISTRY = 0b0010,
@@ -67,8 +66,7 @@ public:
   auto set_ca_cert_path(std::filesystem::path) -> bool;
   auto get_ca_cert_path() const -> std::filesystem::path;
 
-  auto set_private_key_path(std::filesystem::path,
-                            std::filesystem::path,
+  auto set_private_key_path(std::filesystem::path, std::filesystem::path,
                             std::string = "") -> bool;
   auto get_client_cert_path() const -> std::filesystem::path;
   auto get_private_key_path() const -> std::filesystem::path;
@@ -78,7 +76,7 @@ public:
   auto get_schema_registry_uri() const -> std::string;
 
   void set_pushgateway_uri(std::string);
-  auto get_pushgateway_uri(std::string) const -> std::string;
+  auto get_pushgateway_uri() const -> std::string;
 
   void set_schema_registry_timeout(std::chrono::milliseconds);
   auto get_schema_registry_timeout() const -> std::chrono::milliseconds;
@@ -98,4 +96,4 @@ public:
 
   void log() const;
 };
-}
+} // namespace moirai

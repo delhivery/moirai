@@ -1,100 +1,70 @@
 #include "transportation.hxx"
-// #include <utility>
+#include <cassert>
+#include <chrono> // for operator+, __duration_common_type<>::type, days
+#include <utility>
 
-TransportCenter::TransportCenter(std::string code,
-                                 std::string name,
-                                 time_of_day cutoff,
-                                 MovementType movement,
-                                 ProcessType process,
-                                 minutes duration)
-  : mCode(std::move(code))
-  , mName(std::move(name))
-  , mCutoff(cutoff)
-{
+TransportCenter::TransportCenter(std::string center_code)
+    : code(std::move(center_code)) {}
 
-  constexpr auto hashLatencies = [](const LatencyType& latency) -> size_t {
-    return latency.first << sizeof(MovementType) * CHAR_BIT | latency.second;
-  };
-
-  mLatencies = LatencyMap(0, hashLatencies);
-  mLatencies[std::make_pair(movement, process)] = duration;
+TransportEdge::TransportEdge(std::string edge_code, std::string edge_name)
+    : code(std::move(edge_code)), name(std::move(edge_name)),
+      vehicle(VehicleType::SURFACE), movement(MovementType::CARTING),
+      transient(true), terminal(false), m_offset_source(0), m_offset_target(0) {
 }
 
-void
-TransportCenter::latency(MovementType movement,
-                         ProcessType process,
-                         minutes lat)
-{
-  mLatencies.emplace(std::make_pair(movement, process), lat);
-}
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+TransportEdge::TransportEdge(
+    std::string edge_code, std::string edge_name, TIME_OF_DAY departure_time,
+    DURATION transit_duration, DURATION loading_duration,
+    DURATION unloading_duration, VehicleType vehicle_type,
+    MovementType movement_type, bool is_terminal = false)
+    : code(std::move(edge_code)), name(std::move(edge_name)),
+      departure(departure_time), duration(transit_duration),
+      duration_loading(loading_duration),
+      duration_unloading(unloading_duration), vehicle(vehicle_type),
+      movement(movement_type), transient(false), terminal(is_terminal) {}
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
-auto
-TransportCenter::code() const -> std::string
-{
-  return mCode;
-}
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+void TransportEdge::update(const std::shared_ptr<TransportCenter> &source,
+                           const std::shared_ptr<TransportCenter> &target) {
 
-auto
-TransportCenter::latency(MovementType movementType,
-                         ProcessType processType) const -> minutes
-{
-  std::pair<MovementType, ProcessType> key(movementType, processType);
-
-  if (mLatencies.contains(key)) {
-    return mLatencies.at(key);
+  if (movement == MovementType::CARTING) {
+    m_offset_source =
+        source->get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
+    m_offset_target =
+        target->get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+  } else {
+    m_offset_source =
+        source->get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
+    m_offset_target =
+        target->get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
   }
-  return minutes(0);
+
+  m_offset_source += duration_loading / 2;
+  if (terminal) {
+    m_offset_target += duration_unloading;
+  } else {
+    m_offset_target += duration_unloading / 2;
+  }
 }
 
-auto
-TransportCenter::cutoff() const -> time_of_day
-{
-  return mCutoff;
+template <>
+auto TransportEdge::weight<PathTraversalMode::FORWARD>() const -> COST {
+  if (transient) {
+    return {TIME_OF_DAY::max(), DURATION::max()};
+  }
+  TIME_OF_DAY actual_departure{
+      datemod(departure - m_offset_source, std::chrono::days{1})};
+  return {actual_departure, m_offset_source + duration + m_offset_target};
 }
 
-TransportEdge::TransportEdge(std::string code, std::string name)
-  : mCode(std::move(code))
-  , mName(std::move(name))
-  , mVehicle(VehicleType::SURFACE)
-  , mMovement(MovementType::CARTING)
-{
-}
-
-auto
-TransportEdge::code() const -> std::string
-{
-  return mCode;
-}
-
-auto
-TransportEdge::vehicle() const -> VehicleType
-{
-  return mVehicle;
-}
-
-TransportationLoadAttributes::TransportationLoadAttributes(std::string idx,
-                                                           std::string target,
-                                                           datetime reachBy)
-  : mIdx(std::move(idx))
-  , mTargetIdx(std::move(target))
-  , mReachBy(std::move(reachBy))
-{
-}
-
-auto
-TransportationLoadAttributes::idx() const -> std::string
-{
-  return mIdx;
-}
-
-auto
-TransportationLoadAttributes::target() const -> std::string
-{
-  return mTargetIdx;
-}
-
-auto
-TransportationLoadAttributes::reach_by() const -> datetime
-{
-  return mReachBy;
+template <>
+auto TransportEdge::weight<PathTraversalMode::REVERSE>() const -> COST {
+  if (transient) {
+    return {TIME_OF_DAY::max(), DURATION::max()};
+  }
+  TIME_OF_DAY actual_departure{
+      datemod(departure + duration + m_offset_target, std::chrono::days{1})};
+  return {actual_departure, duration + m_offset_source + m_offset_target};
 }

@@ -1,30 +1,22 @@
-#ifndef MOIRAI_SEARCH_WRITER
-#define MOIRAI_SEARCH_WRITER
+#pragma once
 
-#include "consumer.hxx"
-#include <Poco/Net/HTTPSClientSession.h>
-#include <Poco/URI.h>
+#include "blocking_queue.hxx"
+#include "http.hxx"
+#include <stop_token>
 #include <string>
 
-class SearchWriter : public Consumer
-{
+class SearchWriter {
 private:
-  // Poco::Logger& mLogger = Poco::Logger::get("search-writer");
-  const std::string mUser;
-  const std::string mPass;
-  const std::string mIndex;
-
-  Poco::Net::HTTPSClientSession mSession;
+  moirai::Uri m_uri;
+  const std::string m_username;
+  const std::string m_password;
+  const std::string m_search_index;
+  BlockingQueue<std::string> &m_solution_queue;
 
 public:
-  SearchWriter(const Poco::URI&,
-               const std::string&,
-               const std::string&,
-               const std::string&,
-               queue_t*,
-               size_t);
+  SearchWriter(moirai::Uri uri, std::string search_user,
+               std::string search_pass, std::string search_index,
+               BlockingQueue<std::string> *solution_queue);
 
-  void push(const json_t&, size_t) override;
+  void run(const std::stop_token &stop_token);
 };
-
-#endif

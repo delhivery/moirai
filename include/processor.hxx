@@ -1,18 +1,7 @@
-#ifndef MOIRAI_PROCESSOR_HXX
-#define MOIRAI_PROCESSOR_HXX
-
-#ifndef JSON_HAS_CPP_20
-#define JSON_HAS_CPP_20
-#endif
-
-#ifndef JSON_HAS_RANGES
-#define JSON_HAS_RANGES 1
-#endif
+#pragma once
 
 #include "solver.hxx"
-#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 
-auto
-parse_path(const std::vector<Segment>&) -> nlohmann::json;
-
-#endif
+template <PathTraversalMode P>
+auto parse_path(const std::shared_ptr<Segment> &) -> nlohmann::json;

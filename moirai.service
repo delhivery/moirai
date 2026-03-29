@@ -1,0 +1,39 @@
+[Unit]
+Description=Expected Path Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+RuntimeMaxSec=1d
+WorkingDirectory=%h/moirai/build
+EnvironmentFile=%h/.config/moirai/moirai.conf
+ExecStart=%h/moirai/build/moirai \
+          -k ${BROKER_URI_1} \
+          -k ${BROKER_URI_2} \
+          -k ${BROKER_URI_3} \
+          -t ${BATCH_TIMEOUT_MS} \
+          -z ${BATCH_SIZE} \
+          -p ${LOAD_TOPIC} \
+          -s ${SEARCH_URI} \
+          -u ${SEARCH_USER} \
+          -w ${SEARCH_PASS} \
+          -i ${SEARCH_INDEX} \
+          -a ${ROUTE_API_URI} \
+          -b ${FACILITY_TIMINGS_FILE} \
+          -c ${FACILITY_API_URI} \
+          -e ${ROUTE_API_TOKEN} \
+          -l ${FACILITY_API_TOKEN} \
+          -m group.id=${KAFKA_GROUP_ID} \
+          -m auto.offset.reset=${KAFKA_AUTO_OFFSET_RESET} \
+          -m security.protocol=${KAFKA_SECURITY_PROTOCOL} \
+          -m sasl.mechanisms=${KAFKA_SASL_MECHANISMS} \
+          -m sasl.username=${KAFKA_SASL_USERNAME} \
+          -m sasl.password=${KAFKA_SASL_PASSWORD}
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

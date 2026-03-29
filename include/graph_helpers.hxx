@@ -1,39 +1,35 @@
-#ifndef moirai_graph_helpers
-#define moirai_graph_helpers
+#pragma once
 
-#include "date_utils.hxx"
-#include "transportation.hxx"
+#include <cstring> // for memset
+
 #include <boost/graph/graph_traits.hpp> // for graph_traits
-#include <cstring>                      // for memset
 
-static const char emptyChar = 0xFF;
+#include "date_utils.hxx"     // for CLOCK
+#include "transportation.hxx" // for PathTraversalMode, VehicleType
 
-template<class G, VehicleType V>
-struct FilterByVehicleType
-{
-  const G* graph;
+inline constexpr unsigned char NULL_EDGE_FILL_BYTE = 0xFF;
+
+template <class G, VehicleType V> struct FilterByVehicleType {
+  const G *graph;
 
   FilterByVehicleType() = default;
 
-  FilterByVehicleType(const G* graph)
-    : graph(graph)
-  {
-  }
+  FilterByVehicleType(const G *graph) : graph(graph) {}
 
   auto operator()(
-    const typename boost::graph_traits<G>::edge_descriptor& edge) const -> bool
-  {
-    auto edgeProps = (*graph)[edge];
-    return edgeProps->vehicle() <= V;
+
+      const boost::graph_traits<G>::edge_descriptor &edge) const -> bool {
+    auto edge_props = (*graph)[edge];
+    return edge_props->vehicle <= V;
   }
 };
 
-template<typename E>
-static auto
-null_edge() -> E
-{
-  E nullEdge;
-  memset((char*)&nullEdge, emptyChar, sizeof(E));
-  return nullEdge;
+template <PathTraversalMode> struct Compare {
+  auto operator()(CLOCK, CLOCK) const -> bool;
+};
+
+template <typename E> static auto null_edge() -> E {
+  E null_e;
+  memset(reinterpret_cast<char *>(&null_e), NULL_EDGE_FILL_BYTE, sizeof(E));
+  return null_e;
 }
-#endif
