@@ -77,7 +77,7 @@ void SearchWriter::run(const stop_token &stop_token) {
           moirai::append_path(m_uri, "/_bulk"), stringified,
           {std::format("Authorization: Basic {}",
                        get_encoded_credentials(m_username, m_password)),
-           "Content-Type: application/json"});
+           "Content-Type: application/x-ndjson"});
 
       if (response.status_code == HTTP_STATUS_OK ||
           response.status_code == HTTP_STATUS_CREATED) {

@@ -54,6 +54,7 @@ auto perform_request(const moirai::Uri &uri,
 
   moirai::HttpResponse response;
   curl_slist *header_list = nullptr;
+  std::string request_body;
 
   for (const auto &header : headers) {
     header_list = curl_slist_append(header_list, header.c_str());
@@ -71,7 +72,7 @@ auto perform_request(const moirai::Uri &uri,
   }
 
   if (!body.empty()) {
-    const std::string request_body{body};
+    request_body.assign(body);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body.c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
