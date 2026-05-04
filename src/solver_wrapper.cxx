@@ -351,11 +351,23 @@ SolverWrapper::init_edges()
             IST_OFFSET,
           std::chrono::days{ 1 }) };
 
-        for (size_t i = 0; i < stops->size(); ++i) {
-          for (size_t j = i + 1; j < stops->size(); ++j) {
-            const auto& source = (*stops)[i];
-            const auto& target = (*stops)[j];
-            const bool is_terminal = j + 1 == stops->size();
+        std::vector<const moirai::Json*> loading_stops;
+        loading_stops.reserve(stops->size());
+        for (const auto& stop : *stops) {
+          const auto* loading_allowed =
+            moirai::find_member(stop, "loading_allowed");
+          if (loading_allowed != nullptr && loading_allowed->is_boolean() &&
+              !loading_allowed->get<bool>()) {
+            continue;
+          }
+          loading_stops.push_back(&stop);
+        }
+
+        for (size_t i = 0; i < loading_stops.size(); ++i) {
+          for (size_t j = i + 1; j < loading_stops.size(); ++j) {
+            const auto& source = *loading_stops[i];
+            const auto& target = *loading_stops[j];
+            const bool is_terminal = j + 1 == loading_stops.size();
 
             const auto arrival_in =
               moirai::find_string_member(source, "rel_etd");
@@ -412,7 +424,7 @@ SolverWrapper::init_edges()
               m_solver->add_node(std::string(*target_center_code));
             auto edge = std::make_shared<TransportEdge>(
               std::format(
-                "{}.{}", *uuid, (i * (stops->size() - 1)) + j - i - 1),
+                "{}.{}", *uuid, (i * (loading_stops.size() - 1)) + j - i - 1),
               std::string(*name),
               departure_as_time,
               duration,
