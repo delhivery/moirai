@@ -50,7 +50,11 @@ auto Solver::add_edge(const Node<Graph> &source, const Node<Graph> &target,
     return {m_edge_by_name.at(route->code), true};
   }
   route->update(m_graph[source], m_graph[target]);
-  return boost::add_edge(source, target, route, m_graph);
+  auto [edge, inserted] = boost::add_edge(source, target, route, m_graph);
+  if (inserted) {
+    m_edge_by_name[route->code] = edge;
+  }
+  return {edge, inserted};
 }
 
 template <>

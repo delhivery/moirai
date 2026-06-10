@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <mutex>
 #include <stop_token>
@@ -26,6 +27,8 @@ enum class LogLevel : std::uint8_t {
 
 class Logger {
 public:
+  using Sink = std::function<void(LogLevel, std::string_view, std::string_view)>;
+
   [[nodiscard]] auto enabled(LogLevel severity) const -> bool {
     return severity >= m_level;
   }
@@ -50,6 +53,16 @@ public:
 
   void error(std::string_view message) {
     write(LogLevel::error, "ERROR", message);
+  }
+
+  void set_sink(Sink sink) {
+    std::scoped_lock guard(m_lock);
+    m_sink = std::move(sink);
+  }
+
+  void clear_sink() {
+    std::scoped_lock guard(m_lock);
+    m_sink = nullptr;
   }
 
   template <typename... Args>
@@ -86,12 +99,17 @@ private:
     auto now = std::chrono::floor<std::chrono::seconds>(
         std::chrono::system_clock::now());
     std::scoped_lock guard(m_lock);
+    if (m_sink != nullptr) {
+      m_sink(severity, label, message);
+      return;
+    }
     std::clog << std::format("[{:%Y-%m-%d %H:%M:%S}] {:>5} {}\n", now, label,
                              message);
   }
 
   LogLevel m_level{LogLevel::information};
   std::mutex m_lock;
+  Sink m_sink;
 };
 
 class Application {

@@ -14,7 +14,13 @@ using TIME_OF_DAY = DURATION;
 using CLOCK =
     std::chrono::time_point<std::chrono::system_clock,
                             std::chrono::duration<std::uint32_t, minute_ratio>>;
-using COST = std::pair<TIME_OF_DAY, DURATION>;
+
+struct COST {
+  DURATION schedule_offset{};
+  DURATION duration{};
+  std::uint8_t days_of_week{};
+  bool unreachable = false;
+};
 
 enum PathTraversalMode : std::uint8_t;
 

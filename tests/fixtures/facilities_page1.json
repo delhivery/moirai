@@ -1,0 +1,10 @@
+{
+  "result": {
+    "total_page_count": 2,
+    "data": [
+      {"facility_code": "A", "property_id": "P1"},
+      {"facility_code": "B", "property_id": "P1"},
+      {"property_id": "MISSING_CODE"}
+    ]
+  }
+}

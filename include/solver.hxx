@@ -114,7 +114,8 @@ public:
                     << std::format(
                            "Found a lower cost {} from initial {}. Cost: {},{}",
                            format_clock(computed), format_clock(initial),
-                           cost.first.count(), cost.second.count())
+                           cost.schedule_offset.count(),
+                           cost.duration.count())
                     << '\n';
               }
               return computed;

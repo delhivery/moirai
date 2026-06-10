@@ -9,7 +9,8 @@ TransportCenter::TransportCenter(std::string center_code)
 TransportEdge::TransportEdge(std::string edge_code, std::string edge_name)
     : code(std::move(edge_code)), name(std::move(edge_name)),
       vehicle(VehicleType::SURFACE), movement(MovementType::CARTING),
-      transient(true), terminal(false), m_offset_source(0), m_offset_target(0) {
+      days_of_week(ALL_DAYS_OF_WEEK), transient(true), terminal(false),
+      m_offset_source(0), m_offset_target(0) {
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
@@ -17,12 +18,13 @@ TransportEdge::TransportEdge(
     std::string edge_code, std::string edge_name, TIME_OF_DAY departure_time,
     DURATION transit_duration, DURATION loading_duration,
     DURATION unloading_duration, VehicleType vehicle_type,
-    MovementType movement_type, bool is_terminal = false)
+    MovementType movement_type, bool is_terminal, std::uint8_t scheduled_days)
     : code(std::move(edge_code)), name(std::move(edge_name)),
       departure(departure_time), duration(transit_duration),
       duration_loading(loading_duration),
       duration_unloading(unloading_duration), vehicle(vehicle_type),
-      movement(movement_type), transient(false), terminal(is_terminal) {}
+      movement(movement_type), days_of_week(scheduled_days), transient(false),
+      terminal(is_terminal) {}
 // NOLINTEND(bugprone-easily-swappable-parameters)
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -52,19 +54,19 @@ void TransportEdge::update(const std::shared_ptr<TransportCenter> &source,
 template <>
 auto TransportEdge::weight<PathTraversalMode::FORWARD>() const -> COST {
   if (transient) {
-    return {TIME_OF_DAY::max(), DURATION::max()};
+    return {.unreachable = true};
   }
-  TIME_OF_DAY actual_departure{
-      datemod(departure - m_offset_source, std::chrono::days{1})};
-  return {actual_departure, m_offset_source + duration + m_offset_target};
+  return {.schedule_offset = departure - m_offset_source,
+          .duration = m_offset_source + duration + m_offset_target,
+          .days_of_week = days_of_week};
 }
 
 template <>
 auto TransportEdge::weight<PathTraversalMode::REVERSE>() const -> COST {
   if (transient) {
-    return {TIME_OF_DAY::max(), DURATION::max()};
+    return {.unreachable = true};
   }
-  TIME_OF_DAY actual_departure{
-      datemod(departure + duration + m_offset_target, std::chrono::days{1})};
-  return {actual_departure, duration + m_offset_source + m_offset_target};
+  return {.schedule_offset = departure + duration + m_offset_target,
+          .duration = duration + m_offset_source + m_offset_target,
+          .days_of_week = days_of_week};
 }

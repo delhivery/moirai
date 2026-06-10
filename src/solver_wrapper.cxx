@@ -4,6 +4,7 @@
 #include "date_utils.hxx"
 #include "json_utils.hxx"
 #include "processor.hxx"
+#include "route_schedule.hxx"
 #include "transportation.hxx"
 #include "utils.hxx"
 #include <algorithm>
@@ -62,10 +63,12 @@ auto parse_facility_latency_minutes(const moirai::Json& object,
 SolverWrapper::SolverWrapper(
   RuntimeQueues queues,
   const std::shared_ptr<Solver>& solver,
-  const std::filesystem::path& center_timings_filename)
+  const std::filesystem::path& center_timings_filename,
+  HttpGet http_get)
   : m_solver(solver)
   , m_load_queue(*queues.load)
   , m_solution_queue(*queues.solution)
+  , m_http_get(std::move(http_get))
 {
   init_timings(center_timings_filename);
 }
@@ -73,7 +76,8 @@ SolverWrapper::SolverWrapper(
 SolverWrapper::SolverWrapper(
   RuntimeQueues queues,
   InitEndpoints endpoints,
-  const std::filesystem::path& center_timings_filename)
+  const std::filesystem::path& center_timings_filename,
+  HttpGet http_get)
   : m_node_init_uri(moirai::parse_uri(endpoints.node_uri))
   , m_node_init_auth_token(std::move(endpoints.node_token))
   , m_edge_init_uri(moirai::parse_uri(endpoints.edge_uri))
@@ -82,6 +86,7 @@ SolverWrapper::SolverWrapper(
   , m_edge_queue(queues.edge)
   , m_load_queue(*queues.load)
   , m_solution_queue(*queues.solution)
+  , m_http_get(std::move(http_get))
 {
   auto& app = moirai::Application::instance();
   m_solver = std::make_shared<Solver>();
@@ -193,7 +198,7 @@ SolverWrapper::init_nodes(int16_t page)
   const auto request_uri = moirai::with_query_parameters(
     m_node_init_uri,
     { { "page", std::to_string(page) }, { "status", "active" } });
-  const auto response = moirai::http_get(
+  const auto response = m_http_get(
     request_uri,
     { std::format("Authorization: Bearer {}", m_node_init_auth_token) });
 
@@ -308,7 +313,7 @@ void
 SolverWrapper::init_edges()
 {
   auto& app = moirai::Application::instance();
-  const auto response = moirai::http_get(
+  const auto response = m_http_get(
     m_edge_init_uri,
     { std::format("Authorization: Bearer {}", m_edge_init_auth_token) });
 
@@ -327,129 +332,26 @@ SolverWrapper::init_edges()
     app.logger().debug("Got {} edges", data->size());
 
     for (const auto& route : *data) {
-      const auto uuid =
-        moirai::find_string_member(route, "route_schedule_uuid");
-      const auto name = moirai::find_string_member(route, "name");
-      const auto route_type_value =
-        moirai::find_string_member(route, "route_type");
-      const auto reporting_time =
-        moirai::find_string_member(route, "reporting_time");
-      const auto* stops = moirai::find_array_member(route, "halt_centers");
-      if (!uuid.has_value() || !name.has_value() ||
-          !route_type_value.has_value() || !reporting_time.has_value() ||
-          stops == nullptr) {
-        app.logger().error("Skipping invalid route entry");
-        continue;
-      }
-
-      std::string route_type{ *route_type_value };
-      to_lower(route_type);
       try {
-        const TIME_OF_DAY offset{ datemod(
-          std::chrono::duration_cast<TIME_OF_DAY>(
-            time_string_to_time(*reporting_time)) -
-            IST_OFFSET,
-          std::chrono::days{ 1 }) };
-
-        std::vector<const moirai::Json*> loading_stops;
-        loading_stops.reserve(stops->size());
-        for (const auto& stop : *stops) {
-          const auto* loading_allowed =
-            moirai::find_member(stop, "loading_allowed");
-          if (loading_allowed != nullptr && loading_allowed->is_boolean() &&
-              !loading_allowed->get<bool>()) {
-            continue;
-          }
-          loading_stops.push_back(&stop);
-        }
-
-        for (size_t i = 0; i < loading_stops.size(); ++i) {
-          for (size_t j = i + 1; j < loading_stops.size(); ++j) {
-            const auto& source = *loading_stops[i];
-            const auto& target = *loading_stops[j];
-            const bool is_terminal = j + 1 == loading_stops.size();
-
-            const auto arrival_in =
-              moirai::find_string_member(source, "rel_etd");
-            const auto departure =
-              moirai::find_string_member(source, "rel_etd");
-            const auto arrival = moirai::find_string_member(target, "rel_eta");
-            const auto departure_out =
-              moirai::find_string_member(target, "rel_etd");
-            const auto source_center_code =
-              moirai::find_string_member(source, "center_code");
-            const auto target_center_code =
-              moirai::find_string_member(target, "center_code");
-            if (!arrival_in.has_value() || !departure.has_value() ||
-                !arrival.has_value() || !departure_out.has_value() ||
-                !source_center_code.has_value() ||
-                !target_center_code.has_value()) {
-              app.logger().error("Edge<{}> contains invalid halt center data",
-                                 *uuid);
-              continue;
-            }
-
-            const auto departure_as_time =
-              offset + std::chrono::duration_cast<TIME_OF_DAY>(
-                         time_string_to_time(*departure));
-            const auto duration = std::chrono::duration_cast<TIME_OF_DAY>(
-              time_string_to_time(*arrival) -
-              std::chrono::duration_cast<TIME_OF_DAY>(
-                time_string_to_time(*departure)));
-
-            const auto duration_loading =
-              std::chrono::duration_cast<TIME_OF_DAY>(
-                time_string_to_time(*departure) -
-                std::chrono::duration_cast<TIME_OF_DAY>(
-                  time_string_to_time(*arrival_in)));
-
-            const auto duration_unloading =
-              std::chrono::duration_cast<TIME_OF_DAY>(
-                time_string_to_time(*departure_out) -
-                std::chrono::duration_cast<TIME_OF_DAY>(
-                  time_string_to_time(*arrival)));
-
-            if (departure_as_time.count() < 0 || duration.count() < 0) {
-              app.logger().error(
-                "Edge<{}>: Departure<{}> or duration<{}> negative",
-                *uuid,
-                departure_as_time.count(),
-                duration.count());
-              continue;
-            }
-
-            auto [source_vertex, has_source_vertex] =
-              m_solver->add_node(std::string(*source_center_code));
-            auto [target_vertex, has_target_vertex] =
-              m_solver->add_node(std::string(*target_center_code));
-            auto edge = std::make_shared<TransportEdge>(
-              std::format(
-                "{}.{}", *uuid, (i * (loading_stops.size() - 1)) + j - i - 1),
-              std::string(*name),
-              departure_as_time,
-              duration,
-              duration_loading,
-              duration_unloading,
-              route_type == "air" ? VehicleType::AIR : VehicleType::SURFACE,
-              route_type == "carting" ? MovementType::CARTING
-                                      : MovementType::LINEHAUL,
-              is_terminal);
-
-            if (has_source_vertex && has_target_vertex) {
-              m_solver->add_edge(source_vertex, target_vertex, edge);
-            } else {
-              app.logger().error(
-                "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
-                *uuid,
-                *source_center_code,
-                has_source_vertex,
-                *target_center_code,
-                has_target_vertex);
-            }
+        for (const auto& spec : build_route_edge_specs(route, IST_OFFSET)) {
+          auto [source_vertex, has_source_vertex] =
+            m_solver->add_node(spec.source_center_code);
+          auto [target_vertex, has_target_vertex] =
+            m_solver->add_node(spec.target_center_code);
+          if (has_source_vertex && has_target_vertex) {
+            m_solver->add_edge(source_vertex, target_vertex, spec.edge);
+          } else {
+            app.logger().error(
+              "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
+              spec.edge->code,
+              spec.source_center_code,
+              has_source_vertex,
+              spec.target_center_code,
+              has_target_vertex);
           }
         }
       } catch (const std::exception& exc) {
-        app.logger().error("Skipping route {}: {}", *uuid, exc.what());
+        app.logger().error("Skipping route: {}", exc.what());
       }
     }
   } else {
@@ -466,6 +368,7 @@ SolverWrapper::find_paths(
   int32_t bag_start,
   CLOCK bag_end,
   std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
+  -> nlohmann::json
 {
   auto& app = moirai::Application::instance();
   const CLOCK zero = CLOCK{ std::chrono::minutes{ 0 } };

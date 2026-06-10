@@ -1,0 +1,10 @@
+{
+  "id": "bag-normal",
+  "location": "A",
+  "destination": "C",
+  "time": "2026-06-08 08:00:00",
+  "ipdd_destination": "2026-06-09 00:00:00",
+  "cs_slid": "SLID",
+  "cs_act": "ACT",
+  "pid": "PID"
+}

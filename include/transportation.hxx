@@ -28,6 +28,8 @@ enum PathTraversalMode : std::uint8_t {
   REVERSE = 1,
 };
 
+inline constexpr std::uint8_t ALL_DAYS_OF_WEEK = 0b0111'1111;
+
 template <MovementType, ProcessType> using Latency = DURATION;
 
 struct TransportCenter {
@@ -74,6 +76,7 @@ struct TransportEdge {
 
   VehicleType vehicle;
   MovementType movement;
+  std::uint8_t days_of_week;
 
   bool transient;
   bool terminal;
@@ -87,7 +90,8 @@ struct TransportEdge {
                 TIME_OF_DAY departure_time, DURATION transit_duration,
                 DURATION loading_duration, DURATION unloading_duration,
                 VehicleType vehicle_type, MovementType movement_type,
-                bool is_terminal);
+                bool is_terminal,
+                std::uint8_t scheduled_days = ALL_DAYS_OF_WEEK);
 
   template <PathTraversalMode M> [[nodiscard]] auto weight() const -> COST;
 

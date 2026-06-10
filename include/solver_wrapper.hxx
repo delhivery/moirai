@@ -6,6 +6,8 @@
 #include "solver.hxx"
 #include "transportation.hxx"
 #include <filesystem>
+#include <functional>
+#include <nlohmann/json_fwd.hpp>
 #include <stop_token>
 #include <string>
 #include <tuple>
@@ -14,6 +16,9 @@
 
 class SolverWrapper {
 public:
+  using HttpGet = std::function<moirai::HttpResponse(
+      const moirai::Uri &, const std::vector<std::string> &)>;
+
   struct RuntimeQueues {
     BlockingQueue<std::string> *node;
     BlockingQueue<std::string> *edge;
@@ -47,13 +52,16 @@ private:
   BlockingQueue<std::string> *m_edge_queue{nullptr};
   BlockingQueue<std::string> &m_load_queue;
   BlockingQueue<std::string> &m_solution_queue;
+  HttpGet m_http_get;
 
 public:
   SolverWrapper(RuntimeQueues queues, const std::shared_ptr<Solver> &solver,
-                const std::filesystem::path &center_timings_filename);
+                const std::filesystem::path &center_timings_filename,
+                HttpGet http_get = moirai::http_get);
 
   SolverWrapper(RuntimeQueues queues, InitEndpoints endpoints,
-                const std::filesystem::path &center_timings_filename);
+                const std::filesystem::path &center_timings_filename,
+                HttpGet http_get = moirai::http_get);
 
   void init_timings(const std::filesystem::path &facility_timings_filename);
 
@@ -71,7 +79,7 @@ public:
   auto find_paths(std::string bag, std::string bag_source,
                   std::string bag_target, int32_t bag_start, CLOCK bag_end,
                   std::vector<std::tuple<std::string, int32_t, std::string>>
-                      &packages) const;
+                      &packages) const -> nlohmann::json;
 
   void run(const std::stop_token &stop_token);
 };

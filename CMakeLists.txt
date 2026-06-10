@@ -5,6 +5,7 @@ if(POLICY CMP0167)
 endif()
 
 project(moirai)
+include(CTest)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +60,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 option(ANALYZE "Analyze codebase for improvements" OFF)
 option(LOCAL "Run EP locally with production dataset" OFF)
+option(MOIRAI_BUILD_APP "Build the moirai application target" ON)
 
 if(ANALYZE)
   message(STATUS "Analysis on")
@@ -66,49 +68,128 @@ if(ANALYZE)
   find_program(TIDY_PATH NAMES clang-tidy REQUIRED)
 endif()
 
-find_package(Boost COMPONENTS graph)
-find_package(TBB REQUIRED)
-find_package(CURL REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(PkgConfig REQUIRED)
-find_package(RdKafkaCPP QUIET)
-
-if(RdKafkaCPP_FOUND)
-  set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
-else()
-  pkg_check_modules(RDKAFKA REQUIRED IMPORTED_TARGET rdkafka++)
-  add_library(RdKafkaCPP::RdKafkaCPP ALIAS PkgConfig::RDKAFKA)
-  set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
+if(MOIRAI_BUILD_APP OR BUILD_TESTING)
+  find_package(Boost COMPONENTS graph)
 endif()
 
-add_executable(
-  ${PROJECT_NAME}
-  src/date_utils.cxx
-  src/graph_helpers.cxx
-  src/transportation.cxx
-  src/solver.cxx
-  src/utils.cxx
-  src/scan_reader.cxx
-  src/kafka_reader.cxx
-  src/search_writer.cxx
-  src/file_reader.cxx
-  src/processor.cxx
-  src/http.cxx
-  src/solver_wrapper.cxx
-  src/server.cxx)
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+if(MOIRAI_BUILD_APP)
+  find_package(TBB REQUIRED)
+  find_package(CURL REQUIRED)
+  find_package(OpenSSL REQUIRED)
+  find_package(PkgConfig REQUIRED)
+  find_package(RdKafkaCPP QUIET)
 
-if(ANALYZE)
-  set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_INCLUDE_WHAT_YOU_USE
-                                               ${IWYU_PATH})
-  set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
+  if(RdKafkaCPP_FOUND)
+    set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
+  else()
+    pkg_check_modules(RDKAFKA REQUIRED IMPORTED_TARGET rdkafka++)
+    add_library(RdKafkaCPP::RdKafkaCPP ALIAS PkgConfig::RDKAFKA)
+    set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
+  endif()
+
+  add_executable(
+    ${PROJECT_NAME}
+    src/date_utils.cxx
+    src/graph_helpers.cxx
+    src/transportation.cxx
+    src/solver.cxx
+    src/utils.cxx
+    src/scan_reader.cxx
+    src/kafka_reader.cxx
+    src/search_writer.cxx
+    src/file_reader.cxx
+    src/processor.cxx
+    src/http.cxx
+    src/solver_wrapper.cxx
+    src/server.cxx)
+  target_include_directories(${PROJECT_NAME} PUBLIC include)
+
+  if(ANALYZE)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_INCLUDE_WHAT_YOU_USE
+                                                 ${IWYU_PATH})
+    set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
+  endif()
+
+  target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE Boost::graph
+            CURL::libcurl
+            ${MOIRAI_RDKAFKA_TARGET}
+            TBB::tbb
+            OpenSSL::SSL
+            OpenSSL::Crypto)
 endif()
 
-target_link_libraries(
-  ${PROJECT_NAME}
-  PRIVATE Boost::graph
-          CURL::libcurl
-          ${MOIRAI_RDKAFKA_TARGET}
-          TBB::tbb
-          OpenSSL::SSL
-          OpenSSL::Crypto)
+if(BUILD_TESTING)
+  find_package(CURL REQUIRED)
+  find_package(OpenSSL REQUIRED)
+
+  function(moirai_configure_test target)
+    target_include_directories(${target} PRIVATE include tests)
+    target_compile_definitions(
+      ${target}
+      PRIVATE MOIRAI_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    add_test(NAME ${target} COMMAND ${target})
+  endfunction()
+
+  add_executable(moirai_schedule_tests tests/schedule_tests.cxx
+                                        src/date_utils.cxx
+                                        src/transportation.cxx)
+  moirai_configure_test(moirai_schedule_tests)
+
+  add_executable(
+    moirai_solver_tests
+    tests/solver_tests.cxx
+    src/date_utils.cxx
+    src/graph_helpers.cxx
+    src/solver.cxx
+    src/transportation.cxx)
+  moirai_configure_test(moirai_solver_tests)
+  target_link_libraries(moirai_solver_tests PRIVATE Boost::graph)
+
+  add_executable(moirai_processor_tests tests/processor_tests.cxx
+                                        src/date_utils.cxx
+                                        src/processor.cxx
+                                        src/transportation.cxx)
+  moirai_configure_test(moirai_processor_tests)
+
+  add_executable(moirai_logger_tests tests/logger_tests.cxx)
+  moirai_configure_test(moirai_logger_tests)
+
+  set(MOIRAI_WRAPPER_TEST_SOURCES
+      src/date_utils.cxx
+      src/graph_helpers.cxx
+      src/http.cxx
+      src/processor.cxx
+      src/solver.cxx
+      src/solver_wrapper.cxx
+      src/transportation.cxx
+      src/utils.cxx)
+
+  add_executable(
+    moirai_wrapper_tests
+    tests/wrapper_tests.cxx
+    ${MOIRAI_WRAPPER_TEST_SOURCES})
+  moirai_configure_test(moirai_wrapper_tests)
+  target_link_libraries(moirai_wrapper_tests PRIVATE Boost::graph
+                                                     CURL::libcurl
+                                                     OpenSSL::Crypto)
+
+  add_executable(
+    moirai_init_tests
+    tests/init_tests.cxx
+    ${MOIRAI_WRAPPER_TEST_SOURCES})
+  moirai_configure_test(moirai_init_tests)
+  target_link_libraries(moirai_init_tests PRIVATE Boost::graph
+                                                  CURL::libcurl
+                                                  OpenSSL::Crypto)
+
+  add_executable(
+    moirai_run_tests
+    tests/run_tests.cxx
+    ${MOIRAI_WRAPPER_TEST_SOURCES})
+  moirai_configure_test(moirai_run_tests)
+  target_link_libraries(moirai_run_tests PRIVATE Boost::graph
+                                                 CURL::libcurl
+                                                 OpenSSL::Crypto)
+endif()

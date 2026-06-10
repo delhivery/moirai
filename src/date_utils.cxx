@@ -11,6 +11,9 @@ namespace {
 constexpr auto MINUTES_PER_HOUR = 60;
 constexpr auto HOURS_PER_DAY = 24;
 constexpr auto MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;
+constexpr auto DAYS_PER_WEEK = 7;
+constexpr auto MINUTES_PER_WEEK = DAYS_PER_WEEK * MINUTES_PER_DAY;
+constexpr auto UNIX_EPOCH_WEEKDAY = 4;
 constexpr auto IST_OFFSET_MINUTES = 330;
 constexpr auto ISO_DATETIME_LENGTH = 19U;
 constexpr auto DATE_DASH_2_OFFSET = 4U;
@@ -63,6 +66,41 @@ auto parse_iso_datetime(std::string_view input) -> CLOCK {
   return std::chrono::time_point_cast<CLOCK::duration>(time_point);
 }
 
+auto minute_of_week(CLOCK timestamp) -> DURATION {
+  const auto day = std::chrono::floor<std::chrono::days>(timestamp);
+  const auto days_since_epoch = day.time_since_epoch().count();
+  const auto weekday = (days_since_epoch + UNIX_EPOCH_WEEKDAY) % DAYS_PER_WEEK;
+  const TIME_OF_DAY minute_of_day{timestamp - day};
+  return DURATION{static_cast<std::int16_t>((weekday * MINUTES_PER_DAY) +
+                                            minute_of_day.count())};
+}
+
+template <PathTraversalMode M>
+auto scheduled_wait_time(DURATION start_minute_of_week, const COST &cost)
+    -> DURATION {
+  DURATION best_wait{MINUTES_PER_WEEK};
+  for (std::uint8_t day = 0; day < DAYS_PER_WEEK; ++day) {
+    if ((cost.days_of_week & (1U << day)) == 0) {
+      continue;
+    }
+
+    const DURATION scheduled_minute{
+        datemod(DURATION{static_cast<std::int16_t>(day * MINUTES_PER_DAY)} +
+                    cost.schedule_offset,
+                std::chrono::days{DAYS_PER_WEEK})};
+    const DURATION wait{
+        datemod(M == PathTraversalMode::FORWARD
+                    ? scheduled_minute - start_minute_of_week
+                    : start_minute_of_week - scheduled_minute,
+                std::chrono::days{DAYS_PER_WEEK})};
+    if (wait < best_wait) {
+      best_wait = wait;
+    }
+  }
+
+  return best_wait;
+}
+
 } // namespace
 
 auto datemod(DURATION lhs, DURATION rhs) -> std::uint16_t {
@@ -75,25 +113,23 @@ auto datemod(DURATION lhs, DURATION rhs) -> std::uint16_t {
 template <>
 auto CalcualateTraversalCost::operator()<PathTraversalMode::FORWARD>(
     CLOCK start, COST cost) const -> CLOCK {
-  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max()) {
+  if (cost.unreachable || cost.days_of_week == 0) {
     return start;
   }
-  TIME_OF_DAY minutes_start{start -
-                            std::chrono::floor<std::chrono::days>(start)};
-  DURATION wait_time{datemod(cost.first - minutes_start, std::chrono::days{1})};
-  return start + wait_time + cost.second;
+  const DURATION wait_time = scheduled_wait_time<PathTraversalMode::FORWARD>(
+    minute_of_week(start), cost);
+  return start + wait_time + cost.duration;
 }
 
 template <>
 auto CalcualateTraversalCost::operator()<PathTraversalMode::REVERSE>(
     CLOCK start, COST cost) const -> CLOCK {
-  if (cost.first == TIME_OF_DAY::max() and cost.second == DURATION::max()) {
+  if (cost.unreachable || cost.days_of_week == 0) {
     return start;
   }
-  TIME_OF_DAY minutes_start{start -
-                            std::chrono::floor<std::chrono::days>(start)};
-  DURATION wait_time{datemod(minutes_start - cost.first, std::chrono::days{1})};
-  return start - wait_time - cost.second;
+  const DURATION wait_time = scheduled_wait_time<PathTraversalMode::REVERSE>(
+    minute_of_week(start), cost);
+  return start - wait_time - cost.duration;
 }
 
 auto iso_to_date(const std::string &date_string) -> CLOCK {

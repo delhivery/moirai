@@ -1,0 +1,10 @@
+{
+  "id": "bag-items",
+  "location": "A",
+  "destination": "C",
+  "time": "2026-06-08 08:00:00",
+  "items": [
+    {"id": "bad-child", "cn": "D"},
+    {"id": "child-1", "cn": "D", "ipdd_destination": "2026-06-08 12:00:00"}
+  ]
+}

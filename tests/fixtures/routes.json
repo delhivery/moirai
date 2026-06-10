@@ -1,0 +1,44 @@
+{
+  "data": [
+    {
+      "route_schedule_uuid": "route-ac",
+      "name": "A to C",
+      "route_type": "carting",
+      "reporting_time": "06:00",
+      "days_of_week": [1, 2, 3, 4, 5, 6],
+      "halt_centers": [
+        {"center_code": "A", "rel_eta": "0:00", "rel_etd": "3:00", "loading_allowed": true},
+        {"center_code": "B", "rel_eta": "4:00", "rel_etd": "4:30", "loading_allowed": false},
+        {"center_code": "C", "rel_eta": "5:00", "rel_etd": "5:30", "loading_allowed": true}
+      ]
+    },
+    {
+      "route_schedule_uuid": "route-cd",
+      "name": "C to D",
+      "route_type": "linehaul",
+      "reporting_time": "06:00",
+      "days_of_week": [1, 2, 3, 4, 5, 6],
+      "halt_centers": [
+        {"center_code": "C", "rel_eta": "0:00", "rel_etd": "6:00", "loading_allowed": true},
+        {"center_code": "D", "rel_eta": "9:00", "rel_etd": "9:30", "loading_allowed": true}
+      ]
+    },
+    {
+      "route_schedule_uuid": "route-missing-node",
+      "name": "Missing node",
+      "route_type": "carting",
+      "reporting_time": "06:00",
+      "days_of_week": [1],
+      "halt_centers": [
+        {"center_code": "A", "rel_eta": "0:00", "rel_etd": "1:00", "loading_allowed": true},
+        {"center_code": "Z", "rel_eta": "2:00", "rel_etd": "2:30", "loading_allowed": true}
+      ]
+    },
+    {
+      "route_schedule_uuid": "route-invalid",
+      "name": "Invalid",
+      "route_type": "carting",
+      "reporting_time": "06:00"
+    }
+  ]
+}
