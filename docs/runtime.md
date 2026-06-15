@@ -28,6 +28,27 @@ Repeat `--kafka-broker` for additional brokers and repeat `--kafka-config` for
 SASL/MSK settings such as `security.protocol`, `sasl.mechanisms`,
 `sasl.username`, and `sasl.password`.
 
+## OpenSearch Mapping
+
+The application creates `SEARCH_INDEX` on first startup when it does not already
+exist. The generated mapping is explicit and disables dynamic field creation at
+the root and inside path sections. Top-level identifiers are `keyword`, display
+date strings such as `pdd`, `arrival`, and `departure` are `keyword`, canonical
+timestamp counters such as `pdd_ts`, `arrival_ts`, and `departure_ts` are `long`,
+and `updated_at` is an ISO-8601 `date`. Solver timestamps (`pdd_ts`,
+`arrival_ts`, and `departure_ts`) are epoch minutes. Writer timestamps
+(`updated_at_ts`) are epoch seconds.
+
+Path section arrays (`earliest.locations`, `ultimate.locations`, and
+`critical.locations`) are kept in `_source` only with `enabled: false` to avoid
+indexing every hop in every path. The lightweight `first` and `second` path
+objects remain explicitly indexed for filtering and sorting.
+
+OpenSearch does not allow changing an existing field type in place. If an older
+index has dynamically inferred fields such as `earliest.first.arrival` as `text`,
+create a replacement index with the new mapping and reindex, or delete/recreate
+the index during a controlled maintenance window.
+
 ## DWH Append Audit
 
 OpenSearch is written with stable waybill document ids, so it stores the current

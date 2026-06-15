@@ -8,6 +8,7 @@ import moirai.transportation;
 
 namespace {
 
+using moirai_tests::display_epoch_minutes;
 using moirai_tests::expect_eq;
 using moirai_tests::expect_true;
 
@@ -56,6 +57,14 @@ auto two_segment_path() -> OwnedPath {
   return owned;
 }
 
+void expect_timestamp_matches_display(std::string_view display,
+                                      std::int64_t timestamp,
+                                      std::string_view label) {
+  expect_eq(timestamp,
+            static_cast<std::int64_t>(display_epoch_minutes(display)),
+            label);
+}
+
 void test_forward_parse_path_shape() {
   const auto owned = two_segment_path();
   const auto parsed = parse_path<PathTraversalMode::FORWARD>(owned.path);
@@ -65,8 +74,17 @@ void test_forward_parse_path_shape() {
             "route prefix precomputed");
   expect_eq(parsed[0].route, std::string{"route"}, "forward route prefix");
   expect_true(parsed[0].has_departure, "forward has departure");
+  expect_timestamp_matches_display(parsed[0].arrival,
+                                   parsed[0].arrival_ts,
+                                   "forward first arrival timestamp");
+  expect_timestamp_matches_display(parsed[0].departure,
+                                   parsed[0].departure_ts,
+                                   "forward first departure timestamp");
   expect_eq(parsed[1].code, std::string{"B"}, "forward terminal code");
   expect_eq(parsed[1].has_departure, false, "terminal has no route");
+  expect_timestamp_matches_display(parsed[1].arrival,
+                                   parsed[1].arrival_ts,
+                                   "forward terminal arrival timestamp");
 
   std::vector<SearchPathLocation> parsed_into;
   parse_path_into<PathTraversalMode::FORWARD>(owned.path, parsed_into);
@@ -83,8 +101,17 @@ void test_reverse_parse_path_shape() {
   expect_eq(parsed[0].route, std::string{"route"}, "reverse route prefix");
   expect_true(!parsed[0].arrival.empty(), "reverse has arrival");
   expect_true(parsed[0].has_departure, "reverse has departure");
+  expect_timestamp_matches_display(parsed[0].arrival,
+                                   parsed[0].arrival_ts,
+                                   "reverse first arrival timestamp");
+  expect_timestamp_matches_display(parsed[0].departure,
+                                   parsed[0].departure_ts,
+                                   "reverse first departure timestamp");
   expect_eq(parsed[1].code, std::string{"B"}, "reverse terminal code");
   expect_eq(parsed[1].has_departure, false, "reverse terminal has no route");
+  expect_timestamp_matches_display(parsed[1].arrival,
+                                   parsed[1].arrival_ts,
+                                   "reverse terminal arrival timestamp");
 
   std::vector<SearchPathLocation> parsed_into;
   parse_path_into<PathTraversalMode::REVERSE>(owned.path, parsed_into);

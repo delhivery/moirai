@@ -152,4 +152,44 @@ inline auto epoch_minutes(std::string_view timestamp) -> int32_t {
                                 .count());
 }
 
+inline auto parse_digits(std::string_view input) -> int {
+  int value = 0;
+  const auto [ptr, error] =
+    std::from_chars(input.data(), input.data() + input.size(), value);
+  if (error != std::errc{} || ptr != input.data() + input.size()) {
+    std::cerr << "Failed to parse timestamp digits: " << input << '\n';
+    std::exit(1);
+  }
+  return value;
+}
+
+inline auto display_epoch_minutes(std::string_view timestamp) -> int32_t {
+  if (timestamp.size() != 17) {
+    std::cerr << "Unexpected display timestamp: " << timestamp << '\n';
+    std::exit(1);
+  }
+  if (timestamp[2] != '/' || timestamp[5] != '/' || timestamp[8] != ' ' ||
+      timestamp[11] != ':' || timestamp[14] != ':') {
+    std::cerr << "Unexpected display timestamp separators: " << timestamp
+              << '\n';
+    std::exit(1);
+  }
+
+  const auto month = parse_digits(timestamp.substr(0, 2));
+  const auto day = parse_digits(timestamp.substr(3, 2));
+  const auto short_year = parse_digits(timestamp.substr(6, 2));
+  const auto year = short_year >= 70 ? 1900 + short_year : 2000 + short_year;
+  const auto hour = parse_digits(timestamp.substr(9, 2));
+  const auto minute = parse_digits(timestamp.substr(12, 2));
+  const auto second = parse_digits(timestamp.substr(15, 2));
+
+  return epoch_minutes(std::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                                   year,
+                                   month,
+                                   day,
+                                   hour,
+                                   minute,
+                                   second));
+}
+
 } // namespace moirai_tests

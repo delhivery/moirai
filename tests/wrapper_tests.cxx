@@ -9,6 +9,8 @@ import moirai.transportation;
 
 namespace {
 
+using moirai_tests::display_epoch_minutes;
+
 template <typename T, typename U>
 void expect_eq(const T& actual, const U& expected, std::string_view label,
                std::source_location location = std::source_location::current()) {
@@ -105,6 +107,9 @@ void test_find_paths_non_critical_returns_earliest_and_ultimate() {
             static_cast<std::int64_t>(
               iso_to_date("2026-06-08 12:00:00").time_since_epoch().count()),
             "pdd preserved");
+  expect_eq(response.pdd_ts,
+            static_cast<std::int64_t>(display_epoch_minutes(response.pdd)),
+            "pdd_ts matches pdd display");
 }
 
 void test_find_paths_critical_omits_ultimate() {

@@ -610,19 +610,96 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
   return result;
 }
 
+auto keyword_mapping(std::size_t ignore_above = 256) -> moirai::Json {
+  return { { "type", "keyword" }, { "ignore_above", ignore_above } };
+}
+
+auto long_mapping() -> moirai::Json {
+  return { { "type", "long" } };
+}
+
+auto location_mapping() -> moirai::Json {
+  return { { "type", "object" },
+           { "dynamic", false },
+           { "properties",
+             {
+               { "code", keyword_mapping(128) },
+               { "arrival", keyword_mapping(32) },
+               { "arrival_ts", long_mapping() },
+               { "route", keyword_mapping(512) },
+               { "departure", keyword_mapping(32) },
+               { "departure_ts", long_mapping() },
+             } } };
+}
+
+auto path_section_mapping() -> moirai::Json {
+  return { { "type", "object" },
+           { "dynamic", false },
+           { "properties",
+             {
+               { "locations",
+                 {
+                   { "type", "object" },
+                   { "enabled", false },
+                 } },
+               { "first", location_mapping() },
+               { "second", location_mapping() },
+             } } };
+}
+
+auto mapping_at(const moirai::Json& properties, std::string_view field)
+    -> const moirai::Json* {
+  const moirai::Json* current_properties = &properties;
+  while (true) {
+    const auto dot = field.find('.');
+    const auto segment = field.substr(0, dot);
+    const auto iter = current_properties->find(std::string(segment));
+    if (iter == current_properties->end() || !iter->is_object()) {
+      return nullptr;
+    }
+
+    if (dot == std::string_view::npos) {
+      return &*iter;
+    }
+
+    const auto properties_iter = iter->find("properties");
+    if (properties_iter == iter->end() || !properties_iter->is_object()) {
+      return nullptr;
+    }
+
+    current_properties = &*properties_iter;
+    field.remove_prefix(dot + 1);
+  }
+}
+
 auto field_type(const moirai::Json& properties, std::string_view field)
     -> std::optional<std::string> {
-  const auto iter = properties.find(std::string(field));
-  if (iter == properties.end() || !iter->is_object()) {
+  const auto* mapping = mapping_at(properties, field);
+  if (mapping == nullptr) {
     return std::nullopt;
   }
 
-  const auto type_iter = iter->find("type");
-  if (type_iter == iter->end() || !type_iter->is_string()) {
+  const auto type_iter = mapping->find("type");
+  if (type_iter == mapping->end() || !type_iter->is_string()) {
     return std::nullopt;
   }
 
   return type_iter->template get<std::string>();
+}
+
+auto field_bool(const moirai::Json& properties, std::string_view field,
+                std::string_view key) -> std::optional<bool> {
+  const auto* mapping = mapping_at(properties, field);
+  if (mapping == nullptr) {
+    return std::nullopt;
+  }
+
+  const auto iter = mapping->find(std::string(key));
+  if (iter == mapping->end() || !iter->is_boolean()) {
+    return std::nullopt;
+  }
+
+  return iter->template get<bool>();
 }
 
 auto integer_from_json(const moirai::Json& value) -> std::optional<std::int64_t> {
@@ -804,21 +881,21 @@ SearchWriter::create_index_body() const -> std::string
             { "number_of_replicas", m_index_config.replicas },
             { "refresh_interval", m_index_config.refresh_interval } } } } },
     { "mappings",
-      { { "dynamic", true },
+      { { "dynamic", false },
         { "properties",
-          { { "waybill", { { "type", "keyword" } } },
-            { "package", { { "type", "keyword" } } },
-            { "cs_slid", { { "type", "keyword" } } },
-            { "cs_act", { { "type", "keyword" } } },
-            { "pid", { { "type", "keyword" } } },
-            { "fail", { { "type", "keyword" } } },
-            { "pdd", { { "type", "keyword" } } },
-            { "pdd_ts", { { "type", "long" } } },
+          { { "waybill", keyword_mapping(128) },
+            { "package", keyword_mapping(128) },
+            { "cs_slid", keyword_mapping(128) },
+            { "cs_act", keyword_mapping(128) },
+            { "pid", keyword_mapping(128) },
+            { "fail", keyword_mapping(8191) },
+            { "pdd", keyword_mapping(32) },
+            { "pdd_ts", long_mapping() },
             { "updated_at", { { "type", "date" } } },
-            { "updated_at_ts", { { "type", "long" } } },
-            { "earliest", { { "type", "object" }, { "dynamic", true } } },
-            { "ultimate", { { "type", "object" }, { "dynamic", true } } },
-            { "critical", { { "type", "object" }, { "dynamic", true } } } } } } }
+            { "updated_at_ts", long_mapping() },
+            { "earliest", path_section_mapping() },
+            { "ultimate", path_section_mapping() },
+            { "critical", path_section_mapping() } } } } }
   };
 
   return body.dump();
@@ -900,13 +977,8 @@ SearchWriter::validate_index_definition()
     return;
   }
 
-  const std::array expected_fields{
-    std::pair{ "waybill", "keyword" },
-    std::pair{ "package", "keyword" },
-    std::pair{ "updated_at", "date" },
-    std::pair{ "updated_at_ts", "long" },
-  };
-  for (const auto& [field, expected_type] : expected_fields) {
+  const auto validate_field_type =
+    [&](std::string_view field, std::string_view expected_type) {
     const auto actual_type = field_type(*properties, field);
     if (!actual_type.has_value() || *actual_type != expected_type) {
       app.logger().error("Search index {} field {} has type {}, expected {}",
@@ -914,6 +986,58 @@ SearchWriter::validate_index_definition()
                          field,
                          actual_type.value_or("<missing>"),
                          expected_type);
+    }
+  };
+
+  const std::array top_level_fields{
+    std::pair{ "waybill", "keyword" },
+    std::pair{ "package", "keyword" },
+    std::pair{ "cs_slid", "keyword" },
+    std::pair{ "cs_act", "keyword" },
+    std::pair{ "pid", "keyword" },
+    std::pair{ "fail", "keyword" },
+    std::pair{ "pdd", "keyword" },
+    std::pair{ "pdd_ts", "long" },
+    std::pair{ "updated_at", "date" },
+    std::pair{ "updated_at_ts", "long" },
+  };
+  for (const auto& [field, expected_type] : top_level_fields) {
+    validate_field_type(field, expected_type);
+  }
+
+  constexpr std::array path_sections{ "earliest", "ultimate", "critical" };
+  constexpr std::array path_positions{ "first", "second" };
+  constexpr std::array path_location_fields{
+    std::pair{ "code", "keyword" },
+    std::pair{ "arrival", "keyword" },
+    std::pair{ "arrival_ts", "long" },
+    std::pair{ "route", "keyword" },
+    std::pair{ "departure", "keyword" },
+    std::pair{ "departure_ts", "long" },
+  };
+  for (std::string_view section : path_sections) {
+    validate_field_type(section, "object");
+    const auto locations_field = std::format("{}.locations", section);
+    validate_field_type(locations_field, "object");
+    const auto locations_enabled =
+      field_bool(*properties, locations_field, "enabled");
+    if (!locations_enabled.has_value() || *locations_enabled) {
+      app.logger().error(
+        "Search index {} field {} has enabled {}, expected false",
+        m_search_index,
+        locations_field,
+        locations_enabled.has_value()
+          ? std::format("{}", *locations_enabled)
+          : std::string{"<missing>"});
+    }
+
+    for (std::string_view position : path_positions) {
+      const auto position_field = std::format("{}.{}", section, position);
+      validate_field_type(position_field, "object");
+      for (const auto& [field, expected_type] : path_location_fields) {
+        validate_field_type(std::format("{}.{}", position_field, field),
+                            expected_type);
+      }
     }
   }
 

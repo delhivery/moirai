@@ -8,6 +8,8 @@ import moirai.search_writer;
 namespace {
 
 using moirai_tests::ScopedLogCapture;
+using moirai_tests::display_epoch_minutes;
+using moirai_tests::epoch_minutes;
 using moirai_tests::expect_eq;
 using moirai_tests::expect_true;
 
@@ -80,12 +82,12 @@ auto document(std::string id, std::string package_id = "p1") -> SearchDocument {
   result.waybill = id;
   result.package_id = std::move(package_id);
   result.pdd = "06/08/26 12:00:00";
-  result.pdd_ts = 29686320;
+  result.pdd_ts = epoch_minutes("2026-06-08 12:00:00");
 
   SearchPathLocation location;
   location.code = "A";
   location.arrival = "06/08/26 08:00:00";
-  location.arrival_ts = 29686080;
+  location.arrival_ts = epoch_minutes("2026-06-08 08:00:00");
   result.earliest.locations.push_back(std::move(location));
   return result;
 }
@@ -97,19 +99,68 @@ auto has_header(const std::vector<std::string>& headers, std::string_view name)
   });
 }
 
+auto keyword_mapping(std::size_t ignore_above = 256) -> nlohmann::json {
+  return { { "type", "keyword" }, { "ignore_above", ignore_above } };
+}
+
+auto long_mapping() -> nlohmann::json {
+  return { { "type", "long" } };
+}
+
+auto location_mapping() -> nlohmann::json {
+  return { { "type", "object" },
+           { "dynamic", false },
+           { "properties",
+             {
+               { "code", keyword_mapping(128) },
+               { "arrival", keyword_mapping(32) },
+               { "arrival_ts", long_mapping() },
+               { "route", keyword_mapping(512) },
+               { "departure", keyword_mapping(32) },
+               { "departure_ts", long_mapping() },
+             } } };
+}
+
+auto path_section_mapping() -> nlohmann::json {
+  return { { "type", "object" },
+           { "dynamic", false },
+           { "properties",
+             {
+               { "locations",
+                 {
+                   { "type", "object" },
+                   { "enabled", false },
+                 } },
+               { "first", location_mapping() },
+               { "second", location_mapping() },
+             } } };
+}
+
 auto valid_mapping() -> std::string {
-  return R"({
-    "moirai": {
-      "mappings": {
-        "properties": {
-          "waybill": {"type": "keyword"},
-          "package": {"type": "keyword"},
-          "updated_at": {"type": "date"},
-          "updated_at_ts": {"type": "long"}
-        }
-      }
-    }
-  })";
+  const nlohmann::json body = {
+    { "moirai",
+      {
+        { "mappings",
+          { { "dynamic", false },
+            { "properties",
+              {
+                { "waybill", keyword_mapping(128) },
+                { "package", keyword_mapping(128) },
+                { "cs_slid", keyword_mapping(128) },
+                { "cs_act", keyword_mapping(128) },
+                { "pid", keyword_mapping(128) },
+                { "fail", keyword_mapping(8191) },
+                { "pdd", keyword_mapping(32) },
+                { "pdd_ts", long_mapping() },
+                { "updated_at", { { "type", "date" } } },
+                { "updated_at_ts", long_mapping() },
+                { "earliest", path_section_mapping() },
+                { "ultimate", path_section_mapping() },
+                { "critical", path_section_mapping() },
+              } } } },
+      } },
+  };
+  return body.dump();
 }
 
 auto valid_settings() -> std::string {
@@ -230,9 +281,50 @@ void test_missing_index_is_created_with_mapping_and_settings() {
   expect_eq(body["settings"]["index"]["refresh_interval"].get<std::string>(),
             std::string{"30s"},
             "default refresh interval");
+  expect_true(!body["mappings"]["dynamic"].get<bool>(),
+              "root dynamic mapping disabled");
   expect_eq(body["mappings"]["properties"]["waybill"]["type"].get<std::string>(),
             std::string{"keyword"},
             "waybill mapping");
+  expect_eq(body["mappings"]["properties"]["waybill"]["ignore_above"]
+              .get<std::size_t>(),
+            std::size_t{128},
+            "waybill ignore_above");
+  expect_eq(body["mappings"]["properties"]["fail"]["ignore_above"]
+              .get<std::size_t>(),
+            std::size_t{8191},
+            "fail ignore_above");
+  expect_eq(body["mappings"]["properties"]["pdd"]["type"].get<std::string>(),
+            std::string{"keyword"},
+            "pdd display mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["dynamic"].get<bool>(),
+            false,
+            "earliest dynamic disabled");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]
+                ["locations"]["enabled"]
+                  .get<bool>(),
+            false,
+            "locations source-only mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
+                ["properties"]["arrival"]["type"]
+                  .get<std::string>(),
+            std::string{"keyword"},
+            "first arrival display mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
+                ["properties"]["arrival_ts"]["type"]
+                  .get<std::string>(),
+            std::string{"long"},
+            "first arrival_ts mapping");
+  expect_eq(body["mappings"]["properties"]["ultimate"]["properties"]["second"]
+                ["properties"]["route"]["type"]
+                  .get<std::string>(),
+            std::string{"keyword"},
+            "ultimate second route mapping");
+  expect_eq(body["mappings"]["properties"]["critical"]["properties"]["second"]
+                ["properties"]["departure_ts"]["type"]
+                  .get<std::string>(),
+            std::string{"long"},
+            "critical second departure_ts mapping");
   expect_eq(body["mappings"]["properties"]["updated_at_ts"]["type"]
               .get<std::string>(),
             std::string{"long"},
@@ -265,7 +357,21 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
   state->responses = {
     { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
     { "GET", "/moirai/_mapping", { .status_code = 200, .body = R"({
-      "moirai": {"mappings": {"properties": {"waybill": {"type": "text"}}}}
+      "moirai": {"mappings": {"properties": {
+        "waybill": {"type": "text"},
+        "earliest": {
+          "type": "object",
+          "properties": {
+            "locations": {"type": "object", "enabled": true},
+            "first": {
+              "type": "object",
+              "properties": {
+                "arrival": {"type": "text"}
+              }
+            }
+          }
+        }
+      }}}
     })" } },
     { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
     { "GET", "", { .status_code = 200, .body = "[]" } },
@@ -277,6 +383,12 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
 
   expect_true(logs.contains("field waybill has type text, expected keyword"),
               "incompatible mapping logged");
+  expect_true(logs.contains(
+                "field earliest.locations has enabled true, expected false"),
+              "indexed locations mapping logged");
+  expect_true(logs.contains(
+                "field earliest.first.arrival has type text, expected keyword"),
+              "dynamic path text mapping logged");
   expect_true(std::ranges::none_of(state->calls, [](const RecordedCall& call) {
                 return call.method == "PUT";
               }),
@@ -356,6 +468,24 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
   expect_true(!second_body.contains("_id"), "second body omits _id");
   expect_true(first_body.contains("updated_at"), "first body timestamp text");
   expect_true(second_body.contains("updated_at"), "second body timestamp text");
+  expect_eq(first_body["pdd_ts"].get<std::int64_t>(),
+            static_cast<std::int64_t>(
+              display_epoch_minutes(first_body["pdd"].get<std::string>())),
+            "first pdd_ts matches pdd display");
+  expect_eq(second_body["pdd_ts"].get<std::int64_t>(),
+            static_cast<std::int64_t>(
+              display_epoch_minutes(second_body["pdd"].get<std::string>())),
+            "second pdd_ts matches pdd display");
+  expect_eq(first_body["earliest"]["first"]["arrival_ts"].get<std::int64_t>(),
+            static_cast<std::int64_t>(display_epoch_minutes(
+              first_body["earliest"]["first"]["arrival"].get<std::string>())),
+            "first path arrival_ts matches arrival display");
+  expect_eq(second_body["earliest"]["locations"][0]["arrival_ts"]
+              .get<std::int64_t>(),
+            static_cast<std::int64_t>(display_epoch_minutes(
+              second_body["earliest"]["locations"][0]["arrival"]
+                .get<std::string>())),
+            "locations arrival_ts matches arrival display");
   expect_true(first_body["updated_at_ts"].is_number_integer(),
               "first body epoch timestamp");
   expect_true(second_body["updated_at_ts"].is_number_integer(),
