@@ -6,6 +6,6 @@ Type=oneshot
 Environment=DWH_EXPORT_MAX_FILES_PER_RUN=1000
 EnvironmentFile=%h/.config/moirai/moirai.conf
 Environment=DWH_ALLOW_UNSUPPORTED_JAVA=true
-ExecStart=%h/moirai/tools/export_audit_to_parquet.py
+ExecStart=%h/.local/share/moirai-exporter-venv/bin/python %h/moirai/tools/export_audit_to_parquet.py
 StandardOutput=journal
 StandardError=journal

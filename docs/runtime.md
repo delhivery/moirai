@@ -93,7 +93,8 @@ The exporter accepts both the new variable names and the old names:
 `DWH_BUCKET` or `STORAGE`, and `DWH_PREFIX` or `OUT_PFX`.
 
 ```sh
-python3 -m pip install --user boto3 pyspark
+python3 -m venv ~/.local/share/moirai-exporter-venv
+~/.local/share/moirai-exporter-venv/bin/python -m pip install --upgrade pip boto3 pyspark
 cp moirai-dwh-export.service ~/.config/systemd/user/
 cp moirai-dwh-export.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
