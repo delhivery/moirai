@@ -24,6 +24,11 @@ export struct SearchIndexConfig {
   bool bulk_adaptive{true};
   std::size_t bulk_min_records{128};
   std::chrono::milliseconds bulk_target_latency{2000};
+  bool audit_enabled{false};
+  std::filesystem::path audit_dir;
+  std::size_t audit_rotate_records{100'000};
+  std::size_t audit_rotate_bytes{128U * 1024U * 1024U};
+  std::chrono::seconds audit_rotate_interval{300};
 
   static auto from_environment() -> SearchIndexConfig;
 };

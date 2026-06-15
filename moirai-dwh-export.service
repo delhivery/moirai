@@ -1,0 +1,9 @@
+[Unit]
+Description=Export Moirai append audit records to DWH parquet
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/moirai/moirai.conf
+ExecStart=%h/moirai/tools/export_audit_to_parquet.py
+StandardOutput=journal
+StandardError=journal

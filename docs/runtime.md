@@ -28,6 +28,46 @@ Repeat `--kafka-broker` for additional brokers and repeat `--kafka-config` for
 SASL/MSK settings such as `security.protocol`, `sasl.mechanisms`,
 `sasl.username`, and `sasl.password`.
 
+## DWH Append Audit
+
+OpenSearch is written with stable waybill document ids, so it stores the current
+record for each waybill. Enable the DWH audit sink when downstream consumers need
+the historical append stream of every produced expected-path record.
+
+```sh
+DWH_AUDIT_ENABLED=true
+DWH_AUDIT_DIR=/home/fedora/.local/state/moirai/audit
+DWH_AUDIT_ROTATE_RECORDS=100000
+DWH_AUDIT_ROTATE_BYTES=134217728
+DWH_AUDIT_ROTATE_SECONDS=300
+DWH_BUCKET=dwh-prod-datalake
+DWH_PREFIX=expectedpath
+DWH_EXPORT_WORK_DIR=/home/fedora/.local/state/moirai/dwh-export
+DWH_PARQUET_COALESCE=50
+```
+
+The application writes active files as `*.jsonl.open` and atomically publishes
+closed files as `*.jsonl`. Each line is the same data document body sent to
+OpenSearch, without bulk `index` metadata, so the stream remains append-only for
+DWH even though OpenSearch upserts by waybill.
+
+The export timer only consumes closed files. It applies the same flattening
+contract as the previous `autoconvert.py`: nested structs are flattened with
+underscore-separated column names, arrays remain arrays, optional bulk metadata
+rows are filtered if present, output is coalesced to 50 parquet files by default,
+and parquet is partitioned by string column `ad`.
+
+The exporter accepts both the new variable names and the old names:
+`DWH_BUCKET` or `STORAGE`, and `DWH_PREFIX` or `OUT_PFX`.
+
+```sh
+python3 -m pip install --user boto3 pyspark
+cp moirai-dwh-export.service ~/.config/systemd/user/
+cp moirai-dwh-export.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now moirai-dwh-export.timer
+```
+
 ## Local file mode
 
 `--query-from` switches the reader to local file mode. Kafka broker and package

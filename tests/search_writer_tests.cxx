@@ -172,6 +172,42 @@ auto gunzip(std::string_view input) -> std::string {
   return output;
 }
 
+auto unique_temp_dir(std::string_view name) -> std::filesystem::path {
+  const auto now = std::chrono::system_clock::now();
+  const auto epoch_nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             now.time_since_epoch())
+                             .count();
+  return std::filesystem::temp_directory_path() /
+         std::format("{}-{}", name, epoch_nanos);
+}
+
+auto read_audit_lines(const std::filesystem::path& dir)
+    -> std::vector<std::string> {
+  std::vector<std::string> lines;
+  for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".jsonl") {
+      continue;
+    }
+    std::ifstream input(entry.path());
+    std::string line;
+    while (std::getline(input, line)) {
+      if (!line.empty()) {
+        lines.push_back(std::move(line));
+      }
+    }
+  }
+  return lines;
+}
+
+auto count_open_audit_files(const std::filesystem::path& dir) -> std::size_t {
+  return static_cast<std::size_t>(
+    std::ranges::count_if(std::filesystem::directory_iterator(dir),
+                          [](const auto& entry) {
+                            return entry.is_regular_file() &&
+                                   entry.path().extension() == ".open";
+                          }));
+}
+
 void test_missing_index_is_created_with_mapping_and_settings() {
   BlockingQueue<SearchDocument> queue;
   auto state = std::make_shared<FakeSearchState>();
@@ -469,6 +505,53 @@ void test_bulk_gzip_adds_content_encoding_and_compresses_body() {
             "gzip body preserves document id");
 }
 
+void test_audit_sink_writes_closed_append_records() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-audit-1", "p1"));
+  queue.enqueue(document("wb-audit-2", "p2"));
+  queue.enqueue(document("wb-audit-3", "p3"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+  auto config = test_config();
+  const auto audit_dir = unique_temp_dir("moirai-audit-test");
+  config.audit_enabled = true;
+  config.audit_dir = audit_dir;
+  config.audit_rotate_records = 2;
+  config.audit_rotate_bytes = 1024U * 1024U;
+  config.audit_rotate_interval = std::chrono::seconds{3600};
+
+  auto writer = writer_with(state, queue, config);
+  writer.run(std::stop_token{});
+
+  expect_eq(count_open_audit_files(audit_dir),
+            std::size_t{0},
+            "audit files are closed");
+  const auto lines = read_audit_lines(audit_dir);
+  expect_eq(lines.size(), std::size_t{3}, "audit line count");
+
+  std::set<std::string> waybills;
+  for (const auto& line : lines) {
+    const auto parsed = nlohmann::json::parse(line);
+    waybills.insert(parsed["waybill"].get<std::string>());
+    expect_true(parsed.contains("updated_at_ts"),
+                "audit body includes update timestamp");
+    expect_true(!parsed.contains("_id"), "audit body omits OpenSearch id");
+  }
+  expect_true(waybills.contains("wb-audit-1"), "first audit waybill");
+  expect_true(waybills.contains("wb-audit-2"), "second audit waybill");
+  expect_true(waybills.contains("wb-audit-3"), "third audit waybill");
+
+  std::filesystem::remove_all(audit_dir);
+}
+
 void test_shard_skew_logs_warning_and_critical_thresholds() {
   BlockingQueue<SearchDocument> warning_queue;
   auto warning_state = std::make_shared<FakeSearchState>();
@@ -517,6 +600,7 @@ auto main() -> int {
   test_bulk_partial_failure_retries_retryable_items_only();
   test_adaptive_bulk_sizing_grows_after_success();
   test_bulk_gzip_adds_content_encoding_and_compresses_body();
+  test_audit_sink_writes_closed_append_records();
   test_shard_skew_logs_warning_and_critical_thresholds();
   return 0;
 }

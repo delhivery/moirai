@@ -29,6 +29,7 @@ struct BulkDocument {
 
 struct BulkMetrics {
   std::uint64_t attempted_records{0};
+  std::uint64_t audited_records{0};
   std::uint64_t indexed_records{0};
   std::uint64_t failed_records{0};
   std::uint64_t retried_records{0};
@@ -45,6 +46,8 @@ struct BulkItemFailures {
   std::size_t permanent_failures{0};
   std::vector<BulkDocument> retryable;
 };
+
+std::atomic<std::uint64_t> audit_file_sequence{0};
 
 auto parse_size_env(const char* name, std::size_t fallback,
                     bool allow_zero = false) -> std::size_t {
@@ -90,6 +93,16 @@ auto parse_string_env(const char* name, std::string fallback) -> std::string {
   }
 
   return value;
+}
+
+auto parse_path_env(const char* name, std::filesystem::path fallback)
+    -> std::filesystem::path {
+  const char* value = std::getenv(name);
+  if (value == nullptr || std::string_view{value}.empty()) {
+    return fallback;
+  }
+
+  return std::filesystem::path{value};
 }
 
 auto parse_bool_env(const char* name, bool fallback) -> bool {
@@ -152,6 +165,12 @@ auto epoch_seconds(std::chrono::system_clock::time_point timestamp)
     .count();
 }
 
+auto audit_timestamp(std::chrono::system_clock::time_point timestamp)
+    -> std::string {
+  const auto seconds = std::chrono::floor<std::chrono::seconds>(timestamp);
+  return std::format("{:%Y%m%dT%H%M%SZ}", seconds);
+}
+
 void gzip_append(z_stream& stream, std::string& output, std::string_view input,
                  int flush) {
   stream.next_in =
@@ -182,6 +201,135 @@ auto is_retryable_item_status(int status_code) -> bool {
   return status_code == 429 || status_code == 502 || status_code == 503 ||
          status_code == 504;
 }
+
+class AuditSink {
+public:
+  explicit AuditSink(const SearchIndexConfig& config)
+    : m_enabled(config.audit_enabled)
+    , m_dir(config.audit_dir)
+    , m_rotate_records(config.audit_rotate_records)
+    , m_rotate_bytes(config.audit_rotate_bytes)
+    , m_rotate_interval(config.audit_rotate_interval)
+  {
+    if (!m_enabled) {
+      return;
+    }
+    if (m_dir.empty()) {
+      throw std::runtime_error("DWH_AUDIT_DIR is required when DWH_AUDIT_ENABLED=true");
+    }
+    std::filesystem::create_directories(m_dir);
+  }
+
+  AuditSink(const AuditSink&) = delete;
+  auto operator=(const AuditSink&) -> AuditSink& = delete;
+
+  ~AuditSink()
+  {
+    try {
+      close();
+    } catch (...) {
+    }
+  }
+
+  void write(std::string_view body)
+  {
+    if (!m_enabled) {
+      return;
+    }
+
+    if (!m_stream.is_open()) {
+      open_file();
+    }
+
+    const auto next_bytes = body.size() + 1U;
+    const auto elapsed = std::chrono::steady_clock::now() - m_opened_at;
+    if (m_records > 0 &&
+        (m_records >= m_rotate_records ||
+         m_bytes + next_bytes > m_rotate_bytes ||
+         elapsed >= m_rotate_interval)) {
+      close();
+      open_file();
+    }
+
+    m_stream.write(body.data(), static_cast<std::streamsize>(body.size()));
+    m_stream.put('\n');
+    if (!m_stream) {
+      throw std::runtime_error(std::format("Unable to write DWH audit file {}",
+                                           m_open_path.string()));
+    }
+    ++m_records;
+    m_bytes += next_bytes;
+  }
+
+  void close()
+  {
+    if (!m_stream.is_open()) {
+      return;
+    }
+
+    m_stream.flush();
+    if (!m_stream) {
+      throw std::runtime_error(std::format("Unable to flush DWH audit file {}",
+                                           m_open_path.string()));
+    }
+    m_stream.close();
+
+    if (m_records == 0) {
+      std::filesystem::remove(m_open_path);
+    } else {
+      std::error_code error;
+      std::filesystem::rename(m_open_path, m_ready_path, error);
+      if (error) {
+        throw std::runtime_error(
+          std::format("Unable to publish DWH audit file {} -> {}: {}",
+                      m_open_path.string(),
+                      m_ready_path.string(),
+                      error.message()));
+      }
+    }
+
+    m_records = 0;
+    m_bytes = 0;
+    m_open_path.clear();
+    m_ready_path.clear();
+  }
+
+private:
+  bool m_enabled{false};
+  std::filesystem::path m_dir;
+  std::size_t m_rotate_records{100'000};
+  std::size_t m_rotate_bytes{128U * 1024U * 1024U};
+  std::chrono::seconds m_rotate_interval{300};
+  std::ofstream m_stream;
+  std::filesystem::path m_open_path;
+  std::filesystem::path m_ready_path;
+  std::size_t m_records{0};
+  std::size_t m_bytes{0};
+  std::chrono::steady_clock::time_point m_opened_at{};
+
+  void open_file()
+  {
+    const auto now = std::chrono::system_clock::now();
+    const auto epoch_nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                               now.time_since_epoch())
+                               .count();
+    const auto sequence = audit_file_sequence.fetch_add(1) + 1;
+    const auto stem = std::format("moirai-audit-{}-{}-{:06}",
+                                  audit_timestamp(now),
+                                  epoch_nanos,
+                                  sequence);
+    m_open_path = m_dir / (stem + ".jsonl.open");
+    m_ready_path = m_dir / (stem + ".jsonl");
+    m_stream.open(m_open_path, std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!m_stream.is_open()) {
+      throw std::runtime_error(std::format("Unable to open DWH audit file {}",
+                                           m_open_path.string()));
+    }
+    m_records = 0;
+    m_bytes = 0;
+    m_opened_at = std::chrono::steady_clock::now();
+  }
+};
 
 auto sample_ids(const std::vector<std::string>& ids, std::size_t sample_size)
     -> std::string {
@@ -561,8 +709,24 @@ SearchIndexConfig::from_environment() -> SearchIndexConfig
                    static_cast<std::size_t>(
                      config.bulk_target_latency.count()))
   };
+  config.audit_enabled =
+    parse_bool_env("DWH_AUDIT_ENABLED", config.audit_enabled);
+  config.audit_dir = parse_path_env("DWH_AUDIT_DIR", config.audit_dir);
+  config.audit_rotate_records =
+    parse_size_env("DWH_AUDIT_ROTATE_RECORDS", config.audit_rotate_records);
+  config.audit_rotate_bytes =
+    parse_size_env("DWH_AUDIT_ROTATE_BYTES", config.audit_rotate_bytes);
+  config.audit_rotate_interval = std::chrono::seconds{
+    parse_size_env("DWH_AUDIT_ROTATE_SECONDS",
+                   static_cast<std::size_t>(
+                     config.audit_rotate_interval.count()))
+  };
   config.bulk_min_records =
     std::min(config.bulk_min_records, config.bulk_max_records);
+  if (config.audit_enabled && config.audit_dir.empty()) {
+    throw std::runtime_error(
+      "DWH_AUDIT_DIR is required when DWH_AUDIT_ENABLED=true");
+  }
   if (config.shard_critical_ratio < config.shard_warning_ratio) {
     throw std::runtime_error(
       "SEARCH_SHARD_CRITICAL_RATIO must be greater than or equal to "
@@ -960,6 +1124,7 @@ SearchWriter::run(const stop_token& stop_token)
   auto& app = moirai::Application::instance();
   ensure_index_ready();
   BulkMetrics metrics;
+  AuditSink audit_sink{m_index_config};
 
   auto report_metrics = [&]() -> void {
     if (m_index_config.metrics_interval.count() == 0) {
@@ -976,8 +1141,9 @@ SearchWriter::run(const stop_token& stop_token)
       return;
     }
     app.logger().information(
-      "Search writer metrics: indexed={} failed={} retried={} bulk_requests={} "
+      "Search writer metrics: audited={} indexed={} failed={} retried={} bulk_requests={} "
       "uploaded_bytes={} records_per_sec={} bytes_per_sec={} queue_depth={}",
+      metrics.audited_records,
       metrics.indexed_records,
       metrics.failed_records,
       metrics.retried_records,
@@ -987,6 +1153,7 @@ SearchWriter::run(const stop_token& stop_token)
       metrics.uploaded_bytes / static_cast<std::uint64_t>(elapsed),
       m_solution_queue.size_approx());
     metrics.last_report = now;
+    metrics.audited_records = 0;
     metrics.indexed_records = 0;
     metrics.failed_records = 0;
     metrics.retried_records = 0;
@@ -1169,6 +1336,8 @@ SearchWriter::run(const stop_token& stop_token)
                                         indexed_at_text,
                                         indexed_at_seconds),
       };
+      audit_sink.write(document.body);
+      ++metrics.audited_records;
       const auto estimated_bytes =
         document.id.size() + document.body.size() + m_search_index.size() + 64U;
       if (!documents.empty() &&
@@ -1185,5 +1354,6 @@ SearchWriter::run(const stop_token& stop_token)
     upload_batch(std::move(documents));
     report_metrics();
   }
+  audit_sink.close();
   report_metrics();
 }

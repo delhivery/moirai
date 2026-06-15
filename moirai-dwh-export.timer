@@ -1,0 +1,11 @@
+[Unit]
+Description=Export Moirai append audit records to DWH every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=moirai-dwh-export.service
+
+[Install]
+WantedBy=timers.target
