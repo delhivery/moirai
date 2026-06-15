@@ -27,6 +27,7 @@ METRICS_RE = re.compile(
     r"bytes_per_sec=(?P<bps>\d+) queue_depth=(?P<queue>\d+)"
 )
 STARTUP_RE = re.compile(r"Startup timings: .*?total_ms=(?P<total>\d+)")
+MEANINGFUL_SWAP_MB = 512.0
 
 
 @dataclass
@@ -389,7 +390,11 @@ def verdict(samples: list[Sample], vcpus: int, journal: dict[str, float | int | 
     else:
         findings.append("CPU sizing looks reasonable for the sampled load.")
 
-    if swap_max > 0 or mem_available["min"] < 10 or rss["max"] > 80:
+    if (
+        swap_max >= MEANINGFUL_SWAP_MB
+        or mem_available["min"] < 10
+        or rss["max"] > 80
+    ):
         findings.append("Memory headroom is low. Prefer M/R class or more RAM.")
     elif rss["max"] < 45 and mem_available["min"] > 35:
         findings.append("Memory has substantial headroom.")
@@ -444,6 +449,7 @@ def report(
         ("Moirai RSS", [s.rss_mb for s in samples], "MiB"),
         ("Moirai RSS memory", [s.rss_pct for s in samples], "%"),
         ("MemAvailable", [s.mem_available_pct for s in samples], "%"),
+        ("Swap used", [s.swap_used_mb for s in samples], "MiB"),
         ("Load average 1m", [s.load1 for s in samples], ""),
         ("Network RX", [s.net_rx_mbps for s in samples], "MiB/s"),
         ("Network TX", [s.net_tx_mbps for s in samples], "MiB/s"),
