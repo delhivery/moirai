@@ -43,6 +43,9 @@ BUCKET = env_string(("DWH_BUCKET", "STORAGE"), "dwh-prod-datalake")
 PREFIX = env_string(("DWH_PREFIX", "OUT_PFX"), "expectedpath").strip("/")
 COALESCE = int(os.environ.get("DWH_PARQUET_COALESCE", "50"))
 UPLOAD_RETRY_SECONDS = int(os.environ.get("DWH_UPLOAD_RETRY_SECONDS", "60"))
+PROCESSING_STALE_SECONDS = int(
+    os.environ.get("DWH_PROCESSING_STALE_SECONDS", "1800")
+)
 
 
 def flatten_structs(nested_df: DataFrame) -> DataFrame:
@@ -80,6 +83,14 @@ def claim_ready_files() -> list[Path]:
         except FileNotFoundError:
             continue
         claimed.append(claimed_path)
+    if PROCESSING_STALE_SECONDS > 0:
+        cutoff = datetime.now(UTC).timestamp() - PROCESSING_STALE_SECONDS
+        stale_files = sorted(
+            path
+            for path in AUDIT_DIR.glob("*.jsonl.processing")
+            if path.is_file() and path.stat().st_mtime < cutoff
+        )
+        claimed.extend(stale_files)
     return claimed
 
 
@@ -168,6 +179,8 @@ def archive_sources(sources: list[Path]) -> None:
 def main() -> int:
     if COALESCE <= 0:
         raise SystemExit("DWH_PARQUET_COALESCE must be positive")
+    if PROCESSING_STALE_SECONDS < 0:
+        raise SystemExit("DWH_PROCESSING_STALE_SECONDS must be non-negative")
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     sources = claim_ready_files()
     if not sources:
