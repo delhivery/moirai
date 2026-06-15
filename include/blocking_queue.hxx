@@ -14,14 +14,15 @@
 template <typename T> class BlockingQueue {
 public:
   explicit BlockingQueue(size_t capacity = std::numeric_limits<size_t>::max())
-      : m_capacity(capacity) {}
+      : m_capacity(capacity),
+        m_bounded(capacity != std::numeric_limits<size_t>::max()) {}
 
   auto enqueue(T value) -> bool { return wait_enqueue(std::move(value)); }
 
   auto wait_enqueue(T value, const std::stop_token &stop_token = {}) -> bool {
     {
       std::unique_lock lock(m_state_mutex);
-      if (m_capacity != std::numeric_limits<size_t>::max()) {
+      if (m_bounded) {
         m_not_full.wait(lock, stop_token, [this]() -> bool {
           return m_closed || (m_size + m_pending_pushes) < m_capacity;
         });
@@ -37,7 +38,7 @@ public:
     if (!m_queue.enqueue(std::move(value))) {
       std::scoped_lock lock(m_state_mutex);
       --m_pending_pushes;
-      if (m_capacity != std::numeric_limits<size_t>::max()) {
+      if (m_bounded) {
         m_not_full.notify_one();
       }
       return false;
@@ -51,7 +52,7 @@ public:
         while (!m_queue.try_dequeue(discarded)) {
           std::this_thread::yield();
         }
-        if (m_capacity != std::numeric_limits<size_t>::max()) {
+        if (m_bounded) {
           m_not_full.notify_one();
         }
         return false;
@@ -107,7 +108,7 @@ public:
       m_size -= reserved;
     }
 
-    if (m_capacity != std::numeric_limits<size_t>::max()) {
+    if (m_bounded) {
       m_not_full.notify_all();
     }
 
@@ -136,7 +137,7 @@ private:
     const auto reserved = std::min(m_size, count);
     if (reserved > 0) {
       m_size -= reserved;
-      if (m_capacity != std::numeric_limits<size_t>::max()) {
+      if (m_bounded) {
         m_not_full.notify_all();
       }
     }
@@ -162,5 +163,6 @@ private:
   size_t m_size{0};
   size_t m_pending_pushes{0};
   size_t m_capacity;
+  bool m_bounded;
   bool m_closed{false};
 };

@@ -187,6 +187,11 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 
+######## Moirai production fixture ignores ########
+benchmarks/fixtures/*.json
+benchmarks/fixtures/*.jsonl
+!benchmarks/fixtures/.gitkeep
+
 ######## Vim Ignores ########
 # Swap
 [._]*.s[a-v][a-z]

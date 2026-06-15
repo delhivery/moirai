@@ -1,10 +1,6 @@
-#include "date_utils.hxx"
-#include "transportation.hxx"
-#include <charconv>
-#include <cstdint>
-#include <format>
-#include <stdexcept>
-#include <string_view>
+module moirai.date_utils;
+
+import std;
 
 namespace {
 
@@ -156,7 +152,7 @@ auto iso_to_date(const std::string &date_string, const TIME_OF_DAY &cutoff)
          DURATION{IST_OFFSET_MINUTES};
 }
 
-auto now_as_int64() -> int64_t {
+auto now_as_int64() -> std::int64_t {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();

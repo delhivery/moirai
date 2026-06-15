@@ -1,9 +1,11 @@
-#include "utils.hxx"
-#include <openssl/evp.h>
+module;
 
-#include <algorithm>
-#include <format>
-#include <stdexcept>
+module moirai.utils;
+
+import std;
+
+extern "C" int EVP_EncodeBlock(unsigned char* output,
+                                const unsigned char* input, int length);
 
 auto TopicMap::insert(const std::string &role, const std::string &topic)
     -> bool {

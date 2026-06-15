@@ -1,9 +1,13 @@
-#include "file_reader.hxx"
-#include "app.hxx"
-#include "json_utils.hxx"
-#include <exception>
-#include <fstream>
-#include <string>
+module;
+
+#include "blocking_queue.hxx"
+
+module moirai.file_reader;
+
+import std;
+import moirai.app;
+import moirai.json_utils;
+import moirai.scan_reader;
 
 namespace {
 constexpr auto FILE_POLL_INTERVAL = std::chrono::milliseconds{200};

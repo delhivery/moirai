@@ -1,0 +1,9 @@
+CompileFlags:
+  BuiltinHeaders: QueryDriver
+  Compiler: /usr/bin/g++
+  Add:
+    - "-std=c++26"
+  Remove:
+    - -fmodule-mapper=*
+    - -fdeps-format=*
+    - -fmodules-ts

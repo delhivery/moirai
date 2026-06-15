@@ -1,11 +1,10 @@
-#include "date_utils.hxx"
-#include "processor.hxx"
 #include "test_helpers.hxx"
-#include "transportation.hxx"
-#include <cstdint>
-#include <memory>
-#include <nlohmann/json.hpp>
-#include <string>
+
+import std;
+import moirai.date_utils;
+import moirai.processor;
+import moirai.solver;
+import moirai.transportation;
 
 namespace {
 
@@ -30,55 +29,75 @@ auto edge(std::string code, int departure, int duration)
     false);
 }
 
-auto two_segment_path() -> std::shared_ptr<Segment> {
-  auto first = std::make_shared<Segment>();
-  auto second = std::make_shared<Segment>();
-  first->node = center("A");
-  first->outbound = edge("route.uuid.0", 9 * 60, 60);
-  first->distance = iso_to_date("2026-06-08 08:00:00");
-  first->next = second;
+struct OwnedPath {
+  std::shared_ptr<TransportCenter> first;
+  std::shared_ptr<TransportCenter> second;
+  std::shared_ptr<TransportEdge> outbound;
+  Path path;
+};
 
-  second->node = center("B");
-  second->prev = first;
-  second->distance = iso_to_date("2026-06-08 10:00:00");
-  return first;
+auto two_segment_path() -> OwnedPath {
+  OwnedPath owned;
+  owned.first = center("A");
+  owned.second = center("B");
+  owned.outbound = edge("route.uuid.0", 9 * 60, 60);
+  owned.path.steps = {
+    PathStep{
+      .node = owned.first.get(),
+      .outbound = owned.outbound.get(),
+      .distance = iso_to_date("2026-06-08 08:00:00"),
+    },
+    PathStep{
+      .node = owned.second.get(),
+      .outbound = nullptr,
+      .distance = iso_to_date("2026-06-08 10:00:00"),
+    },
+  };
+  return owned;
 }
 
 void test_forward_parse_path_shape() {
-  const auto parsed =
-    parse_path<PathTraversalMode::FORWARD>(two_segment_path());
-  expect_eq(parsed.size(), size_t{2}, "forward parse path size");
-  expect_eq(parsed[0]["code"].get<std::string>(), std::string{"A"},
-            "forward first code");
-  expect_eq(parsed[0]["route"].get<std::string>(), std::string{"route"},
-            "forward route prefix");
-  expect_true(parsed[0].contains("departure"), "forward has departure");
-  expect_true(parsed[0].contains("departure_ts"), "forward has departure ts");
-  expect_eq(parsed[1]["code"].get<std::string>(), std::string{"B"},
-            "forward terminal code");
-  expect_eq(parsed[1].contains("route"), false, "terminal has no route");
+  const auto owned = two_segment_path();
+  const auto parsed = parse_path<PathTraversalMode::FORWARD>(owned.path);
+  expect_eq(parsed.size(), std::size_t{2}, "forward parse path size");
+  expect_eq(parsed[0].code, std::string{"A"}, "forward first code");
+  expect_eq(owned.outbound->route_prefix, std::string{"route"},
+            "route prefix precomputed");
+  expect_eq(parsed[0].route, std::string{"route"}, "forward route prefix");
+  expect_true(parsed[0].has_departure, "forward has departure");
+  expect_eq(parsed[1].code, std::string{"B"}, "forward terminal code");
+  expect_eq(parsed[1].has_departure, false, "terminal has no route");
+
+  std::vector<SearchPathLocation> parsed_into;
+  parse_path_into<PathTraversalMode::FORWARD>(owned.path, parsed_into);
+  expect_eq(parsed_into.size(), parsed.size(), "forward parse into size");
+  expect_eq(parsed_into[0].route, parsed[0].route,
+            "forward parse into route");
 }
 
 void test_reverse_parse_path_shape() {
-  const auto parsed =
-    parse_path<PathTraversalMode::REVERSE>(two_segment_path());
-  expect_eq(parsed.size(), size_t{2}, "reverse parse path size");
-  expect_eq(parsed[0]["code"].get<std::string>(), std::string{"A"},
-            "reverse first code");
-  expect_eq(parsed[0]["route"].get<std::string>(), std::string{"route"},
-            "reverse route prefix");
-  expect_true(parsed[0].contains("arrival"), "reverse has arrival");
-  expect_true(parsed[0].contains("departure"), "reverse has departure");
-  expect_eq(parsed[1]["code"].get<std::string>(), std::string{"B"},
-            "reverse terminal code");
-  expect_eq(parsed[1].contains("route"), false, "reverse terminal has no route");
+  const auto owned = two_segment_path();
+  const auto parsed = parse_path<PathTraversalMode::REVERSE>(owned.path);
+  expect_eq(parsed.size(), std::size_t{2}, "reverse parse path size");
+  expect_eq(parsed[0].code, std::string{"A"}, "reverse first code");
+  expect_eq(parsed[0].route, std::string{"route"}, "reverse route prefix");
+  expect_true(!parsed[0].arrival.empty(), "reverse has arrival");
+  expect_true(parsed[0].has_departure, "reverse has departure");
+  expect_eq(parsed[1].code, std::string{"B"}, "reverse terminal code");
+  expect_eq(parsed[1].has_departure, false, "reverse terminal has no route");
+
+  std::vector<SearchPathLocation> parsed_into;
+  parse_path_into<PathTraversalMode::REVERSE>(owned.path, parsed_into);
+  expect_eq(parsed_into.size(), parsed.size(), "reverse parse into size");
+  expect_eq(parsed_into[0].route, parsed[0].route,
+            "reverse parse into route");
 }
 
 void test_null_path_serializes_empty() {
-  expect_eq(parse_path<PathTraversalMode::FORWARD>(nullptr).empty(), true,
-            "null forward path is empty");
-  expect_eq(parse_path<PathTraversalMode::REVERSE>(nullptr).empty(), true,
-            "null reverse path is empty");
+  expect_eq(parse_path<PathTraversalMode::FORWARD>(Path{}).empty(), true,
+            "empty forward path is empty");
+  expect_eq(parse_path<PathTraversalMode::REVERSE>(Path{}).empty(), true,
+            "empty reverse path is empty");
 }
 
 } // namespace
@@ -87,5 +106,5 @@ auto main() -> int {
   test_forward_parse_path_shape();
   test_reverse_parse_path_shape();
   test_null_path_serializes_empty();
-  return EXIT_SUCCESS;
+  return 0;
 }

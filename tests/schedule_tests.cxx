@@ -1,13 +1,8 @@
-#include "date_utils.hxx"
-#include "json_utils.hxx"
-#include "route_schedule.hxx"
-#include "transportation.hxx"
-#include <cstdint>
-#include <cstdlib>
-#include <iostream>
-#include <memory>
-#include <source_location>
-#include <string_view>
+import std;
+import moirai.date_utils;
+import moirai.json_utils;
+import moirai.route_schedule;
+import moirai.transportation;
 
 namespace {
 
@@ -28,7 +23,7 @@ void expect_eq(const T& actual, const U& expected, std::string_view label,
 
   std::cerr << location.file_name() << ':' << location.line() << ": " << label
             << " failed\n";
-  std::exit(EXIT_FAILURE);
+  std::exit(1);
 }
 
 void test_route_days_of_week_parsing() {
@@ -237,5 +232,5 @@ auto main() -> int {
   test_forward_schedule_traversal();
   test_reverse_schedule_traversal();
   test_transport_edge_weights();
-  return EXIT_SUCCESS;
+  return 0;
 }

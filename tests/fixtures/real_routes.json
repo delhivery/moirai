@@ -1,0 +1,219 @@
+{
+  "captured_at": "2026-06-11T07:57:42+00:00",
+  "data": [
+    {
+      "days_of_week": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "INUPAREL",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "3:30:00"
+        },
+        {
+          "center_code": "INUPASPA",
+          "loading_allowed": false,
+          "position": 1,
+          "rel_eta": "22:00:00",
+          "rel_etd": "23:00:00"
+        },
+        {
+          "center_code": "INWBAXQO",
+          "loading_allowed": true,
+          "position": 2,
+          "rel_eta": "1 day, 20:00:00",
+          "rel_etd": "1 day, 23:30:00"
+        }
+      ],
+      "name": "Noida-Gorakhpur-Siliguri - B Double",
+      "reporting_time": "04:30:00",
+      "route_schedule_uuid": "thanos::sroute:00439f3e-2513-4f8f-8fee-391a8a7ccd07",
+      "route_type": "FTL"
+    },
+    {
+      "days_of_week": [
+        0,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "INHRAAJC",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "3:30:00"
+        },
+        {
+          "center_code": "INASBCAG",
+          "loading_allowed": true,
+          "position": 1,
+          "rel_eta": "2 days, 3:30:00",
+          "rel_etd": "2 days, 7:00:00"
+        }
+      ],
+      "name": "Gurgaon-Guwahati-Gurgaon-2",
+      "reporting_time": "04:30:00",
+      "route_schedule_uuid": "thanos::sroute:004259b5-75ff-4128-ac61-6a9ff8fc2a25",
+      "route_type": "FTL"
+    },
+    {
+      "days_of_week": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "IN110037A1V",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "0:00:00"
+        },
+        {
+          "center_code": "INMHBGMR",
+          "loading_allowed": true,
+          "position": 1,
+          "rel_eta": "14:30:00",
+          "rel_etd": "14:30:00"
+        }
+      ],
+      "name": "Air-Indigo-6E 955",
+      "reporting_time": "17:00:00",
+      "route_schedule_uuid": "thanos::sroute:007efbc8-04de-4441-b5ed-6d07f95d234e",
+      "route_type": "Air"
+    },
+    {
+      "days_of_week": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "INDLAXIR",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "0:30:00"
+        },
+        {
+          "center_code": "INDLAZPT",
+          "loading_allowed": true,
+          "position": 1,
+          "rel_eta": "1:00:00",
+          "rel_etd": "1:30:00"
+        },
+        {
+          "center_code": "INDLAXIR",
+          "loading_allowed": true,
+          "position": 2,
+          "rel_eta": "2:00:00",
+          "rel_etd": "2:15:00"
+        }
+      ],
+      "name": "Carting--C1.2--Delhi_Shahdara_I--Delhi_Gharoli_D--o",
+      "reporting_time": "06:30:00",
+      "route_schedule_uuid": "thanos::sroute:000154b8-6d83-439c-bbb4-8536df45887c",
+      "route_type": "Carting"
+    },
+    {
+      "days_of_week": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "INKAARUF",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "2:00:00"
+        },
+        {
+          "center_code": "INTSAUOF",
+          "loading_allowed": true,
+          "position": 1,
+          "rel_eta": "4:00:00",
+          "rel_etd": "6:00:00"
+        },
+        {
+          "center_code": "IND501359AAE",
+          "loading_allowed": true,
+          "position": 2,
+          "rel_eta": "10:30:00",
+          "rel_etd": "12:30:00"
+        }
+      ],
+      "name": "Hyderabad_S-Raichur-DC-Hyderabad_S",
+      "reporting_time": "02:00:00",
+      "route_schedule_uuid": "thanos::sroute:003b8727-0cc1-47f9-b689-ce16623bad91",
+      "route_type": "FTL"
+    },
+    {
+      "days_of_week": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "halt_centers": [
+        {
+          "center_code": "INAPAWXA",
+          "loading_allowed": true,
+          "position": 0,
+          "rel_eta": "0:00:00",
+          "rel_etd": "0:30:00"
+        },
+        {
+          "center_code": "INAPAURB",
+          "loading_allowed": true,
+          "position": 1,
+          "rel_eta": "1:45:00",
+          "rel_etd": "2:00:00"
+        },
+        {
+          "center_code": "INAPAWXA",
+          "loading_allowed": true,
+          "position": 2,
+          "rel_eta": "3:30:00",
+          "rel_etd": "3:45:00"
+        }
+      ],
+      "name": "Carting--Ongole_Tangutur_H---Chimakurthy_Siddavari_D--o",
+      "reporting_time": "04:30:00",
+      "route_schedule_uuid": "thanos::sroute:0004337a-7b5f-4558-b939-1d5a55341561",
+      "route_type": "Carting"
+    }
+  ],
+  "fixture_source": "sanitized production scheduled routes"
+}

@@ -21,6 +21,7 @@ ExecStart=%h/moirai/build/moirai \
           -u ${SEARCH_USER} \
           -w ${SEARCH_PASS} \
           -i ${SEARCH_INDEX} \
+          --search-writers ${SEARCH_WRITER_THREADS} \
           -a ${ROUTE_API_URI} \
           -b ${FACILITY_TIMINGS_FILE} \
           -c ${FACILITY_API_URI} \

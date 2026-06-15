@@ -1,18 +1,13 @@
-#include "date_utils.hxx"
-#include "route_schedule.hxx"
-#include "solver.hxx"
-#include "transportation.hxx"
-#include <cstddef>
-#include <cstdint>
-#include <chrono>
-#include <cstdlib>
-#include <format>
-#include <iostream>
-#include <memory>
-#include <source_location>
-#include <string>
-#include <string_view>
-#include <vector>
+import std;
+import moirai.date_utils;
+import moirai.json_utils;
+import moirai.route_schedule;
+import moirai.solver;
+import moirai.transportation;
+
+#ifndef MOIRAI_TEST_FIXTURE_DIR
+#define MOIRAI_TEST_FIXTURE_DIR "tests/fixtures"
+#endif
 
 namespace {
 
@@ -35,7 +30,7 @@ void expect_eq(const T& actual, const U& expected, std::string_view label,
 
   std::cerr << location.file_name() << ':' << location.line() << ": " << label
             << " failed\n";
-  std::exit(EXIT_FAILURE);
+  std::exit(1);
 }
 
 void expect_true(bool value, std::string_view label,
@@ -44,30 +39,30 @@ void expect_true(bool value, std::string_view label,
   expect_eq(value, true, label, location);
 }
 
-void expect_not_null(const std::shared_ptr<Segment>& segment,
-                     std::string_view label,
-                     std::source_location location =
-                       std::source_location::current()) {
-  if (segment != nullptr) {
+void expect_not_empty(const Path& path,
+                      std::string_view label,
+                      std::source_location location =
+                        std::source_location::current()) {
+  if (!path.empty()) {
     return;
   }
 
   std::cerr << location.file_name() << ':' << location.line() << ": " << label
             << " failed\n";
-  std::exit(EXIT_FAILURE);
+  std::exit(1);
 }
 
 struct GraphBuilder {
   Solver solver;
 
-  auto add_center(std::string code) -> Node<Graph> {
+  auto add_center(std::string code) -> NodeId {
     auto center = std::make_shared<TransportCenter>(std::move(code));
-    const auto [node, inserted] = solver.add_node(center);
-    expect_true(inserted, "center insertion");
+    const auto node = solver.add_node(center);
+    expect_true(node != INVALID_NODE, "center insertion");
     return node;
   }
 
-  auto add_edge(Node<Graph> source, Node<Graph> target, std::string code,
+  auto add_edge(NodeId source, NodeId target, std::string code,
                 int departure_minutes, int duration_minutes,
                 std::uint8_t days = ALL_DAYS_OF_WEEK,
                 VehicleType vehicle = VehicleType::SURFACE,
@@ -84,37 +79,36 @@ struct GraphBuilder {
       movement,
       terminal,
       days);
-    solver.add_edge(source, target, edge);
+    expect_true(solver.add_edge(source, target, edge) != INVALID_EDGE,
+                "edge insertion");
     return edge;
   }
 };
 
-auto node_codes(const std::shared_ptr<Segment>& segment)
+auto node_codes(const Path& path)
     -> std::vector<std::string> {
   std::vector<std::string> codes;
-  for (auto current = segment; current != nullptr; current = current->next) {
-    codes.push_back(current->node->code);
+  codes.reserve(path.steps.size());
+  for (const auto& step : path.steps) {
+    codes.push_back(step.node->code);
   }
   return codes;
 }
 
-auto edge_codes(const std::shared_ptr<Segment>& segment)
+auto edge_codes(const Path& path)
     -> std::vector<std::string> {
   std::vector<std::string> codes;
-  for (auto current = segment; current != nullptr && current->next != nullptr;
-       current = current->next) {
-    codes.push_back(current->outbound->code);
+  codes.reserve(path.steps.size());
+  for (const auto& step : path.steps) {
+    if (step.outbound != nullptr) {
+      codes.push_back(step.outbound->code);
+    }
   }
   return codes;
 }
 
-auto last_segment(const std::shared_ptr<Segment>& segment)
-    -> std::shared_ptr<Segment> {
-  auto current = segment;
-  while (current != nullptr && current->next != nullptr) {
-    current = current->next;
-  }
-  return current;
+auto last_step(const Path& path) -> const PathStep& {
+  return path.back();
 }
 
 auto make_base_route() -> moirai::Json {
@@ -145,30 +139,131 @@ auto make_base_route() -> moirai::Json {
   };
 }
 
+auto load_json_fixture(std::string_view name) -> moirai::Json {
+  const auto path = std::filesystem::path{MOIRAI_TEST_FIXTURE_DIR} / name;
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    std::cerr << "Failed to open fixture " << path << '\n';
+    std::exit(1);
+  }
+
+  auto parsed = moirai::parse_json(input);
+  if (!parsed.has_value()) {
+    std::cerr << "Failed to parse fixture " << path << '\n';
+    std::exit(1);
+  }
+  return *parsed;
+}
+
+auto loading_stop_count(const moirai::Json& route) -> std::size_t {
+  const auto* stops = moirai::find_array_member(route, "halt_centers");
+  if (stops == nullptr) {
+    return 0;
+  }
+
+  return static_cast<std::size_t>(
+    std::ranges::count_if(*stops, [](const moirai::Json& stop) {
+      const auto* loading_allowed =
+        moirai::find_member(stop, "loading_allowed");
+      return loading_allowed == nullptr || !loading_allowed->is_boolean() ||
+             loading_allowed->get<bool>();
+    }));
+}
+
+auto has_blocked_stop(const moirai::Json& route) -> bool {
+  const auto* stops = moirai::find_array_member(route, "halt_centers");
+  if (stops == nullptr) {
+    return false;
+  }
+
+  return std::ranges::any_of(*stops, [](const moirai::Json& stop) {
+    const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
+    return loading_allowed != nullptr && loading_allowed->is_boolean() &&
+           !loading_allowed->get<bool>();
+  });
+}
+
+auto has_day_prefixed_time(const moirai::Json& route) -> bool {
+  const auto* stops = moirai::find_array_member(route, "halt_centers");
+  if (stops == nullptr) {
+    return false;
+  }
+
+  return std::ranges::any_of(*stops, [](const moirai::Json& stop) {
+    for (const auto* key : {"rel_eta", "rel_etd"}) {
+      const auto value = moirai::find_string_member(stop, key);
+      if (value.has_value() && value->find("day,") != std::string_view::npos) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+auto blocked_center_codes(const moirai::Json& route) -> std::vector<std::string> {
+  std::vector<std::string> codes;
+  const auto* stops = moirai::find_array_member(route, "halt_centers");
+  if (stops == nullptr) {
+    return codes;
+  }
+
+  for (const auto& stop : *stops) {
+    const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
+    const auto center_code = moirai::find_string_member(stop, "center_code");
+    if (loading_allowed != nullptr && loading_allowed->is_boolean() &&
+        !loading_allowed->get<bool>() && center_code.has_value()) {
+      codes.emplace_back(*center_code);
+    }
+  }
+  return codes;
+}
+
 void test_graph_basics() {
   GraphBuilder graph;
   const auto a = graph.add_center("A");
   const auto b = graph.add_center("B");
 
-  const auto [existing_a, has_a] = graph.solver.add_node("A");
-  expect_true(has_a, "existing node lookup succeeds");
-  expect_eq(existing_a, a, "existing node descriptor is reused");
+  const auto existing_a = graph.solver.find_node("A");
+  expect_true(existing_a.has_value(), "existing node lookup succeeds");
+  expect_eq(*existing_a, a, "existing node descriptor is reused");
 
-  const auto [missing, has_missing] = graph.solver.add_node("missing");
-  expect_eq(has_missing, false, "missing node lookup fails");
-  expect_eq(missing, Graph::null_vertex(), "missing node descriptor is null");
+  const auto missing = graph.solver.find_node("missing");
+  expect_eq(missing.has_value(), false, "missing node lookup fails");
+  expect_eq(graph.solver.get_node(INVALID_NODE) == nullptr, true,
+            "invalid node lookup returns null");
+  expect_eq(graph.solver.add_node(nullptr), INVALID_NODE,
+            "null center insertion returns invalid node");
 
   graph.add_edge(a, b, "edge", 9 * 60, 60);
-  const auto [existing_edge, has_edge] = graph.solver.add_edge("edge");
-  expect_true(has_edge, "existing edge lookup succeeds");
+  const auto existing_edge = graph.solver.find_edge("edge");
+  expect_true(existing_edge.has_value(), "existing edge lookup succeeds");
 
   auto duplicate = std::make_shared<TransportEdge>(
     "edge", "duplicate", DURATION{600}, DURATION{60}, DURATION{0},
     DURATION{0}, VehicleType::SURFACE, MovementType::CARTING, false);
-  const auto [duplicate_edge, duplicate_result] =
+  const auto duplicate_edge =
     graph.solver.add_edge(a, b, duplicate);
-  expect_true(duplicate_result, "duplicate edge returns existing descriptor");
-  expect_eq(duplicate_edge, existing_edge, "duplicate edge descriptor reused");
+  expect_eq(duplicate_edge, *existing_edge,
+            "duplicate edge descriptor reused");
+  expect_eq(graph.solver.find_edge("missing").has_value(), false,
+            "missing edge lookup fails");
+  expect_eq(graph.solver.add_edge(INVALID_NODE, b, duplicate), INVALID_EDGE,
+            "invalid source edge insertion returns invalid edge");
+  expect_eq(graph.solver.add_edge(a, INVALID_NODE, duplicate), INVALID_EDGE,
+            "invalid target edge insertion returns invalid edge");
+  expect_eq(graph.solver.add_edge(a, b, nullptr), INVALID_EDGE,
+            "null edge insertion returns invalid edge");
+  const auto start = iso_to_date("2026-06-08 08:00:00");
+  const auto invalid_source_path =
+    graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      INVALID_NODE, b, start);
+  expect_eq(invalid_source_path.empty(), true,
+            "invalid source path lookup returns empty path");
+  const auto invalid_target_path =
+    graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      a, INVALID_NODE, start);
+  expect_eq(invalid_target_path.empty(), true,
+            "invalid target path lookup returns empty path");
   expect_eq(graph.solver.show(), std::string{"Graph<2, 1>"},
             "duplicate edge does not change graph size");
 
@@ -177,6 +272,55 @@ void test_graph_basics() {
               "show_all contains source node");
   expect_true(graph_dump.find("edge: A TO B") != std::string::npos,
               "show_all contains edge");
+}
+
+void test_value_overloads_and_csr_invalidation() {
+  Solver solver;
+  auto source_center = TransportCenter{"A"};
+  auto target_center = TransportCenter{"B"};
+  source_center.set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+      DURATION{10});
+  target_center.set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+      DURATION{5});
+  const auto a = solver.add_node(std::move(source_center));
+  const auto b = solver.add_node(std::move(target_center));
+  expect_true(a != INVALID_NODE && b != INVALID_NODE,
+              "value center insertion succeeds");
+
+  auto edge = TransportEdge("A-B", "route", DURATION{9 * 60}, DURATION{30},
+                            DURATION{0}, DURATION{0}, VehicleType::SURFACE,
+                            MovementType::CARTING, false);
+  expect_true(solver.add_edge(a, b, std::move(edge)) != INVALID_EDGE,
+              "value edge insertion succeeds");
+  solver.finalize_graph();
+
+  const auto start = iso_to_date("2026-06-08 08:00:00");
+  const auto path =
+    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      a, b, start);
+  expect_not_empty(path, "explicitly finalized CSR path exists");
+  expect_eq(node_codes(path), std::vector<std::string>({"A", "B"}),
+            "value overload path node order");
+
+  const auto c = solver.add_node(TransportCenter{"C"});
+  auto next = TransportEdge("B-C", "route", DURATION{10 * 60}, DURATION{15},
+                            DURATION{0}, DURATION{0}, VehicleType::SURFACE,
+                            MovementType::CARTING, false);
+  expect_true(solver.add_edge(b, c, std::move(next)) != INVALID_EDGE,
+              "post-finalize edge insertion succeeds");
+  const auto invalidated_path =
+    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      a, c, start);
+  expect_not_empty(invalidated_path, "lazy CSR rebuild path exists");
+  expect_eq(node_codes(invalidated_path),
+            std::vector<std::string>({"A", "B", "C"}),
+            "CSR invalidation includes post-finalize edge");
+
+  const auto isolated = solver.add_node(TransportCenter{"D"});
+  const auto missing_path =
+    solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      isolated, a, start);
+  expect_eq(missing_path.empty(), true, "isolated node has empty adjacency");
 }
 
 void test_forward_path_selection() {
@@ -193,12 +337,12 @@ void test_forward_path_selection() {
   const auto path =
     graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       a, c, start);
-  expect_not_null(path, "forward path exists");
+  expect_not_empty(path, "forward path exists");
   expect_eq(node_codes(path), std::vector<std::string>({"A", "B", "C"}),
             "forward chooses faster two-hop path");
   expect_eq(edge_codes(path), std::vector<std::string>({"A-B", "B-C"}),
             "forward edge sequence");
-  expect_eq(minutes_between(last_segment(path)->distance, start), 120,
+  expect_eq(minutes_between(last_step(path).distance, start), 120,
             "forward arrival includes wait between hops");
 
   GraphBuilder direct_graph;
@@ -212,7 +356,7 @@ void test_forward_path_selection() {
     direct_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         da, dc, start);
-  expect_not_null(direct_path, "direct forward path exists");
+  expect_not_empty(direct_path, "direct forward path exists");
   expect_eq(node_codes(direct_path), std::vector<std::string>({"A", "C"}),
             "forward chooses direct path when faster");
 
@@ -223,7 +367,7 @@ void test_forward_path_selection() {
     unreachable_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ua, uc, start);
-  expect_eq(missing_path == nullptr, true, "unreachable forward target");
+  expect_eq(missing_path.empty(), true, "unreachable forward target");
 
   GraphBuilder wait_graph;
   const auto wa = wait_graph.add_center("A");
@@ -234,8 +378,8 @@ void test_forward_path_selection() {
     wait_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         wa, wb, after_departure);
-  expect_not_null(wait_path, "daily wait path exists");
-  expect_eq(minutes_between(last_segment(wait_path)->distance,
+  expect_not_empty(wait_path, "daily wait path exists");
+  expect_eq(minutes_between(last_step(wait_path).distance,
                             after_departure),
             (23 * 60) + 30, "forward rolls daily route after departure");
 }
@@ -250,12 +394,12 @@ void test_reverse_path_selection() {
   const auto path =
     graph.solver.find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
       b, a, deadline);
-  expect_not_null(path, "reverse path exists");
+  expect_not_empty(path, "reverse path exists");
   expect_eq(node_codes(path), std::vector<std::string>({"A", "B"}),
             "reverse path node order");
   expect_eq(edge_codes(path), std::vector<std::string>({"A-B"}),
             "reverse edge sequence");
-  expect_eq(minutes_between(deadline, path->distance), 180,
+  expect_eq(minutes_between(deadline, path.front().distance), 180,
             "reverse latest source departure");
 
   GraphBuilder choice_graph;
@@ -269,13 +413,13 @@ void test_reverse_path_selection() {
     choice_graph.solver
       .find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
         cc, ca, deadline);
-  expect_not_null(choice_path, "reverse choice path exists");
+  expect_not_empty(choice_path, "reverse choice path exists");
   expect_eq(node_codes(choice_path), std::vector<std::string>({"A", "B", "C"}),
             "reverse chooses latest feasible two-hop path");
   expect_eq(edge_codes(choice_path),
             std::vector<std::string>({"A-B-late", "B-C-late"}),
             "reverse chosen edge sequence");
-  expect_eq(minutes_between(deadline, choice_path->distance), 120,
+  expect_eq(minutes_between(deadline, choice_path.front().distance), 120,
             "reverse chosen path latest departure");
 
   GraphBuilder unreachable_graph;
@@ -285,7 +429,7 @@ void test_reverse_path_selection() {
     unreachable_graph.solver
       .find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
         ub, ua, deadline);
-  expect_eq(missing_path == nullptr, true, "unreachable reverse target");
+  expect_eq(missing_path.empty(), true, "unreachable reverse target");
 }
 
 void test_days_of_week_graph_behavior() {
@@ -301,15 +445,15 @@ void test_days_of_week_graph_behavior() {
     monday_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ma, mb, monday_start);
-  expect_not_null(monday_path, "Monday route available same day");
-  expect_eq(minutes_between(last_segment(monday_path)->distance, monday_start),
+  expect_not_empty(monday_path, "Monday route available same day");
+  expect_eq(minutes_between(last_step(monday_path).distance, monday_start),
             90, "Monday same-day route");
   const auto next_monday_path =
     monday_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ma, mb, monday_after);
-  expect_not_null(next_monday_path, "Monday route available next week");
-  expect_eq(minutes_between(last_segment(next_monday_path)->distance,
+  expect_not_empty(next_monday_path, "Monday route available next week");
+  expect_eq(minutes_between(last_step(next_monday_path).distance,
                             monday_after),
             (6 * 24 * 60) + (23 * 60) + 30,
             "Monday-only route rolls to next Monday");
@@ -328,15 +472,15 @@ void test_days_of_week_graph_behavior() {
     skip_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         sa, sb, sunday_start);
-  expect_not_null(skip_path, "Mon-Sat route skips Sunday");
-  expect_eq(minutes_between(last_segment(skip_path)->distance, sunday_start),
+  expect_not_empty(skip_path, "Mon-Sat route skips Sunday");
+  expect_eq(minutes_between(last_step(skip_path).distance, sunday_start),
             (25 * 60) + 15, "forward skips Sunday to Monday");
   const auto reverse_skip =
     skip_graph.solver
       .find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
         sb, sa, sunday_start);
-  expect_not_null(reverse_skip, "reverse Mon-Sat route skips Sunday");
-  expect_eq(minutes_between(sunday_start, reverse_skip->distance),
+  expect_not_empty(reverse_skip, "reverse Mon-Sat route skips Sunday");
+  expect_eq(minutes_between(sunday_start, reverse_skip.front().distance),
             23 * 60, "reverse uses previous Saturday");
 
   GraphBuilder competing_graph;
@@ -350,7 +494,7 @@ void test_days_of_week_graph_behavior() {
     competing_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ca, cc, tuesday_start);
-  expect_not_null(competing_path, "competing day path exists");
+  expect_not_empty(competing_path, "competing day path exists");
   expect_eq(edge_codes(competing_path), std::vector<std::string>({"slow-today"}),
             "available slower route beats unavailable fast route");
 
@@ -364,8 +508,8 @@ void test_days_of_week_graph_behavior() {
     multi_day_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ga, gc, monday_start);
-  expect_not_null(multi_day_path, "multi-day path exists");
-  expect_eq(minutes_between(last_segment(multi_day_path)->distance,
+  expect_not_empty(multi_day_path, "multi-day path exists");
+  expect_eq(minutes_between(last_step(multi_day_path).distance,
                             monday_start),
             (25 * 60) + 30, "multi-hop path waits for next day second leg");
 
@@ -379,8 +523,8 @@ void test_days_of_week_graph_behavior() {
     missed_leg_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         la, lc, monday_start);
-  expect_not_null(missed_path, "missed second leg path exists");
-  expect_eq(minutes_between(last_segment(missed_path)->distance, monday_start),
+  expect_not_empty(missed_path, "missed second leg path exists");
+  expect_eq(minutes_between(last_step(missed_path).distance, monday_start),
             (7 * 24 * 60) + 90,
             "second leg rolls to following Monday after one-minute miss");
 }
@@ -395,11 +539,11 @@ void test_vehicle_filtering() {
   const auto surface_path =
     graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
       a, b, start);
-  expect_eq(surface_path == nullptr, true, "surface filter excludes air edge");
+  expect_eq(surface_path.empty(), true, "surface filter excludes air edge");
   const auto air_path =
     graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
       a, b, start);
-  expect_not_null(air_path, "air filter includes air edge");
+  expect_not_empty(air_path, "air filter includes air edge");
 
   GraphBuilder choice_graph;
   const auto ca = choice_graph.add_center("A");
@@ -412,14 +556,14 @@ void test_vehicle_filtering() {
     choice_graph.solver
       .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
         ca, cb, start);
-  expect_not_null(surface_choice, "surface choice path exists");
+  expect_not_empty(surface_choice, "surface choice path exists");
   expect_eq(edge_codes(surface_choice),
             std::vector<std::string>({"surface-slow"}),
             "surface query chooses surface edge only");
   const auto air_choice =
     choice_graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
       ca, cb, start);
-  expect_not_null(air_choice, "air choice path exists");
+  expect_not_empty(air_choice, "air choice path exists");
   expect_eq(edge_codes(air_choice), std::vector<std::string>({"air-fast"}),
             "air query can choose air edge");
 }
@@ -427,39 +571,39 @@ void test_vehicle_filtering() {
 void test_route_edge_spec_expansion() {
   const auto route = make_base_route();
   const auto specs = build_route_edge_specs(route, IST_OFFSET);
-  expect_eq(specs.size(), size_t{3}, "loading stops create N choose 2 edges");
+  expect_eq(specs.size(), std::size_t{3}, "loading stops create N choose 2 edges");
   expect_eq(specs[0].source_center_code, std::string{"A"}, "first source");
   expect_eq(specs[0].target_center_code, std::string{"C"}, "first target");
   expect_eq(specs[1].source_center_code, std::string{"A"}, "second source");
   expect_eq(specs[1].target_center_code, std::string{"D"}, "second target");
   expect_eq(specs[2].source_center_code, std::string{"C"}, "third source");
   expect_eq(specs[2].target_center_code, std::string{"D"}, "third target");
-  expect_eq(specs[0].edge->code, std::string{"route.0"}, "first edge code");
-  expect_eq(specs[2].edge->code, std::string{"route.2"}, "third edge code");
-  expect_eq(specs[0].edge->vehicle, VehicleType::AIR,
+  expect_eq(specs[0].edge.code, std::string{"route.0"}, "first edge code");
+  expect_eq(specs[2].edge.code, std::string{"route.2"}, "third edge code");
+  expect_eq(specs[0].edge.vehicle, VehicleType::AIR,
             "air route maps to air vehicle");
-  expect_eq(specs[0].edge->movement, MovementType::LINEHAUL,
+  expect_eq(specs[0].edge.movement, MovementType::LINEHAUL,
             "air route maps to linehaul movement");
-  expect_eq(specs[0].edge->terminal, false, "non-final target not terminal");
-  expect_eq(specs[1].edge->terminal, true, "final target terminal");
-  expect_eq(specs[0].edge->days_of_week,
+  expect_eq(specs[0].edge.terminal, false, "non-final target not terminal");
+  expect_eq(specs[1].edge.terminal, true, "final target terminal");
+  expect_eq(specs[0].edge.days_of_week,
             static_cast<std::uint8_t>(ALL_DAYS_OF_WEEK & ~day_mask(0)),
             "days copied to route edges");
 
   auto carting_route = make_base_route();
   carting_route["route_type"] = "carting";
   const auto carting_specs = build_route_edge_specs(carting_route, IST_OFFSET);
-  expect_eq(carting_specs[0].edge->vehicle, VehicleType::SURFACE,
+  expect_eq(carting_specs[0].edge.vehicle, VehicleType::SURFACE,
             "carting maps to surface vehicle");
-  expect_eq(carting_specs[0].edge->movement, MovementType::CARTING,
+  expect_eq(carting_specs[0].edge.movement, MovementType::CARTING,
             "carting maps to carting movement");
 
   auto unknown_route = make_base_route();
   unknown_route["route_type"] = "rail";
   const auto unknown_specs = build_route_edge_specs(unknown_route, IST_OFFSET);
-  expect_eq(unknown_specs[0].edge->vehicle, VehicleType::SURFACE,
+  expect_eq(unknown_specs[0].edge.vehicle, VehicleType::SURFACE,
             "unknown route type maps to surface vehicle");
-  expect_eq(unknown_specs[0].edge->movement, MovementType::LINEHAUL,
+  expect_eq(unknown_specs[0].edge.movement, MovementType::LINEHAUL,
             "unknown route type maps to linehaul movement");
 
   auto one_stop_route = make_base_route();
@@ -479,7 +623,7 @@ void test_route_edge_spec_expansion() {
   non_boolean_loading_route["halt_centers"][1]["loading_allowed"] = "false";
   const auto non_boolean_specs =
     build_route_edge_specs(non_boolean_loading_route, IST_OFFSET);
-  expect_eq(non_boolean_specs.size(), size_t{6},
+  expect_eq(non_boolean_specs.size(), std::size_t{6},
             "non-boolean loading_allowed remains included");
 
   auto invalid_route = make_base_route();
@@ -491,7 +635,7 @@ void test_route_edge_spec_expansion() {
   invalid_stop_route["halt_centers"][2].erase("center_code");
   const auto invalid_stop_specs =
     build_route_edge_specs(invalid_stop_route, IST_OFFSET);
-  expect_eq(invalid_stop_specs.size(), size_t{1},
+  expect_eq(invalid_stop_specs.size(), std::size_t{1},
             "invalid halt center skips affected edges only");
   expect_eq(invalid_stop_specs[0].source_center_code, std::string{"A"},
             "remaining valid source after invalid stop");
@@ -502,7 +646,7 @@ void test_route_edge_spec_expansion() {
   negative_duration_route["halt_centers"][2]["rel_eta"] = "0:30";
   const auto negative_specs =
     build_route_edge_specs(negative_duration_route, IST_OFFSET);
-  expect_eq(negative_specs.size(), size_t{2},
+  expect_eq(negative_specs.size(), std::size_t{2},
             "negative duration skips affected edges");
   expect_eq(negative_specs[0].target_center_code, std::string{"D"},
             "negative duration keeps valid A-D edge");
@@ -513,7 +657,7 @@ void test_route_edge_spec_expansion() {
   default_days_route["days_of_week"] = moirai::Json::array({"bad", true});
   const auto default_days_specs =
     build_route_edge_specs(default_days_route, IST_OFFSET);
-  expect_eq(default_days_specs[0].edge->days_of_week, ALL_DAYS_OF_WEEK,
+  expect_eq(default_days_specs[0].edge.days_of_week, ALL_DAYS_OF_WEEK,
             "invalid days default to all days");
 
   auto negative_offset_route = make_base_route();
@@ -521,7 +665,7 @@ void test_route_edge_spec_expansion() {
   negative_offset_route["halt_centers"][0]["rel_etd"] = "0:30";
   const auto negative_offset_specs =
     build_route_edge_specs(negative_offset_route, IST_OFFSET);
-  expect_eq(negative_offset_specs[0].edge->departure.count(), -240,
+  expect_eq(negative_offset_specs[0].edge.departure.count(), -240,
             "negative reporting offset is preserved");
 }
 
@@ -549,7 +693,7 @@ void test_large_route_edge_spec_expansion() {
   const auto specs = build_route_edge_specs(route, IST_OFFSET);
   const auto elapsed = std::chrono::steady_clock::now() - started;
 
-  expect_eq(specs.size(), size_t{28},
+  expect_eq(specs.size(), std::size_t{28},
             "large route expands N choose 2 after loading filter");
   expect_eq(specs.front().source_center_code, std::string{"N1"},
             "first included source after filtering");
@@ -560,15 +704,131 @@ void test_large_route_edge_spec_expansion() {
               "large route expansion smoke test stays bounded");
 }
 
+void test_real_route_fixture_edge_expansion() {
+  const auto fixture = load_json_fixture("real_routes.json");
+  const auto* routes = moirai::find_array_member(fixture, "data");
+  expect_true(routes != nullptr && !routes->empty(),
+              "real route fixture has routes");
+
+  bool saw_blocked_stop = false;
+  bool saw_restricted_days = false;
+  bool saw_day_prefixed_time = false;
+  bool saw_air = false;
+  bool saw_carting = false;
+
+  for (const auto& route : *routes) {
+    const auto specs = build_route_edge_specs(route, IST_OFFSET);
+    const auto loading_count = loading_stop_count(route);
+    const auto expected_edges = (loading_count * (loading_count - 1U)) / 2U;
+    expect_eq(specs.size(), expected_edges,
+              "real route expands N choose 2 after loading filter");
+
+    const auto days = parse_route_days_of_week(route);
+    const auto* days_json = moirai::find_array_member(route, "days_of_week");
+    saw_restricted_days =
+      saw_restricted_days || (days_json != nullptr && days_json->size() < 7);
+    saw_blocked_stop = saw_blocked_stop || has_blocked_stop(route);
+    saw_day_prefixed_time =
+      saw_day_prefixed_time || has_day_prefixed_time(route);
+
+    const auto route_type = moirai::find_string_member(route, "route_type");
+    if (route_type.has_value()) {
+      const auto lowered = lower_copy(*route_type);
+      saw_air = saw_air || lowered == "air";
+      saw_carting = saw_carting || lowered == "carting";
+    }
+
+    const auto blocked_codes = blocked_center_codes(route);
+    for (const auto& spec : specs) {
+      expect_eq(spec.edge.days_of_week, days,
+                "real route edge preserves day mask");
+      expect_true(!std::ranges::contains(blocked_codes,
+                                         spec.source_center_code),
+                  "blocked stop is not an edge source");
+      expect_true(!std::ranges::contains(blocked_codes,
+                                         spec.target_center_code),
+                  "blocked stop is not an edge target");
+    }
+  }
+
+  expect_true(saw_blocked_stop, "real fixture includes loading_allowed false");
+  expect_true(saw_restricted_days, "real fixture includes restricted days");
+  expect_true(saw_day_prefixed_time, "real fixture includes day-prefixed time");
+  expect_true(saw_air, "real fixture includes air route");
+  expect_true(saw_carting, "real fixture includes carting route");
+}
+
+void test_real_route_fixture_scheduled_paths() {
+  const auto fixture = load_json_fixture("real_routes.json");
+  const auto* routes = moirai::find_array_member(fixture, "data");
+  expect_true(routes != nullptr && !routes->empty(),
+              "real route fixture has routes for path test");
+
+  const moirai::Json* restricted_route = nullptr;
+  for (const auto& route : *routes) {
+    const auto* days = moirai::find_array_member(route, "days_of_week");
+    if (days != nullptr && days->size() < 7) {
+      restricted_route = &route;
+      break;
+    }
+  }
+  expect_true(restricted_route != nullptr,
+              "real fixture has restricted-day route");
+
+  const auto specs = build_route_edge_specs(*restricted_route, IST_OFFSET);
+  expect_true(!specs.empty(), "restricted real route produces an edge");
+  const auto& edge_spec = specs.front();
+
+  GraphBuilder graph;
+  const auto source = graph.add_center(edge_spec.source_center_code);
+  const auto target = graph.add_center(edge_spec.target_center_code);
+  auto expected_edge = edge_spec.edge;
+  expected_edge.update(*graph.solver.get_node(source),
+                       *graph.solver.get_node(target));
+  expect_true(graph.solver.add_edge(source, target, edge_spec.edge) !=
+                  INVALID_EDGE,
+              "real route edge inserted");
+
+  const auto monday_start = iso_to_date("2026-06-08 00:00:00");
+  CalcualateTraversalCost calculator;
+  const auto expected_arrival =
+    calculator.operator()<PathTraversalMode::FORWARD>(
+      monday_start, expected_edge.weight<PathTraversalMode::FORWARD>());
+  const auto forward_path =
+    graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::AIR>(
+      source, target, monday_start);
+  expect_not_empty(forward_path, "real restricted forward path exists");
+  expect_eq(last_step(forward_path).distance, expected_arrival,
+            "real restricted forward path follows day mask");
+  expect_true(minutes_between(expected_arrival, monday_start) > 24 * 60,
+              "real restricted forward path skips disallowed Monday");
+
+  const auto monday_deadline = iso_to_date("2026-06-08 23:00:00");
+  const auto expected_departure =
+    calculator.operator()<PathTraversalMode::REVERSE>(
+      monday_deadline, expected_edge.weight<PathTraversalMode::REVERSE>());
+  const auto reverse_path =
+    graph.solver.find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
+      target, source, monday_deadline);
+  expect_not_empty(reverse_path, "real restricted reverse path exists");
+  expect_eq(reverse_path.front().distance, expected_departure,
+            "real restricted reverse path follows day mask");
+  expect_true(minutes_between(monday_deadline, expected_departure) > 24 * 60,
+              "real restricted reverse path skips disallowed Monday");
+}
+
 } // namespace
 
 auto main() -> int {
   test_graph_basics();
+  test_value_overloads_and_csr_invalidation();
   test_forward_path_selection();
   test_reverse_path_selection();
   test_days_of_week_graph_behavior();
   test_vehicle_filtering();
   test_route_edge_spec_expansion();
   test_large_route_edge_spec_expansion();
-  return EXIT_SUCCESS;
+  test_real_route_fixture_edge_expansion();
+  test_real_route_fixture_scheduled_paths();
+  return 0;
 }

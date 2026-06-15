@@ -1,10 +1,14 @@
-#include "kafka_reader.hxx"
-#include "app.hxx"
-#include <array>
-#include <limits>
-#include <memory>
-#include <ranges>
-#include <stdexcept>
+module;
+
+#include "blocking_queue.hxx"
+#include <librdkafka/rdkafkacpp.h>
+
+module moirai.kafka_reader;
+
+import std;
+import moirai.app;
+import moirai.scan_reader;
+import moirai.utils;
 
 namespace {
 

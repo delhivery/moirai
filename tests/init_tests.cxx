@@ -1,6 +1,6 @@
 #include "test_helpers.hxx"
-#include <fstream>
-#include <stdexcept>
+
+import std;
 
 namespace {
 
@@ -52,9 +52,9 @@ void test_endpoint_initialization_builds_graph() {
   expect_eq(solver->show(), std::string{"Graph<5, 6>"},
             "init builds facilities custody and route edges");
 
-  const auto [a, has_a] = solver->add_node("A");
-  expect_true(has_a, "facility A exists");
-  const auto center_a = solver->get_node(a);
+  const auto a = solver->find_node("A");
+  expect_true(a.has_value(), "facility A exists");
+  const auto center_a = solver->get_node(*a);
   expect_eq(center_a->get_latency<MovementType::CARTING,
                                   ProcessType::INBOUND>().count(),
             5, "timings parser accepts HH:MM latency");
@@ -63,9 +63,9 @@ void test_endpoint_initialization_builds_graph() {
             10, "timings parser accepts integer latency");
   expect_eq(center_a->get_cutoff().count(), 360, "cutoff parsed");
 
-  const auto [e, has_e] = solver->add_node("E");
-  expect_true(has_e, "facility without timing exists");
-  expect_eq(solver->get_node(e)->get_cutoff().count(), 240,
+  const auto e = solver->find_node("E");
+  expect_true(e.has_value(), "facility without timing exists");
+  expect_eq(solver->get_node(*e)->get_cutoff().count(), 240,
             "default cutoff used for missing timing record");
 
   const auto graph_dump = solver->show_all();
@@ -153,5 +153,5 @@ auto main() -> int {
   test_endpoint_initialization_builds_graph();
   test_initialization_handles_bad_http_responses();
   test_initialization_handles_invalid_json_logs();
-  return EXIT_SUCCESS;
+  return 0;
 }

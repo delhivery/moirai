@@ -1,67 +1,92 @@
-#include "processor.hxx"
-#include "date_utils.hxx"
-#include <nlohmann/json.hpp>
+module moirai.processor;
+
+import std;
+import moirai.date_utils;
+import moirai.search_document;
+import moirai.solver;
+import moirai.transportation;
+
+template <>
+void parse_path_into<PathTraversalMode::FORWARD>(
+    const Path& path, std::vector<SearchPathLocation>& response) {
+  response.clear();
+  response.reserve(path.steps.size());
+
+  for (const auto& step : path.steps) {
+    if (step.node == nullptr) {
+      continue;
+    }
+    if (step.outbound != nullptr) {
+      const auto departure =
+        get_departure(step.distance, step.outbound->departure);
+      SearchPathLocation entry = {
+        .code = step.node->code,
+        .arrival = format_clock(step.distance),
+        .arrival_ts = step.distance.time_since_epoch().count(),
+        .route = step.outbound->route_prefix,
+        .departure = format_clock(departure),
+        .departure_ts = departure.time_since_epoch().count(),
+        .has_departure = true,
+      };
+      response.push_back(entry);
+    } else {
+      SearchPathLocation terminal;
+      terminal.code = step.node->code;
+      terminal.arrival = format_clock(step.distance);
+      terminal.arrival_ts = step.distance.time_since_epoch().count();
+      response.push_back(std::move(terminal));
+    }
+  }
+}
+
+template <>
+void parse_path_into<PathTraversalMode::REVERSE>(
+    const Path& path, std::vector<SearchPathLocation>& response) {
+  response.clear();
+  response.reserve(path.steps.size());
+
+  if (!path.steps.empty()) {
+    auto arrival = path.steps.front().distance;
+    for (const auto& step : path.steps) {
+      if (step.node == nullptr) {
+        continue;
+      }
+      if (step.outbound == nullptr) {
+        SearchPathLocation terminal;
+        terminal.code = step.node->code;
+        terminal.arrival = format_clock(arrival);
+        terminal.arrival_ts = arrival.time_since_epoch().count();
+        response.push_back(std::move(terminal));
+        continue;
+      }
+
+      SearchPathLocation entry = {
+        .code = step.node->code,
+        .arrival = format_clock(arrival),
+        .arrival_ts = arrival.time_since_epoch().count(),
+        .route = step.outbound->route_prefix,
+        .departure = format_clock(step.distance),
+        .departure_ts = step.distance.time_since_epoch().count(),
+        .has_departure = true,
+      };
+      response.push_back(entry);
+      arrival = step.distance + step.outbound->duration;
+    }
+  }
+}
 
 template <>
 auto parse_path<PathTraversalMode::FORWARD>(
-    const std::shared_ptr<Segment> &start) -> nlohmann::json {
-  nlohmann::json response = {};
-
-  if (start != nullptr) {
-    auto current = start;
-
-    while (current->next != nullptr) {
-      nlohmann::json entry = {
-          {"code", current->node->code},
-          {"arrival", format_clock(current->distance)},
-          {"arrival_ts", current->distance.time_since_epoch().count()},
-          {"route", current->outbound->code.substr(
-                        0, current->outbound->code.find('.'))},
-          {"departure", format_clock(get_departure(
-                            current->distance, current->outbound->departure))},
-          {"departure_ts",
-           get_departure(current->distance, current->outbound->departure)
-               .time_since_epoch()
-               .count()},
-      };
-      response.push_back(entry);
-      current = current->next;
-    }
-    nlohmann::json entry = {
-        {"code", current->node->code},
-        {"arrival", format_clock(current->distance)},
-        {"arrival_ts", current->distance.time_since_epoch().count()}};
-    response.push_back(entry);
-  }
+    const Path& path) -> std::vector<SearchPathLocation> {
+  std::vector<SearchPathLocation> response;
+  parse_path_into<PathTraversalMode::FORWARD>(path, response);
   return response;
 }
 
 template <>
 auto parse_path<PathTraversalMode::REVERSE>(
-    const std::shared_ptr<Segment> &start) -> nlohmann::json {
-  nlohmann::json response = {};
-
-  if (start != nullptr) {
-    auto current = start;
-    auto arrival = current->distance;
-
-    while (current->next != nullptr) {
-      nlohmann::json entry = {
-          {"code", current->node->code},
-          {"arrival", format_clock(arrival)},
-          {"arrival_ts", arrival.time_since_epoch().count()},
-          {"route", current->outbound->code.substr(
-                        0, current->outbound->code.find('.'))},
-          {"departure", format_clock(current->distance)},
-          {"departure_ts", current->distance.time_since_epoch().count()}};
-      response.push_back(entry);
-      arrival = current->distance + current->outbound->duration;
-      current = current->next;
-    }
-    nlohmann::json entry{{"code", current->node->code},
-                         {"arrival", format_clock(arrival)},
-                         {"arrival_ts", arrival.time_since_epoch().count()}};
-    response.push_back(entry);
-  }
+    const Path& path) -> std::vector<SearchPathLocation> {
+  std::vector<SearchPathLocation> response;
+  parse_path_into<PathTraversalMode::REVERSE>(path, response);
   return response;
 }

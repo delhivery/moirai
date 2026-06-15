@@ -1,21 +1,11 @@
 #include "blocking_queue.hxx"
-#include "date_utils.hxx"
-#include "solver.hxx"
-#include "solver_wrapper.hxx"
-#include "test_helpers.hxx"
-#include "transportation.hxx"
 #include <nlohmann/json.hpp>
-#include <cstdlib>
-#include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <source_location>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <vector>
+#include "test_helpers.hxx"
+
+import std;
+import moirai.date_utils;
+import moirai.solver;
+import moirai.transportation;
 
 namespace {
 
@@ -28,7 +18,7 @@ void expect_eq(const T& actual, const U& expected, std::string_view label,
 
   std::cerr << location.file_name() << ':' << location.line() << ": " << label
             << " failed\n";
-  std::exit(EXIT_FAILURE);
+  std::exit(1);
 }
 
 void expect_true(bool value, std::string_view label,
@@ -43,17 +33,17 @@ auto epoch_minutes(std::string_view timestamp) -> int32_t {
                                 .count());
 }
 
-auto add_center(Solver& solver, std::string code) -> Node<Graph> {
+auto add_center(Solver& solver, std::string code) -> NodeId {
   auto center = std::make_shared<TransportCenter>(std::move(code));
-  const auto [node, inserted] = solver.add_node(center);
-  expect_true(inserted, "center added");
+  const auto node = solver.add_node(center);
+  expect_true(node != INVALID_NODE, "center added");
   return node;
 }
 
-auto add_edge(Solver& solver, Node<Graph> source, Node<Graph> target,
+auto add_edge(Solver& solver, NodeId source, NodeId target,
               std::string code, int departure_minutes, int duration_minutes)
     -> void {
-  solver.add_edge(
+  const auto edge_id = solver.add_edge(
     source,
     target,
     std::make_shared<TransportEdge>(
@@ -66,6 +56,7 @@ auto add_edge(Solver& solver, Node<Graph> source, Node<Graph> target,
       VehicleType::SURFACE,
       MovementType::CARTING,
       false));
+  expect_true(edge_id != INVALID_EDGE, "edge added");
 }
 
 auto make_wrapper(std::shared_ptr<Solver> solver) -> SolverWrapper {
@@ -77,7 +68,7 @@ auto make_wrapper(std::shared_ptr<Solver> solver) -> SolverWrapper {
   }
 
   static BlockingQueue<std::string> load_queue;
-  static BlockingQueue<std::string> solution_queue;
+  static BlockingQueue<SearchDocument> solution_queue;
   SolverWrapper::RuntimeQueues queues{
     .node = nullptr,
     .edge = nullptr,
@@ -103,16 +94,16 @@ void test_find_paths_non_critical_returns_earliest_and_ultimate() {
     iso_to_date("2026-06-08 12:00:00"),
     packages);
 
-  expect_eq(response["waybill"].get<std::string>(), std::string{"bag"},
-            "waybill copied");
-  expect_true(response.contains("earliest"), "earliest path present");
-  expect_true(response.contains("ultimate"), "ultimate path present");
-  expect_eq(response["earliest"]["locations"].size(), size_t{2},
+  expect_eq(response.waybill, std::string{"bag"}, "waybill copied");
+  expect_true(!response.earliest.locations.empty(), "earliest path present");
+  expect_true(!response.ultimate.locations.empty(), "ultimate path present");
+  expect_eq(response.earliest.locations.size(), std::size_t{2},
             "earliest has source and target");
-  expect_eq(response["ultimate"]["locations"].size(), size_t{2},
+  expect_eq(response.ultimate.locations.size(), std::size_t{2},
             "ultimate has source and target");
-  expect_eq(response["pdd_ts"].get<std::uint32_t>(),
-            iso_to_date("2026-06-08 12:00:00").time_since_epoch().count(),
+  expect_eq(response.pdd_ts,
+            static_cast<std::int64_t>(
+              iso_to_date("2026-06-08 12:00:00").time_since_epoch().count()),
             "pdd preserved");
 }
 
@@ -132,8 +123,9 @@ void test_find_paths_critical_omits_ultimate() {
     iso_to_date("2026-06-08 09:30:00"),
     packages);
 
-  expect_true(response.contains("earliest"), "critical still returns earliest");
-  expect_eq(response.contains("ultimate"), false,
+  expect_true(!response.earliest.locations.empty(),
+              "critical still returns earliest");
+  expect_eq(response.ultimate.locations.empty(), true,
             "critical path omits ultimate");
 }
 
@@ -153,7 +145,7 @@ void test_find_paths_missing_node_returns_fail() {
     iso_to_date("2026-06-08 12:00:00"),
     packages);
 
-  expect_true(response.contains("fail"), "missing node returns fail");
+  expect_true(!response.fail.empty(), "missing node returns fail");
   expect_true(logs.contains("Pathing failed"), "missing node debug log");
   moirai::Application::instance().logger().set_level("information");
 }
@@ -178,10 +170,11 @@ void test_find_paths_child_can_make_parent_critical() {
     iso_to_date("2026-06-08 12:00:00"),
     packages);
 
-  expect_eq(response["package"].get<std::string>(), std::string{"child"},
+  expect_eq(response.package_id, std::string{"child"},
             "package id comes from child");
-  expect_true(response.contains("earliest"), "child critical returns earliest");
-  expect_eq(response.contains("ultimate"), false,
+  expect_true(!response.earliest.locations.empty(),
+              "child critical returns earliest");
+  expect_eq(response.ultimate.locations.empty(), true,
             "child critical omits ultimate");
 }
 
@@ -192,5 +185,5 @@ auto main() -> int {
   test_find_paths_critical_omits_ultimate();
   test_find_paths_missing_node_returns_fail();
   test_find_paths_child_can_make_parent_critical();
-  return EXIT_SUCCESS;
+  return 0;
 }

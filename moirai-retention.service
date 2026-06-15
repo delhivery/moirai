@@ -1,0 +1,12 @@
+[Unit]
+Description=Expected Path OpenSearch retention cleanup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/moirai/moirai.conf
+TimeoutStartSec=55min
+ExecStart=/bin/bash -lc 'set -euo pipefail; cutoff=$(date -u -d "${SEARCH_RETENTION_DAYS:-7} days ago" +%%s); curl -fsS -u "${SEARCH_USER}:${SEARCH_PASS}" -H "Content-Type: application/json" -X POST "${SEARCH_URI%%/}/${SEARCH_INDEX}/_delete_by_query?conflicts=proceed&slices=auto&requests_per_second=${SEARCH_RETENTION_RPS:-5000}" --data "{\"query\":{\"range\":{\"updated_at_ts\":{\"lt\":${cutoff}}}}}"'
+StandardOutput=journal
+StandardError=journal

@@ -1,23 +1,13 @@
-#pragma once
+export module moirai.app;
 
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <csignal>
-#include <cstdint>
-#include <format>
-#include <functional>
-#include <iostream>
-#include <mutex>
-#include <stop_token>
-#include <string_view>
-#include <thread>
-#include <utility>
+export import std;
 
-namespace moirai {
+export namespace moirai {
 
 inline constexpr auto TERMINATION_POLL_INTERVAL =
     std::chrono::milliseconds{250};
+inline constexpr int INTERRUPT_SIGNAL = 2;
+inline constexpr int TERMINATION_SIGNAL = 15;
 
 enum class LogLevel : std::uint8_t {
   debug = 0,
@@ -66,7 +56,7 @@ public:
   }
 
   template <typename... Args>
-  void debug(std::format_string<Args...> fmt, Args &&...args) {
+  void debug(std::format_string<Args...> fmt, Args&&... args) {
     if (!enabled(LogLevel::debug)) {
       return;
     }
@@ -74,7 +64,7 @@ public:
   }
 
   template <typename... Args>
-  void information(std::format_string<Args...> fmt, Args &&...args) {
+  void information(std::format_string<Args...> fmt, Args&&... args) {
     if (!enabled(LogLevel::information)) {
       return;
     }
@@ -82,7 +72,7 @@ public:
   }
 
   template <typename... Args>
-  void error(std::format_string<Args...> fmt, Args &&...args) {
+  void error(std::format_string<Args...> fmt, Args&&... args) {
     if (!enabled(LogLevel::error)) {
       return;
     }
@@ -114,16 +104,16 @@ private:
 
 class Application {
 public:
-  static auto instance() -> Application & {
+  static auto instance() -> Application& {
     static Application application;
     return application;
   }
 
-  auto logger() -> Logger & { return m_logger; }
+  auto logger() -> Logger& { return m_logger; }
 
   static void install_signal_handlers() {
-    std::signal(SIGINT, &Application::handle_signal);
-    std::signal(SIGTERM, &Application::handle_signal);
+    std::signal(INTERRUPT_SIGNAL, &Application::handle_signal);
+    std::signal(TERMINATION_SIGNAL, &Application::handle_signal);
   }
 
   void request_termination() { m_termination_requested.store(true); }
@@ -149,7 +139,7 @@ private:
 };
 
 template <typename Rep, typename Period>
-auto wait_for(const std::stop_token &stop_token,
+auto wait_for(const std::stop_token& stop_token,
               std::chrono::duration<Rep, Period> duration) -> bool {
   if (stop_token.stop_requested()) {
     return false;

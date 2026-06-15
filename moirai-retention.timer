@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Expected Path OpenSearch retention cleanup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=moirai-retention.service
+
+[Install]
+WantedBy=timers.target

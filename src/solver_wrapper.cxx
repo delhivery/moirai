@@ -1,26 +1,21 @@
-#include "solver_wrapper.hxx"
-#include "app.hxx"
+module;
+
 #include "blocking_queue.hxx"
-#include "date_utils.hxx"
-#include "json_utils.hxx"
-#include "processor.hxx"
-#include "route_schedule.hxx"
-#include "transportation.hxx"
-#include "utils.hxx"
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <format>
-#include <fstream>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+#include <nlohmann/json.hpp>
+
+module moirai.solver_wrapper;
+
+import std;
+import moirai.app;
+import moirai.date_utils;
+import moirai.http;
+import moirai.json_utils;
+import moirai.processor;
+import moirai.route_schedule;
+import moirai.search_document;
+import moirai.solver;
+import moirai.transportation;
+import moirai.utils;
 
 namespace {
 
@@ -28,11 +23,134 @@ constexpr long HTTP_STATUS_OK = 200;
 constexpr auto IST_OFFSET = DURATION{ 330 };
 constexpr std::size_t SOLVER_BATCH_SIZE = 64;
 constexpr std::size_t MIN_IPDD_LENGTH = 11;
+constexpr std::string_view ROUTE_EXPANSION_THREADS_ENV =
+  "MOIRAI_ROUTE_EXPANSION_THREADS";
+constexpr std::string_view PATH_CACHE_ENABLED_ENV = "MOIRAI_PATH_CACHE_ENABLED";
+constexpr std::string_view PATH_CACHE_MAX_ENTRIES_ENV =
+  "MOIRAI_PATH_CACHE_MAX_ENTRIES";
+constexpr std::string_view PATH_CACHE_BUCKET_MINUTES_ENV =
+  "MOIRAI_PATH_CACHE_BUCKET_MINUTES";
 const auto DEFAULT_FACILITY_CUTOFF =
   std::chrono::duration_cast<TIME_OF_DAY>(time_string_to_time("04:00"));
 
 using FacilityTimings =
   std::tuple<int16_t, int16_t, int16_t, int16_t, TIME_OF_DAY>;
+using PackageInfo = std::tuple<std::string, std::int32_t, std::string>;
+
+struct PathCacheConfig {
+  bool enabled{true};
+  std::size_t max_entries{65'536};
+  std::uint32_t bucket_minutes{1};
+};
+
+struct LoadPayload {
+  std::string id;
+  std::string location;
+  std::string destination;
+  std::string event_time;
+  std::string ipdd_destination;
+  std::string cs_slid;
+  std::string cs_act;
+  std::string pid;
+  const moirai::Json* items{nullptr};
+};
+
+struct WrapperScratch {
+  std::vector<PackageInfo> packages;
+};
+
+thread_local WrapperScratch wrapper_scratch;
+
+auto milliseconds_since(std::chrono::steady_clock::time_point start,
+                        std::chrono::steady_clock::time_point end)
+    -> std::int64_t {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+    .count();
+}
+
+auto parse_bool_env(std::string_view name, bool fallback) -> bool {
+  const char* value = std::getenv(std::string(name).c_str());
+  if (value == nullptr || std::string_view{value}.empty()) {
+    return fallback;
+  }
+  std::string input{value};
+  std::ranges::transform(input, input.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
+  });
+  if (input == "1" || input == "true" || input == "yes" || input == "on") {
+    return true;
+  }
+  if (input == "0" || input == "false" || input == "no" || input == "off") {
+    return false;
+  }
+  throw std::runtime_error(std::format("Invalid {} value '{}'", name, input));
+}
+
+auto parse_size_env(std::string_view name, std::size_t fallback,
+                    bool allow_zero = false) -> std::size_t {
+  const char* value = std::getenv(std::string(name).c_str());
+  if (value == nullptr || std::string_view{value}.empty()) {
+    return fallback;
+  }
+  std::size_t parsed{};
+  const std::string_view input{value};
+  const auto [ptr, error] =
+    std::from_chars(input.data(), input.data() + input.size(), parsed);
+  if (error != std::errc{} || ptr != input.data() + input.size() ||
+      (!allow_zero && parsed == 0)) {
+    throw std::runtime_error(std::format("Invalid {} value '{}'", name, input));
+  }
+  return parsed;
+}
+
+auto path_cache_config_from_environment() -> PathCacheConfig {
+  PathCacheConfig cache;
+  cache.enabled = parse_bool_env(PATH_CACHE_ENABLED_ENV, cache.enabled);
+  cache.max_entries =
+    parse_size_env(PATH_CACHE_MAX_ENTRIES_ENV, cache.max_entries, true);
+  cache.bucket_minutes = static_cast<std::uint32_t>(
+    parse_size_env(PATH_CACHE_BUCKET_MINUTES_ENV, cache.bucket_minutes));
+  if (cache.max_entries == 0) {
+    cache.enabled = false;
+  }
+  return cache;
+}
+
+auto optional_string(const moirai::Json& object, const char* key)
+    -> std::string {
+  const auto value = moirai::find_string_member(object, key);
+  return value.has_value() ? std::string(*value) : std::string{};
+}
+
+auto extract_load_payload(const moirai::Json& data)
+    -> std::expected<LoadPayload, std::string> {
+  const auto bag_identifier = moirai::find_string_member(data, "id");
+  const auto current_location = moirai::find_string_member(data, "location");
+  const auto item_destination =
+    moirai::find_string_member(data, "destination");
+  const auto event_time = moirai::find_string_member(data, "time");
+  if (!bag_identifier.has_value() || !current_location.has_value() ||
+      !item_destination.has_value() || !event_time.has_value()) {
+    return std::unexpected{"missing id, location, destination, or time"};
+  }
+
+  auto* items = moirai::find_array_member(data, "items");
+  if (items == nullptr) {
+    items = moirai::find_array_member(data, "item");
+  }
+
+  return LoadPayload{
+    .id = std::string(*bag_identifier),
+    .location = std::string(*current_location),
+    .destination = std::string(*item_destination),
+    .event_time = std::string(*event_time),
+    .ipdd_destination = optional_string(data, "ipdd_destination"),
+    .cs_slid = optional_string(data, "cs_slid"),
+    .cs_act = optional_string(data, "cs_act"),
+    .pid = optional_string(data, "pid"),
+    .items = items,
+  };
+}
 
 auto parse_facility_latency_minutes(const moirai::Json& object,
                                     const char* key) -> std::optional<int16_t>
@@ -58,6 +176,83 @@ auto parse_facility_latency_minutes(const moirai::Json& object,
   return static_cast<int16_t>(minutes);
 }
 
+auto parse_route_expansion_threads(std::size_t route_count) -> std::size_t {
+  if (route_count == 0) {
+    return 0;
+  }
+
+  const char* value = std::getenv(ROUTE_EXPANSION_THREADS_ENV.data());
+  if (value != nullptr && std::string_view{value}.empty()) {
+    value = nullptr;
+  }
+
+  std::size_t requested{};
+  if (value != nullptr) {
+    const std::string_view input{value};
+    const auto [ptr, error] =
+      std::from_chars(input.data(), input.data() + input.size(), requested);
+    if (error != std::errc{} || ptr != input.data() + input.size() ||
+        requested == 0) {
+      throw std::runtime_error(
+        std::format("Invalid {} value '{}'",
+                    ROUTE_EXPANSION_THREADS_ENV,
+                    input));
+    }
+  } else {
+    requested = std::thread::hardware_concurrency();
+    if (requested == 0) {
+      requested = 1;
+    }
+  }
+
+  return std::clamp(requested, std::size_t{1}, route_count);
+}
+
+auto expand_route_specs(const moirai::Json& routes)
+    -> std::vector<std::expected<std::vector<RouteEdgeSpec>, std::string>> {
+  const auto route_count = routes.size();
+  std::vector<std::expected<std::vector<RouteEdgeSpec>, std::string>> expanded(
+    route_count);
+  const auto worker_count = parse_route_expansion_threads(route_count);
+  if (worker_count == 0) {
+    return expanded;
+  }
+
+  const auto expand_one = [&routes, &expanded](std::size_t index) -> void {
+    try {
+      expanded[index] = build_route_edge_specs(routes[index], IST_OFFSET);
+    } catch (const std::exception& exc) {
+      expanded[index] = std::unexpected{
+        std::format("route {}: {}", index, exc.what())
+      };
+    }
+  };
+
+  if (worker_count == 1) {
+    for (std::size_t index = 0; index < route_count; ++index) {
+      expand_one(index);
+    }
+    return expanded;
+  }
+
+  std::atomic_size_t next_route{0};
+  std::vector<std::jthread> workers;
+  workers.reserve(worker_count);
+  for (std::size_t worker = 0; worker < worker_count; ++worker) {
+    workers.emplace_back([&]() {
+      while (true) {
+        const auto index = next_route.fetch_add(1, std::memory_order_relaxed);
+        if (index >= route_count) {
+          return;
+        }
+        expand_one(index);
+      }
+    });
+  }
+
+  return expanded;
+}
+
 } // namespace
 
 SolverWrapper::SolverWrapper(
@@ -70,6 +265,10 @@ SolverWrapper::SolverWrapper(
   , m_solution_queue(*queues.solution)
   , m_http_get(std::move(http_get))
 {
+  const auto cache_config = path_cache_config_from_environment();
+  m_path_cache.enabled = cache_config.enabled;
+  m_path_cache.max_entries = cache_config.max_entries;
+  m_path_cache.bucket_minutes = cache_config.bucket_minutes;
   init_timings(center_timings_filename);
 }
 
@@ -89,12 +288,55 @@ SolverWrapper::SolverWrapper(
   , m_http_get(std::move(http_get))
 {
   auto& app = moirai::Application::instance();
+  const auto total_started = std::chrono::steady_clock::now();
+  auto phase_started = total_started;
+  const auto finish_phase = [&phase_started]() {
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed = milliseconds_since(phase_started, now);
+    phase_started = now;
+    return elapsed;
+  };
+
+  const auto cache_config = path_cache_config_from_environment();
+  m_path_cache.enabled = cache_config.enabled;
+  m_path_cache.max_entries = cache_config.max_entries;
+  m_path_cache.bucket_minutes = cache_config.bucket_minutes;
+
   m_solver = std::make_shared<Solver>();
   init_timings(center_timings_filename);
+  const auto timings_ms = finish_phase();
   init_nodes();
+  const auto nodes_ms = finish_phase();
   init_custody();
+  const auto custody_ms = finish_phase();
   init_edges();
-  app.logger().debug("Initialized graph: {}", m_solver->show());
+  const auto routes_ms = finish_phase();
+  m_solver->finalize_graph();
+  const auto finalize_ms = finish_phase();
+  const auto stats = m_solver->graph_stats();
+  app.logger().information(
+    "Initialized graph: queue={} nodes={} edges={} csr_out={} csr_in={} "
+    "avg_out_degree={} max_out_degree={}",
+    stats.queue,
+    stats.nodes,
+    stats.edges,
+    stats.outgoing_storage,
+    stats.incoming_storage,
+    stats.average_out_degree,
+    stats.max_out_degree);
+  app.logger().information(
+    "Startup timings: timings_ms={} nodes_ms={} custody_ms={} routes_ms={} "
+    "finalize_ms={} total_ms={} path_cache_enabled={} path_cache_max_entries={} "
+    "path_cache_bucket_minutes={}",
+    timings_ms,
+    nodes_ms,
+    custody_ms,
+    routes_ms,
+    finalize_ms,
+    milliseconds_since(total_started, std::chrono::steady_clock::now()),
+    m_path_cache.enabled,
+    m_path_cache.max_entries,
+    m_path_cache.bucket_minutes);
 }
 
 void
@@ -221,6 +463,10 @@ SolverWrapper::init_nodes(int16_t page)
       return;
     }
 
+    if (page == 1) {
+      m_solver->reserve_nodes(data->size() * static_cast<std::size_t>(*pages));
+    }
+
     for (const auto& facility : *data) {
       const auto facility_code =
         moirai::find_string_member(facility, "facility_code");
@@ -237,22 +483,21 @@ SolverWrapper::init_nodes(int16_t page)
         app.logger().debug("No timings found for facility: {}", *facility_code);
       }
 
-      auto transport_center =
-        std::make_shared<TransportCenter>(std::string(*facility_code));
+      auto transport_center = TransportCenter{std::string(*facility_code)};
       transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::INBOUND>(
+        .set_latency<MovementType::CARTING, ProcessType::INBOUND>(
           DURATION(std::get<0>(facility_timings)));
       transport_center
-        ->set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
+        .set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
           DURATION(std::get<1>(facility_timings)));
       transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
+        .set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
           DURATION(std::get<2>(facility_timings)));
       transport_center
-        ->set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
+        .set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
           DURATION(std::get<3>(facility_timings)));
-      transport_center->set_cutoff(std::get<4>(facility_timings));
-      m_solver->add_node(transport_center);
+      transport_center.set_cutoff(std::get<4>(facility_timings));
+      (void)m_solver->add_node(std::move(transport_center));
 
       const auto property_id =
         moirai::find_string_member(facility, "property_id");
@@ -284,24 +529,24 @@ SolverWrapper::init_custody()
           continue;
         }
 
-        auto [vertex_primary, has_vertex_primary] =
-          m_solver->add_node(value[i]);
-        auto [vertex_secondary, has_vertex_secondary] =
-          m_solver->add_node(value[j]);
+        const auto vertex_primary = m_solver->find_node(value[i]);
+        const auto vertex_secondary = m_solver->find_node(value[j]);
 
-        if (has_vertex_primary and has_vertex_secondary) {
+        if (vertex_primary.has_value() and vertex_secondary.has_value()) {
           const std::string name =
             std::format("CUSTODY-{}-{}", value[i], value[j]);
-          m_solver->add_edge(vertex_primary,
-                             vertex_secondary,
-                             std::make_shared<TransportEdge>(name, name));
-          app.logger().debug("Added custody edge: {}", name);
+          const auto edge_id = m_solver->add_edge(
+              *vertex_primary, *vertex_secondary,
+              TransportEdge{name, name});
+          if (edge_id != INVALID_EDGE) {
+            app.logger().debug("Added custody edge: {}", name);
+          }
         } else {
           app.logger().error("Colocated facilities {}:{} or {}:{} missing",
                              value[i],
-                             has_vertex_primary,
+                             vertex_primary.has_value(),
                              value[j],
-                             has_vertex_secondary);
+                             vertex_secondary.has_value());
         }
       }
     }
@@ -329,31 +574,72 @@ SolverWrapper::init_edges()
       return;
     }
 
-    app.logger().debug("Got {} edges", data->size());
+    app.logger().debug("Got {} routes", data->size());
+    const auto expansion_started = std::chrono::steady_clock::now();
+    auto expanded_routes = expand_route_specs(*data);
+    const auto expansion_ms =
+      milliseconds_since(expansion_started, std::chrono::steady_clock::now());
+    const auto route_edge_count = std::accumulate(
+      expanded_routes.begin(),
+      expanded_routes.end(),
+      std::size_t{0},
+      [](std::size_t total, const auto& route_specs) {
+        return total + (route_specs.has_value() ? route_specs->size() : 0U);
+      });
+    m_solver->reserve_edges(route_edge_count);
 
-    for (const auto& route : *data) {
-      try {
-        for (const auto& spec : build_route_edge_specs(route, IST_OFFSET)) {
-          auto [source_vertex, has_source_vertex] =
-            m_solver->add_node(spec.source_center_code);
-          auto [target_vertex, has_target_vertex] =
-            m_solver->add_node(spec.target_center_code);
-          if (has_source_vertex && has_target_vertex) {
-            m_solver->add_edge(source_vertex, target_vertex, spec.edge);
-          } else {
-            app.logger().error(
-              "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
-              spec.edge->code,
-              spec.source_center_code,
-              has_source_vertex,
-              spec.target_center_code,
-              has_target_vertex);
-          }
+    std::unordered_map<std::string,
+                       std::optional<NodeId>,
+                       TransparentStringHash,
+                       TransparentStringEqual>
+      node_cache;
+    node_cache.reserve(route_edge_count == 0 ? 0 : route_edge_count / 2U);
+    const auto resolve_node =
+      [this, &node_cache](std::string_view center_code) -> std::optional<NodeId> {
+      if (const auto cached = node_cache.find(center_code);
+          cached != node_cache.end()) {
+        return cached->second;
+      }
+      auto node = m_solver->find_node(center_code);
+      node_cache.emplace(std::string(center_code), node);
+      return node;
+    };
+
+    const auto insertion_started = std::chrono::steady_clock::now();
+    std::size_t inserted_edges = 0;
+    for (auto& route_specs : expanded_routes) {
+      if (!route_specs.has_value()) {
+        app.logger().error("Skipping route: {}", route_specs.error());
+        continue;
+      }
+
+      for (auto& spec : *route_specs) {
+        const auto source_vertex = resolve_node(spec.source_center_code);
+        const auto target_vertex = resolve_node(spec.target_center_code);
+        if (source_vertex.has_value() && target_vertex.has_value()) {
+          (void)m_solver->add_edge(*source_vertex,
+                                   *target_vertex,
+                                   std::move(spec.edge));
+          ++inserted_edges;
+        } else {
+          app.logger().error(
+            "Edge<{}>: Source<{}>:{} or Target<{}>:{} vertex missing",
+            spec.edge.code,
+            spec.source_center_code,
+            source_vertex.has_value(),
+            spec.target_center_code,
+            target_vertex.has_value());
         }
-      } catch (const std::exception& exc) {
-        app.logger().error("Skipping route: {}", exc.what());
       }
     }
+    app.logger().information(
+      "Route timings: routes={} expanded_edges={} inserted_edges={} "
+      "expansion_ms={} insertion_ms={}",
+      data->size(),
+      route_edge_count,
+      inserted_edges,
+      expansion_ms,
+      milliseconds_since(insertion_started, std::chrono::steady_clock::now()));
   } else {
     app.logger().error("Unable to fetch route data: {}", response.body);
   }
@@ -367,8 +653,8 @@ SolverWrapper::find_paths(
   std::string bag_target,
   int32_t bag_start,
   CLOCK bag_end,
-  std::vector<std::tuple<std::string, int32_t, std::string>>& packages) const
-  -> nlohmann::json
+  std::vector<PackageInfo>& packages) const
+  -> SearchDocument
 {
   auto& app = moirai::Application::instance();
   const CLOCK zero = CLOCK{ std::chrono::minutes{ 0 } };
@@ -378,49 +664,96 @@ SolverWrapper::find_paths(
                      bag_end.time_since_epoch().count());
 
   CLOCK bag_earliest_pdd = CLOCK::max();
-  const auto [source, has_source] = m_solver->add_node(bag_source);
-  const auto [target, has_target] = m_solver->add_node(bag_target);
+  const auto source = m_solver->find_node(bag_source);
+  const auto target = m_solver->find_node(bag_target);
 
   app.logger().debug("Finding path for {} with tmax epoch minutes: {}",
                      bag,
                      bag_end.time_since_epoch().count());
 
-  nlohmann::json response;
-  response["_id"] = bag;
-  response["waybill"] = bag;
-  response["package"] = bag;
+  SearchDocument response;
+  response.id = bag;
+  response.waybill = bag;
+  response.package_id = bag;
 
-  if (!has_source || !has_target) {
+  if (!source.has_value() || !target.has_value()) {
     app.logger().debug(
       "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
       bag,
       bag_source,
-      has_source,
+      source.has_value(),
       bag_target,
-      has_target);
-    response["fail"] = std::format(
+      target.has_value());
+    response.fail = std::format(
       "{}: Pathing failed. Source <{}>: {} or Target <{}>: {} missing",
       bag,
       bag_source,
-      has_source,
+      source.has_value(),
       bag_target,
-      has_target);
+      target.has_value());
     return response;
   }
 
-  auto solution_earliest_start_segment =
-    m_solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
-      source, target, start);
-  std::shared_ptr<Segment> solution_ultimate_start_segment = nullptr;
+  const auto cache_bucket = [this](CLOCK timestamp) -> std::uint32_t {
+    return m_path_cache.bucket_minutes == 0
+             ? timestamp.time_since_epoch().count()
+             : timestamp.time_since_epoch().count() /
+                 m_path_cache.bucket_minutes;
+  };
+  const auto cache_key = [&](std::string_view mode,
+                             NodeId source_node,
+                             NodeId target_node,
+                             CLOCK timestamp) -> std::string {
+    return std::format("{}:{}:{}:{}",
+                       mode,
+                       source_node,
+                       target_node,
+                       cache_bucket(timestamp));
+  };
+  const auto remember = [this](std::string key, PathCacheEntry entry)
+      -> PathCacheEntry {
+    if (!m_path_cache.enabled) {
+      return entry;
+    }
+    if (m_path_cache.entries.size() >= m_path_cache.max_entries &&
+        !m_path_cache.order.empty()) {
+      m_path_cache.entries.erase(m_path_cache.order.front());
+      m_path_cache.order.pop_front();
+    }
+    auto [iter, inserted] =
+      m_path_cache.entries.emplace(std::move(key), std::move(entry));
+    if (inserted) {
+      m_path_cache.order.push_back(iter->first);
+    }
+    return iter->second;
+  };
+  const auto forward_path = [&]() -> PathCacheEntry {
+    const auto key = cache_key("F:S", *source, *target, start);
+    if (m_path_cache.enabled) {
+      if (const auto cached = m_path_cache.entries.find(key);
+          cached != m_path_cache.entries.end()) {
+        ++m_path_cache.hits;
+        return cached->second;
+      }
+      ++m_path_cache.misses;
+    }
+    const auto path =
+      m_solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+        *source, *target, start);
+    PathCacheEntry entry;
+    entry.found = !path.empty();
+    if (entry.found) {
+      entry.first_distance = path.front().distance;
+      entry.last_distance = path.back().distance;
+      parse_path_into<PathTraversalMode::FORWARD>(path, entry.locations);
+    }
+    return remember(key, std::move(entry));
+  }();
 
   bool critical = false;
 
-  if (solution_earliest_start_segment != nullptr) {
-    auto segment = solution_earliest_start_segment;
-    while (segment->next != nullptr) {
-      segment = segment->next;
-    }
-    bag_earliest_pdd = segment->distance;
+  if (forward_path.found) {
+    bag_earliest_pdd = forward_path.last_distance;
 
     app.logger().debug("Bag pdd epoch minutes {} earliest_pdd epoch minutes {}",
                        bag_pdd.time_since_epoch().count(),
@@ -433,19 +766,38 @@ SolverWrapper::find_paths(
           return std::get<1>(lhs) < std::get<1>(rhs);
         });
 
-      const auto [child_target, has_child_target] =
-        m_solver->add_node(std::get<0>(child_earliest));
+      const auto child_target = m_solver->find_node(std::get<0>(child_earliest));
 
-      if (child_target != target and has_child_target) {
+      if (child_target != target and child_target.has_value()) {
         const auto child_pdd =
           zero + std::chrono::minutes(std::get<1>(child_earliest));
-        auto child_critical_start_segment =
-          m_solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-            child_target, target, child_pdd);
+        const auto child_key =
+          cache_key("R:S", *child_target, *target, child_pdd);
+        const auto child_critical_path = [&]() -> PathCacheEntry {
+          if (m_path_cache.enabled) {
+            if (const auto cached = m_path_cache.entries.find(child_key);
+                cached != m_path_cache.entries.end()) {
+              ++m_path_cache.hits;
+              return cached->second;
+            }
+            ++m_path_cache.misses;
+          }
+          const auto path =
+            m_solver
+              ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+                *child_target, *target, child_pdd);
+          PathCacheEntry entry;
+          entry.found = !path.empty();
+          if (entry.found) {
+            entry.first_distance = path.front().distance;
+            entry.last_distance = path.back().distance;
+            parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
+          }
+          return remember(child_key, std::move(entry));
+        }();
 
-        if (child_critical_start_segment != nullptr) {
-          const auto child_pdd_at_parent_target =
-            child_critical_start_segment->distance;
+        if (child_critical_path.found) {
+          const auto child_pdd_at_parent_target = child_critical_path.first_distance;
 
           if (bag_pdd == CLOCK::max()) {
             bag_pdd = child_pdd_at_parent_target;
@@ -466,39 +818,43 @@ SolverWrapper::find_paths(
   }
 
   if (!critical) {
-    solution_ultimate_start_segment =
-      m_solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-        target, source, bag_pdd);
+    const auto key = cache_key("R:S", *target, *source, bag_pdd);
+    const auto ultimate_path = [&]() -> PathCacheEntry {
+      if (m_path_cache.enabled) {
+        if (const auto cached = m_path_cache.entries.find(key);
+            cached != m_path_cache.entries.end()) {
+          ++m_path_cache.hits;
+          return cached->second;
+        }
+        ++m_path_cache.misses;
+      }
+      const auto path =
+        m_solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+          *target, *source, bag_pdd);
+      PathCacheEntry entry;
+      entry.found = !path.empty();
+      if (entry.found) {
+        entry.first_distance = path.front().distance;
+        entry.last_distance = path.back().distance;
+        parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
+      }
+      return remember(key, std::move(entry));
+    }();
+    if (ultimate_path.found) {
+      response.ultimate.locations = ultimate_path.locations;
+    }
   }
 
   if (!packages.empty()) {
-    response["package"] = std::get<2>(packages[0]);
+    response.package_id = std::get<2>(packages[0]);
   }
 
-  if (const auto earliest_path =
-        parse_path<PathTraversalMode::FORWARD>(solution_earliest_start_segment);
-      !earliest_path.empty()) {
-    response["earliest"]["locations"] = earliest_path;
-    response["earliest"]["first"] = earliest_path[0];
-
-    if (earliest_path.size() > 1) {
-      response["earliest"]["second"] = earliest_path[1];
-    }
+  if (forward_path.found) {
+    response.earliest.locations = forward_path.locations;
   }
 
-  if (const auto ultimate_path =
-        parse_path<PathTraversalMode::REVERSE>(solution_ultimate_start_segment);
-      !ultimate_path.empty()) {
-    response["ultimate"]["locations"] = ultimate_path;
-    response["ultimate"]["first"] = ultimate_path[0];
-
-    if (ultimate_path.size() > 1) {
-      response["ultimate"]["second"] = ultimate_path[1];
-    }
-  }
-
-  response["pdd"] = format_clock(bag_pdd);
-  response["pdd_ts"] = bag_pdd.time_since_epoch().count();
+  response.pdd = format_clock(bag_pdd);
+  response.pdd_ts = bag_pdd.time_since_epoch().count();
 
   return response;
 }
@@ -530,26 +886,18 @@ SolverWrapper::run(const std::stop_token& stop_token)
               return;
             }
 
-            const auto bag_identifier = moirai::find_string_member(*data, "id");
-            const auto current_location =
-              moirai::find_string_member(*data, "location");
-            const auto item_destination =
-              moirai::find_string_member(*data, "destination");
-            const auto event_time = moirai::find_string_member(*data, "time");
-            const auto* items = moirai::find_array_member(*data, "items");
-            if (items == nullptr) {
-              items = moirai::find_array_member(*data, "item");
-            }
-            if (!bag_identifier.has_value() || !current_location.has_value() ||
-                !item_destination.has_value() || !event_time.has_value()) {
-              app.logger().error("Load payload is missing mandatory fields");
+            const auto load = extract_load_payload(*data);
+            if (!load.has_value()) {
+              app.logger().error("Load payload is invalid: {}", load.error());
               return;
             }
 
-            std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+            auto& packages = wrapper_scratch.packages;
+            packages.clear();
 
-            if (items != nullptr) {
-              for (const auto& waybill : *items) {
+            if (load->items != nullptr) {
+              packages.reserve(load->items->size());
+              for (const auto& waybill : *load->items) {
                 const auto waybill_ipdd =
                   moirai::find_string_member(waybill, "ipdd_destination");
                 const auto waybill_cn =
@@ -577,88 +925,77 @@ SolverWrapper::run(const std::stop_token& stop_token)
                   app.logger().error(
                     "Load {} contains invalid waybill entry. "
                     "Invalid/missing fields: {}. Waybill payload: {}",
-                    *bag_identifier,
+                    load->id,
                     invalid_fields,
                     waybill.dump());
                   continue;
                 }
 
                 try {
+                  const auto cn = std::string(*waybill_cn);
+                  const auto ipdd = std::string(*waybill_ipdd);
                   auto waybill_tmax =
-                    iso_to_date(std::string(*waybill_ipdd), true);
-                  if (m_facility_timings_map.contains(
-                        std::string(*waybill_cn))) {
+                    iso_to_date(ipdd, true);
+                  if (const auto timing = m_facility_timings_map.find(cn);
+                      timing != m_facility_timings_map.end()) {
                     waybill_tmax = iso_to_date(
-                      std::string(*waybill_ipdd),
-                      std::get<4>(
-                        m_facility_timings_map[std::string(*waybill_cn)]));
+                      ipdd,
+                      std::get<4>(timing->second));
                   }
 
-                  packages.emplace_back(std::string(*waybill_cn),
+                  packages.emplace_back(std::move(cn),
                                         waybill_tmax.time_since_epoch().count(),
                                         std::string(*waybill_id));
                 } catch (const std::exception& exc) {
                   app.logger().error(
                     "Load {} contains invalid waybill entry. "
                     "Failed to parse waybill: {}. Waybill payload: {}",
-                    *bag_identifier,
+                    load->id,
                     exc.what(),
                     waybill.dump());
                 }
               }
             }
 
-            if (current_location->empty() || item_destination->empty() ||
-                current_location == item_destination) {
+            if (load->location.empty() || load->destination.empty() ||
+                load->location == load->destination) {
               return;
             }
 
             CLOCK tmax = CLOCK::max();
 
-            const auto ipdd =
-              moirai::find_string_member(*data, "ipdd_destination");
-            if (ipdd.has_value() && ipdd->length() > MIN_IPDD_LENGTH) {
-              tmax = iso_to_date(std::string(*ipdd), true);
-              if (m_facility_timings_map.contains(
-                    std::string(*item_destination))) {
+            if (load->ipdd_destination.length() > MIN_IPDD_LENGTH) {
+              tmax = iso_to_date(load->ipdd_destination, true);
+              if (const auto timing =
+                    m_facility_timings_map.find(load->destination);
+                  timing != m_facility_timings_map.end()) {
                 tmax = iso_to_date(
-                  std::string(*ipdd),
-                  std::get<4>(
-                    m_facility_timings_map[std::string(*item_destination)]));
+                  load->ipdd_destination,
+                  std::get<4>(timing->second));
               }
             }
 
-            nlohmann::json solution;
+            SearchDocument solution;
             try {
               solution = find_paths(
-                std::string(*bag_identifier),
-                std::string(*current_location),
-                std::string(*item_destination),
-                static_cast<int32_t>(iso_to_date(std::string(*event_time))
+                load->id,
+                load->location,
+                load->destination,
+                static_cast<int32_t>(iso_to_date(load->event_time)
                                        .time_since_epoch()
                                        .count()),
                 tmax,
                 packages);
             } catch (const std::exception& exc) {
               app.logger().error(
-                "Failed to process load {}: {}", *bag_identifier, exc.what());
+                "Failed to process load {}: {}", load->id, exc.what());
               return;
             }
 
-            if (solution.empty()) {
-              app.logger().debug("No legitimate paths for payload: {}",
-                                 payload);
-              return;
-            }
-
-            const auto cs_slid = moirai::find_string_member(*data, "cs_slid");
-            const auto cs_act = moirai::find_string_member(*data, "cs_act");
-            const auto pid = moirai::find_string_member(*data, "pid");
-            solution["cs_slid"] =
-              cs_slid.has_value() ? std::string(*cs_slid) : "";
-            solution["cs_act"] = cs_act.has_value() ? std::string(*cs_act) : "";
-            solution["pid"] = pid.has_value() ? std::string(*pid) : "";
-            if (!m_solution_queue.wait_enqueue(solution.dump(), stop_token)) {
+            solution.cs_slid = load->cs_slid;
+            solution.cs_act = load->cs_act;
+            solution.pid = load->pid;
+            if (!m_solution_queue.wait_enqueue(std::move(solution), stop_token)) {
               return;
             }
           });
@@ -669,4 +1006,10 @@ SolverWrapper::run(const std::stop_token& stop_token)
       app.logger().error("Exception occurred: {}", exc.what());
     }
   }
+  app.logger().information(
+    "Path cache metrics: enabled={} entries={} hits={} misses={}",
+    m_path_cache.enabled,
+    m_path_cache.entries.size(),
+    m_path_cache.hits,
+    m_path_cache.misses);
 }

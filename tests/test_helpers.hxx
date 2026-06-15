@@ -1,22 +1,14 @@
 #pragma once
 
 #include "blocking_queue.hxx"
-#include "app.hxx"
-#include "date_utils.hxx"
-#include "http.hxx"
-#include "solver_wrapper.hxx"
-#include <algorithm>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <map>
-#include <memory>
-#include <source_location>
-#include <sstream>
-#include <string>
-#include <string_view>
-#include <vector>
+
+import std;
+import moirai.date_utils;
+import moirai.app;
+import moirai.http;
+import moirai.search_document;
+import moirai.solver;
+import moirai.solver_wrapper;
 
 #ifndef MOIRAI_TEST_FIXTURE_DIR
 #define MOIRAI_TEST_FIXTURE_DIR "tests/fixtures"
@@ -33,7 +25,7 @@ void expect_eq(const T& actual, const U& expected, std::string_view label,
 
   std::cerr << location.file_name() << ':' << location.line() << ": " << label
             << " failed\n";
-  std::exit(EXIT_FAILURE);
+  std::exit(1);
 }
 
 inline void expect_true(bool value, std::string_view label,
@@ -50,7 +42,7 @@ inline auto read_fixture(std::string_view name) -> std::string {
   std::ifstream input(fixture_path(name));
   if (!input.is_open()) {
     std::cerr << "Failed to open fixture " << name << '\n';
-    std::exit(EXIT_FAILURE);
+    std::exit(1);
   }
 
   std::ostringstream output;
@@ -108,8 +100,8 @@ public:
     });
   }
 
-  [[nodiscard]] auto count_containing(std::string_view text) const -> size_t {
-    return static_cast<size_t>(
+  [[nodiscard]] auto count_containing(std::string_view text) const -> std::size_t {
+    return static_cast<std::size_t>(
       std::ranges::count_if(records, [text](const LogRecord& record) {
         return record.message.find(text) != std::string::npos;
       }));
@@ -132,7 +124,7 @@ struct WrapperHarness {
   BlockingQueue<std::string> node_queue;
   BlockingQueue<std::string> edge_queue;
   BlockingQueue<std::string> load_queue;
-  BlockingQueue<std::string> solution_queue;
+  BlockingQueue<SearchDocument> solution_queue;
   std::shared_ptr<Solver> solver = std::make_shared<Solver>();
 
   [[nodiscard]] auto queues() -> SolverWrapper::RuntimeQueues {

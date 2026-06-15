@@ -1,20 +1,19 @@
-#include "server.hxx"
-#include "app.hxx"
+module;
+
 #include "blocking_queue.hxx"
-#include "file_reader.hxx"
-#include "kafka_reader.hxx"
-#include "scan_reader.hxx"
-#include "search_writer.hxx"
-#include "solver_wrapper.hxx"
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <filesystem>
 #include <getopt.h>
-#include <memory>
-#include <stdexcept>
-#include <thread>
-#include <utility>
+
+module moirai.server;
+
+import std;
+import moirai.app;
+import moirai.file_reader;
+import moirai.http;
+import moirai.kafka_reader;
+import moirai.scan_reader;
+import moirai.search_writer;
+import moirai.solver_wrapper;
+import moirai.utils;
 
 void Moirai::display_help() const {
   std::cout << "System directed path prediction for transportation systems\n\n";
@@ -41,6 +40,7 @@ void Moirai::display_help() const {
   std::cout << "     sasl.username=...,sasl.password=...\n";
   std::cout << "  -q, --query-from <path>\n";
   std::cout << "  -r, --route-topic <topic> (ignored; compatibility only)\n";
+  std::cout << "  --search-writers <count>\n";
   std::cout << "  -t, --batch-timeout <milliseconds>\n";
   std::cout << "  -z, --batch-size <count>\n";
 }
@@ -70,12 +70,16 @@ void Moirai::validate_options() const {
   if (!m_local_mode && !m_topic_map.contains_role("load")) {
     throw std::runtime_error("Missing required option --package-topic");
   }
+  if (m_search_writer_threads == 0) {
+    throw std::runtime_error("--search-writers must be greater than zero");
+  }
 }
 
 void Moirai::parse_options(int argc, char **argv) {
   m_command_name = std::filesystem::path(argv[0]).filename().string();
 
-  constexpr std::array<option, 19> long_options{{
+  constexpr int SEARCH_WRITERS_OPTION = 1000;
+  constexpr std::array<option, 20> long_options{{
       {.name = "help", .has_arg = no_argument, .flag = nullptr, .val = 'h'},
       {.name = "route-api",
        .has_arg = required_argument,
@@ -145,6 +149,10 @@ void Moirai::parse_options(int argc, char **argv) {
        .has_arg = required_argument,
        .flag = nullptr,
        .val = 'z'},
+      {.name = "search-writers",
+       .has_arg = required_argument,
+       .flag = nullptr,
+       .val = SEARCH_WRITERS_OPTION},
       {.name = nullptr, .has_arg = 0, .flag = nullptr, .val = 0},
   }};
 
@@ -213,7 +221,7 @@ void Moirai::parse_options(int argc, char **argv) {
       m_search_uri = optarg;
       break;
     case 't':
-      m_timeout = static_cast<uint16_t>(std::stoul(optarg));
+      m_timeout = static_cast<std::uint16_t>(std::stoul(optarg));
       break;
     case 'u':
       m_search_user = optarg;
@@ -222,7 +230,11 @@ void Moirai::parse_options(int argc, char **argv) {
       m_search_pass = optarg;
       break;
     case 'z':
-      m_batch_size = static_cast<uint16_t>(std::stoul(optarg));
+      m_batch_size = static_cast<std::uint16_t>(std::stoul(optarg));
+      break;
+    case SEARCH_WRITERS_OPTION:
+      m_search_writer_threads =
+          static_cast<std::uint16_t>(std::stoul(optarg));
       break;
     default:
       throw std::runtime_error("Invalid command line option");
@@ -253,7 +265,7 @@ auto Moirai::run_pipeline() -> int {
   BlockingQueue<std::string> node_queue{1};
   BlockingQueue<std::string> edge_queue{1};
   BlockingQueue<std::string> load_queue{PIPELINE_QUEUE_CAPACITY};
-  BlockingQueue<std::string> solution_queue{PIPELINE_QUEUE_CAPACITY};
+  BlockingQueue<SearchDocument> solution_queue{PIPELINE_QUEUE_CAPACITY};
 
   SolverWrapper wrapper(
       SolverWrapper::RuntimeQueues{.node = &node_queue,
@@ -286,17 +298,24 @@ auto Moirai::run_pipeline() -> int {
             .node = nullptr, .edge = nullptr, .load = &load_queue});
   }
 
-  SearchWriter writer(moirai::parse_uri(m_search_uri), m_search_user,
-                      m_search_pass, m_search_index, &solution_queue);
+  std::vector<std::shared_ptr<SearchWriter>> writers;
+  writers.reserve(m_search_writer_threads);
+  for (std::uint16_t index = 0; index < m_search_writer_threads; ++index) {
+    writers.push_back(std::make_shared<SearchWriter>(
+        moirai::parse_uri(m_search_uri), m_search_user, m_search_pass,
+        m_search_index, &solution_queue));
+  }
 
   const unsigned int hardware_threads =
       std::max(3U, std::thread::hardware_concurrency());
   const int solver_threads =
       std::max(1, static_cast<int>(hardware_threads) - 2);
-  const int num_threads = solver_threads + 2;
+  const int num_threads = solver_threads + 1 + m_search_writer_threads;
   std::atomic<int> active_solver_threads{solver_threads};
-  app.logger().information("Starting {} solver threads on {} hardware threads",
-                           solver_threads, hardware_threads);
+  app.logger().information(
+      "Starting {} solver threads and {} search writer threads on {} hardware "
+      "threads",
+      solver_threads, m_search_writer_threads, hardware_threads);
 
   std::vector<std::shared_ptr<SolverWrapper>> secondary;
   secondary.reserve(std::max(0, solver_threads - 1));
@@ -321,10 +340,11 @@ auto Moirai::run_pipeline() -> int {
       edge_queue.close();
       load_queue.close();
     });
-    threads.emplace_back(
-        [&app, &writer](const std::stop_token &stop_token) -> void {
+    for (const auto& writer : writers) {
+      threads.emplace_back(
+        [&app, writer](const std::stop_token &stop_token) -> void {
           try {
-            writer.run(stop_token);
+            writer->run(stop_token);
           } catch (const std::exception &exc) {
             app.logger().error("Writer thread failed: {}", exc.what());
             app.request_termination();
@@ -333,6 +353,7 @@ auto Moirai::run_pipeline() -> int {
             app.request_termination();
           }
         });
+    }
     threads.emplace_back(
         [&app, &wrapper, &solution_queue,
          &active_solver_threads](const std::stop_token &stop_token) -> void {
@@ -413,15 +434,6 @@ auto Moirai::run(int argc, char **argv) -> int {
   } catch (...) {
     app.logger().error("Unhandled error");
     display_help();
-    return 1;
-  }
-}
-
-auto main(int argc, char **argv) -> int {
-  try {
-    Moirai app;
-    return app.run(argc, argv);
-  } catch (...) {
     return 1;
   }
 }

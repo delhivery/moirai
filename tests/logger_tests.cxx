@@ -1,6 +1,6 @@
 #include "test_helpers.hxx"
-#include <cstddef>
-#include <string>
+
+import std;
 
 namespace {
 
@@ -15,7 +15,7 @@ void test_logger_capture_and_levels() {
     ScopedLogCapture logs;
     logger.debug("hidden debug");
     logger.error("visible error");
-    expect_eq(logs.records.size(), size_t{1}, "debug suppressed by info level");
+    expect_eq(logs.records.size(), std::size_t{1}, "debug suppressed by info level");
     expect_true(logs.contains("visible error"), "error captured");
     expect_eq(logs.records[0].label, std::string{"ERROR"}, "error label");
   }
@@ -26,7 +26,7 @@ void test_logger_capture_and_levels() {
     logger.debug("visible debug");
     logger.information("visible info");
     logger.error("visible error");
-    expect_eq(logs.records.size(), size_t{3}, "debug level captures all logs");
+    expect_eq(logs.records.size(), std::size_t{3}, "debug level captures all logs");
     expect_true(logs.contains("visible debug"), "debug captured");
     expect_true(logs.contains("visible info"), "info captured");
     expect_true(logs.contains("visible error"), "error captured");
@@ -38,5 +38,5 @@ void test_logger_capture_and_levels() {
 
 auto main() -> int {
   test_logger_capture_and_levels();
-  return EXIT_SUCCESS;
+  return 0;
 }
