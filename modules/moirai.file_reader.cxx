@@ -13,6 +13,7 @@ private:
 
 public:
   FileReader(const std::string& datafile, BlockingQueue<std::string>* load_queue);
+  ~FileReader() override;
 
   void run(std::stop_token stop_token) override;
 };

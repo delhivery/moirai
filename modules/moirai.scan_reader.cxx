@@ -13,7 +13,7 @@ protected:
 public:
   explicit ScanReader(BlockingQueue<std::string>* load_queue);
 
-  virtual ~ScanReader() = default;
+  virtual ~ScanReader();
 
   virtual void run(std::stop_token stop_token) = 0;
 };

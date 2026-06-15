@@ -17,6 +17,8 @@ FileReader::FileReader(const std::string &datafile,
                        BlockingQueue<std::string> *load_queue)
     : ScanReader(load_queue), m_load_file(datafile) {}
 
+FileReader::~FileReader() = default;
+
 void FileReader::run(std::stop_token stop_token) {
   auto &app = moirai::Application::instance();
   std::ifstream load_file_stream(m_load_file);

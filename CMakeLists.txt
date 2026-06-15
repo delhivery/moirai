@@ -100,11 +100,36 @@ set(MOIRAI_GNU_WARNINGS -Wno-maybe-uninitialized
                         -Wno-expose-global-module-tu-local)
 set(MOIRAI_CLANG_WARNINGS -Wno-reserved-module-identifier)
 
+set(MOIRAI_PGO_MODE
+    ""
+    CACHE STRING "PGO mode: empty, generate, or use")
+set(MOIRAI_PGO_DIR
+    "${CMAKE_BINARY_DIR}/pgo"
+    CACHE PATH "Profile data directory for MOIRAI_PGO_MODE")
+set(MOIRAI_SOLVER_QUEUE
+    "binary"
+    CACHE STRING "Solver queue implementation: binary or bucket")
+option(MOIRAI_ENABLE_GCC_LTO
+       "Enable GCC LTO for Release builds; disabled by default while GCC modules support is unstable"
+       OFF)
+
+if(NOT MOIRAI_PGO_MODE STREQUAL "generate" AND
+   NOT MOIRAI_PGO_MODE STREQUAL "use" AND
+   NOT MOIRAI_PGO_MODE STREQUAL "")
+  message(FATAL_ERROR "MOIRAI_PGO_MODE must be empty, generate, or use")
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-fwhole-program -flto=auto -fgraphite-identity
-                        -floop-nest-optimize -fno-semantic-interposition
-                        -fno-plt)
+    if(MOIRAI_ENABLE_GCC_LTO AND MOIRAI_PGO_MODE STREQUAL "")
+      add_compile_options(-fwhole-program -flto=auto)
+    elseif(MOIRAI_ENABLE_GCC_LTO)
+      message(STATUS "Disabling gcc LTO/whole-program flags for PGO module build")
+    else()
+      message(STATUS "GCC LTO disabled for module build")
+    endif()
+    add_compile_options(-fgraphite-identity -floop-nest-optimize
+                        -fno-semantic-interposition -fno-plt)
     add_link_options(-fuse-ld=mold)
     message(STATUS "Compiling with gcc")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -117,15 +142,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 option(ANALYZE "Analyze codebase for improvements" OFF)
 option(LOCAL "Run EP locally with production dataset" OFF)
 option(MOIRAI_BUILD_APP "Build the moirai application target" ON)
-set(MOIRAI_PGO_MODE
-    ""
-    CACHE STRING "PGO mode: empty, generate, or use")
-set(MOIRAI_PGO_DIR
-    "${CMAKE_BINARY_DIR}/pgo"
-    CACHE PATH "Profile data directory for MOIRAI_PGO_MODE")
-set(MOIRAI_SOLVER_QUEUE
-    "binary"
-    CACHE STRING "Solver queue implementation: binary or bucket")
 
 if(ANALYZE)
   message(STATUS "Analysis on")

@@ -8,3 +8,5 @@ import std;
 
 ScanReader::ScanReader(BlockingQueue<std::string> *load_queue)
     : m_load_queue(*load_queue) {}
+
+ScanReader::~ScanReader() = default;
