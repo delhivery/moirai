@@ -67,7 +67,9 @@ DWH_PREFIX=expectedpath
 DWH_EXPORT_WORK_DIR=/home/fedora/.local/state/moirai/dwh-export
 DWH_PARQUET_COALESCE=50
 DWH_PROCESSING_STALE_SECONDS=1800
-JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+DWH_EXPORT_MAX_FILES_PER_RUN=1000
+JAVA_HOME=/usr/lib/jvm/java-25-openjdk
+DWH_ALLOW_UNSUPPORTED_JAVA=true
 ```
 
 The application writes active files as `*.jsonl.open` and atomically publishes
@@ -82,8 +84,10 @@ rows are filtered if present, output is coalesced to 50 parquet files by default
 and parquet is partitioned by string column `ad`.
 If a previous exporter run crashes after claiming files, stale
 `*.jsonl.processing` files are retried after `DWH_PROCESSING_STALE_SECONDS`.
-The PySpark exporter supports Java 17 or 21. Newer Java runtimes can fail inside
-Spark/Hadoop before reading local audit files.
+`DWH_EXPORT_MAX_FILES_PER_RUN` limits each timer invocation so a recovery run
+does not claim an unbounded live backlog into `*.jsonl.processing`. For Spark
+4.2 and Java 25 deployments, set `DWH_ALLOW_UNSUPPORTED_JAVA=true`; omit it when
+running the stable Java 17/21 Spark path.
 
 The exporter accepts both the new variable names and the old names:
 `DWH_BUCKET` or `STORAGE`, and `DWH_PREFIX` or `OUT_PFX`.

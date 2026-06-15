@@ -48,6 +48,7 @@ UPLOAD_RETRY_SECONDS = int(os.environ.get("DWH_UPLOAD_RETRY_SECONDS", "60"))
 PROCESSING_STALE_SECONDS = int(
     os.environ.get("DWH_PROCESSING_STALE_SECONDS", "1800")
 )
+MAX_FILES_PER_RUN = int(os.environ.get("DWH_EXPORT_MAX_FILES_PER_RUN", "0"))
 SUPPORTED_JAVA_MAJORS = {17, 21}
 JAVA_VERSION_RE = re.compile(r'version "(\d+)(?:\.(\d+))?')
 
@@ -126,27 +127,29 @@ def validate_java_runtime() -> None:
 
 def claim_ready_files() -> list[Path]:
     AUDIT_DIR.mkdir(parents=True, exist_ok=True)
-    files = sorted(path for path in AUDIT_DIR.glob("*.jsonl") if path.is_file())
     claimed: list[Path] = []
-    claimed_paths: set[Path] = set()
+
+    def can_claim_more() -> bool:
+        return MAX_FILES_PER_RUN == 0 or len(claimed) < MAX_FILES_PER_RUN
+
+    if PROCESSING_STALE_SECONDS > 0:
+        cutoff = datetime.now(UTC).timestamp() - PROCESSING_STALE_SECONDS
+        for path in sorted(AUDIT_DIR.glob("*.jsonl.processing")):
+            if not can_claim_more():
+                return claimed
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                claimed.append(path)
+
+    files = sorted(path for path in AUDIT_DIR.glob("*.jsonl") if path.is_file())
     for path in files:
+        if not can_claim_more():
+            break
         claimed_path = path.with_suffix(path.suffix + ".processing")
         try:
             path.rename(claimed_path)
         except FileNotFoundError:
             continue
         claimed.append(claimed_path)
-        claimed_paths.add(claimed_path)
-    if PROCESSING_STALE_SECONDS > 0:
-        cutoff = datetime.now(UTC).timestamp() - PROCESSING_STALE_SECONDS
-        stale_files = sorted(
-            path
-            for path in AUDIT_DIR.glob("*.jsonl.processing")
-            if path.is_file()
-            and path not in claimed_paths
-            and path.stat().st_mtime < cutoff
-        )
-        claimed.extend(stale_files)
     return claimed
 
 
@@ -195,6 +198,11 @@ def write_parquet(
         dataframes = dataframe if dataframes is None else dataframes.unionByName(
             dataframe, allowMissingColumns=True
         )
+        if len(processed_sources) % 100 == 0:
+            print(
+                f"Read {len(processed_sources)} of {len(sources)} audit files",
+                flush=True,
+            )
 
     if failed_sources and not processed_sources:
         raise RuntimeError(
@@ -250,12 +258,15 @@ def main() -> int:
         raise SystemExit("DWH_PARQUET_COALESCE must be positive")
     if PROCESSING_STALE_SECONDS < 0:
         raise SystemExit("DWH_PROCESSING_STALE_SECONDS must be non-negative")
+    if MAX_FILES_PER_RUN < 0:
+        raise SystemExit("DWH_EXPORT_MAX_FILES_PER_RUN must be non-negative")
     validate_java_runtime()
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     sources = claim_ready_files()
     if not sources:
         print("No closed audit files to export")
         return 0
+    print(f"Claimed {len(sources)} audit files for export", flush=True)
 
     with TemporaryDirectory(dir=WORK_DIR) as tmpdir:
         tmp_root = Path(tmpdir)
