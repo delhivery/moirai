@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,6 +48,8 @@ UPLOAD_RETRY_SECONDS = int(os.environ.get("DWH_UPLOAD_RETRY_SECONDS", "60"))
 PROCESSING_STALE_SECONDS = int(
     os.environ.get("DWH_PROCESSING_STALE_SECONDS", "1800")
 )
+SUPPORTED_JAVA_MAJORS = {17, 21}
+JAVA_VERSION_RE = re.compile(r'version "(\d+)(?:\.(\d+))?')
 
 
 def flatten_structs(nested_df: DataFrame) -> DataFrame:
@@ -72,10 +76,59 @@ def flatten_structs(nested_df: DataFrame) -> DataFrame:
     return nested_df.select(columns)
 
 
+def bool_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def java_binary() -> str:
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        return str(Path(java_home).expanduser() / "bin" / "java")
+    return "java"
+
+
+def java_major_version() -> int:
+    try:
+        result = subprocess.run(
+            [java_binary(), "-version"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            "Java runtime not found. Install java-17-openjdk-headless or "
+            "java-21-openjdk-headless and set JAVA_HOME."
+        ) from exc
+
+    match = JAVA_VERSION_RE.search(result.stdout)
+    if match is None:
+        raise SystemExit(f"Unable to parse Java version from: {result.stdout.strip()}")
+    major = int(match.group(1))
+    if major == 1 and match.group(2) is not None:
+        return int(match.group(2))
+    return major
+
+
+def validate_java_runtime() -> None:
+    if bool_env("DWH_ALLOW_UNSUPPORTED_JAVA"):
+        return
+    major = java_major_version()
+    if major not in SUPPORTED_JAVA_MAJORS:
+        supported = ", ".join(str(version) for version in sorted(SUPPORTED_JAVA_MAJORS))
+        raise SystemExit(
+            f"Unsupported Java major version {major} for Spark/Hadoop export. "
+            f"Use Java {supported}, set JAVA_HOME, or set "
+            "DWH_ALLOW_UNSUPPORTED_JAVA=true to bypass."
+        )
+
+
 def claim_ready_files() -> list[Path]:
     AUDIT_DIR.mkdir(parents=True, exist_ok=True)
     files = sorted(path for path in AUDIT_DIR.glob("*.jsonl") if path.is_file())
     claimed: list[Path] = []
+    claimed_paths: set[Path] = set()
     for path in files:
         claimed_path = path.with_suffix(path.suffix + ".processing")
         try:
@@ -83,12 +136,15 @@ def claim_ready_files() -> list[Path]:
         except FileNotFoundError:
             continue
         claimed.append(claimed_path)
+        claimed_paths.add(claimed_path)
     if PROCESSING_STALE_SECONDS > 0:
         cutoff = datetime.now(UTC).timestamp() - PROCESSING_STALE_SECONDS
         stale_files = sorted(
             path
             for path in AUDIT_DIR.glob("*.jsonl.processing")
-            if path.is_file() and path.stat().st_mtime < cutoff
+            if path.is_file()
+            and path not in claimed_paths
+            and path.stat().st_mtime < cutoff
         )
         claimed.extend(stale_files)
     return claimed
@@ -119,28 +175,41 @@ def dataframe_for_file(spark: SparkSession, path: Path) -> DataFrame | None:
     )
 
 
-def write_parquet(spark: SparkSession, sources: list[Path], output_dir: Path) -> None:
+def write_parquet(
+    spark: SparkSession, sources: list[Path], output_dir: Path
+) -> tuple[list[Path], list[Path]]:
     dataframes: DataFrame | None = None
+    processed_sources: list[Path] = []
+    failed_sources: list[Path] = []
 
     for source in sources:
         try:
             dataframe = dataframe_for_file(spark, source)
         except Exception as exc:
             print(f"Error processing file {source}: {exc}")
+            failed_sources.append(source)
             continue
+        processed_sources.append(source)
         if dataframe is None:
             continue
         dataframes = dataframe if dataframes is None else dataframes.unionByName(
             dataframe, allowMissingColumns=True
         )
 
+    if failed_sources and not processed_sources:
+        raise RuntimeError(
+            f"Failed to process all {len(failed_sources)} audit files; "
+            "leaving claimed files for retry"
+        )
+
     if dataframes is None or dataframes.rdd.isEmpty():
-        return
+        return processed_sources, failed_sources
 
     dataframe = flatten_structs(dataframes)
     dataframe.coalesce(COALESCE).write.mode("append").partitionBy("ad").parquet(
         str(output_dir.resolve())
     )
+    return processed_sources, failed_sources
 
 
 def upload_parquet(output_dir: Path) -> int:
@@ -181,6 +250,7 @@ def main() -> int:
         raise SystemExit("DWH_PARQUET_COALESCE must be positive")
     if PROCESSING_STALE_SECONDS < 0:
         raise SystemExit("DWH_PROCESSING_STALE_SECONDS must be non-negative")
+    validate_java_runtime()
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     sources = claim_ready_files()
     if not sources:
@@ -192,13 +262,18 @@ def main() -> int:
         output_dir = tmp_root / "parquet"
         spark = build_spark(tmp_root)
         try:
-            write_parquet(spark, sources, output_dir)
+            processed_sources, failed_sources = write_parquet(spark, sources, output_dir)
         finally:
             spark.stop()
         uploaded = upload_parquet(output_dir)
 
-    archive_sources(sources)
-    print(f"Uploaded {uploaded} parquet files from {len(sources)} audit files")
+    archive_sources(processed_sources)
+    print(f"Uploaded {uploaded} parquet files from {len(processed_sources)} audit files")
+    if failed_sources:
+        print(
+            f"Left {len(failed_sources)} failed audit files in processing state for retry"
+        )
+        return 1
     return 0
 
 
