@@ -21,6 +21,8 @@ constexpr long HTTP_STATUS_OK = 200;
 constexpr long HTTP_STATUS_CREATED = 201;
 constexpr long HTTP_STATUS_NOT_FOUND = 404;
 constexpr std::size_t GZIP_CHUNK_BYTES = 16U * 1024U;
+constexpr std::string_view DISPLAY_DATE_FORMAT =
+  "MM/dd/yy HH:mm:ss||strict_date_optional_time";
 
 struct BulkDocument {
   std::string id;
@@ -618,16 +620,21 @@ auto long_mapping() -> moirai::Json {
   return { { "type", "long" } };
 }
 
+auto display_date_mapping() -> moirai::Json {
+  return { { "type", "date" },
+           { "format", std::string{ DISPLAY_DATE_FORMAT } } };
+}
+
 auto location_mapping() -> moirai::Json {
   return { { "type", "object" },
            { "dynamic", false },
            { "properties",
              {
                { "code", keyword_mapping(128) },
-               { "arrival", keyword_mapping(32) },
+               { "arrival", display_date_mapping() },
                { "arrival_ts", long_mapping() },
                { "route", keyword_mapping(512) },
-               { "departure", keyword_mapping(32) },
+               { "departure", display_date_mapping() },
                { "departure_ts", long_mapping() },
              } } };
 }
@@ -700,6 +707,21 @@ auto field_bool(const moirai::Json& properties, std::string_view field,
   }
 
   return iter->template get<bool>();
+}
+
+auto field_string(const moirai::Json& properties, std::string_view field,
+                  std::string_view key) -> std::optional<std::string> {
+  const auto* mapping = mapping_at(properties, field);
+  if (mapping == nullptr) {
+    return std::nullopt;
+  }
+
+  const auto iter = mapping->find(std::string(key));
+  if (iter == mapping->end() || !iter->is_string()) {
+    return std::nullopt;
+  }
+
+  return iter->template get<std::string>();
 }
 
 auto integer_from_json(const moirai::Json& value) -> std::optional<std::int64_t> {
@@ -889,7 +911,7 @@ SearchWriter::create_index_body() const -> std::string
             { "cs_act", keyword_mapping(128) },
             { "pid", keyword_mapping(128) },
             { "fail", keyword_mapping(8191) },
-            { "pdd", keyword_mapping(32) },
+            { "pdd", display_date_mapping() },
             { "pdd_ts", long_mapping() },
             { "updated_at", { { "type", "date" } } },
             { "updated_at_ts", long_mapping() },
@@ -988,6 +1010,18 @@ SearchWriter::validate_index_definition()
                          expected_type);
     }
   };
+  const auto validate_field_format =
+    [&](std::string_view field, std::string_view expected_format) {
+      const auto actual_format = field_string(*properties, field, "format");
+      if (!actual_format.has_value() || *actual_format != expected_format) {
+        app.logger().error(
+          "Search index {} field {} has format {}, expected {}",
+          m_search_index,
+          field,
+          actual_format.value_or("<missing>"),
+          expected_format);
+      }
+    };
 
   const std::array top_level_fields{
     std::pair{ "waybill", "keyword" },
@@ -996,7 +1030,7 @@ SearchWriter::validate_index_definition()
     std::pair{ "cs_act", "keyword" },
     std::pair{ "pid", "keyword" },
     std::pair{ "fail", "keyword" },
-    std::pair{ "pdd", "keyword" },
+    std::pair{ "pdd", "date" },
     std::pair{ "pdd_ts", "long" },
     std::pair{ "updated_at", "date" },
     std::pair{ "updated_at_ts", "long" },
@@ -1004,15 +1038,16 @@ SearchWriter::validate_index_definition()
   for (const auto& [field, expected_type] : top_level_fields) {
     validate_field_type(field, expected_type);
   }
+  validate_field_format("pdd", DISPLAY_DATE_FORMAT);
 
   constexpr std::array path_sections{ "earliest", "ultimate", "critical" };
   constexpr std::array path_positions{ "first", "second" };
   constexpr std::array path_location_fields{
     std::pair{ "code", "keyword" },
-    std::pair{ "arrival", "keyword" },
+    std::pair{ "arrival", "date" },
     std::pair{ "arrival_ts", "long" },
     std::pair{ "route", "keyword" },
-    std::pair{ "departure", "keyword" },
+    std::pair{ "departure", "date" },
     std::pair{ "departure_ts", "long" },
   };
   for (std::string_view section : path_sections) {
@@ -1038,6 +1073,10 @@ SearchWriter::validate_index_definition()
         validate_field_type(std::format("{}.{}", position_field, field),
                             expected_type);
       }
+      validate_field_format(std::format("{}.arrival", position_field),
+                            DISPLAY_DATE_FORMAT);
+      validate_field_format(std::format("{}.departure", position_field),
+                            DISPLAY_DATE_FORMAT);
     }
   }
 

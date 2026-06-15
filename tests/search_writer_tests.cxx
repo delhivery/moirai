@@ -107,16 +107,21 @@ auto long_mapping() -> nlohmann::json {
   return { { "type", "long" } };
 }
 
+auto display_date_mapping() -> nlohmann::json {
+  return { { "type", "date" },
+           { "format", "MM/dd/yy HH:mm:ss||strict_date_optional_time" } };
+}
+
 auto location_mapping() -> nlohmann::json {
   return { { "type", "object" },
            { "dynamic", false },
            { "properties",
              {
                { "code", keyword_mapping(128) },
-               { "arrival", keyword_mapping(32) },
+               { "arrival", display_date_mapping() },
                { "arrival_ts", long_mapping() },
                { "route", keyword_mapping(512) },
-               { "departure", keyword_mapping(32) },
+               { "departure", display_date_mapping() },
                { "departure_ts", long_mapping() },
              } } };
 }
@@ -150,7 +155,7 @@ auto valid_mapping() -> std::string {
                 { "cs_act", keyword_mapping(128) },
                 { "pid", keyword_mapping(128) },
                 { "fail", keyword_mapping(8191) },
-                { "pdd", keyword_mapping(32) },
+                { "pdd", display_date_mapping() },
                 { "pdd_ts", long_mapping() },
                 { "updated_at", { { "type", "date" } } },
                 { "updated_at_ts", long_mapping() },
@@ -295,8 +300,11 @@ void test_missing_index_is_created_with_mapping_and_settings() {
             std::size_t{8191},
             "fail ignore_above");
   expect_eq(body["mappings"]["properties"]["pdd"]["type"].get<std::string>(),
-            std::string{"keyword"},
-            "pdd display mapping");
+            std::string{"date"},
+            "pdd date mapping");
+  expect_eq(body["mappings"]["properties"]["pdd"]["format"].get<std::string>(),
+            std::string{"MM/dd/yy HH:mm:ss||strict_date_optional_time"},
+            "pdd date format");
   expect_eq(body["mappings"]["properties"]["earliest"]["dynamic"].get<bool>(),
             false,
             "earliest dynamic disabled");
@@ -308,8 +316,13 @@ void test_missing_index_is_created_with_mapping_and_settings() {
   expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
                 ["properties"]["arrival"]["type"]
                   .get<std::string>(),
-            std::string{"keyword"},
-            "first arrival display mapping");
+            std::string{"date"},
+            "first arrival date mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
+                ["properties"]["arrival"]["format"]
+                  .get<std::string>(),
+            std::string{"MM/dd/yy HH:mm:ss||strict_date_optional_time"},
+            "first arrival date format");
   expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
                 ["properties"]["arrival_ts"]["type"]
                   .get<std::string>(),
@@ -320,6 +333,11 @@ void test_missing_index_is_created_with_mapping_and_settings() {
                   .get<std::string>(),
             std::string{"keyword"},
             "ultimate second route mapping");
+  expect_eq(body["mappings"]["properties"]["ultimate"]["properties"]["second"]
+                ["properties"]["departure"]["type"]
+                  .get<std::string>(),
+            std::string{"date"},
+            "ultimate second departure date mapping");
   expect_eq(body["mappings"]["properties"]["critical"]["properties"]["second"]
                 ["properties"]["departure_ts"]["type"]
                   .get<std::string>(),
@@ -387,7 +405,7 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
                 "field earliest.locations has enabled true, expected false"),
               "indexed locations mapping logged");
   expect_true(logs.contains(
-                "field earliest.first.arrival has type text, expected keyword"),
+                "field earliest.first.arrival has type text, expected date"),
               "dynamic path text mapping logged");
   expect_true(std::ranges::none_of(state->calls, [](const RecordedCall& call) {
                 return call.method == "PUT";
