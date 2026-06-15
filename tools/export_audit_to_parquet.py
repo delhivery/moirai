@@ -49,6 +49,9 @@ PROCESSING_STALE_SECONDS = int(
     os.environ.get("DWH_PROCESSING_STALE_SECONDS", "1800")
 )
 MAX_FILES_PER_RUN = int(os.environ.get("DWH_EXPORT_MAX_FILES_PER_RUN", "0"))
+PROCESSED_RETENTION_SECONDS = int(
+    os.environ.get("DWH_PROCESSED_RETENTION_SECONDS", "-1")
+)
 SUPPORTED_JAVA_MAJORS = {17, 21}
 JAVA_VERSION_RE = re.compile(r'version "(\d+)(?:\.(\d+))?')
 
@@ -245,12 +248,49 @@ def upload_parquet(output_dir: Path) -> int:
     return uploaded
 
 
-def archive_sources(sources: list[Path]) -> None:
+def cleanup_processed_archives(retention_seconds: int) -> int:
+    processed_dir = WORK_DIR / "processed"
+    if retention_seconds < 0 or not processed_dir.exists():
+        return 0
+
+    cutoff = datetime.now(UTC).timestamp() - retention_seconds
+    deleted = 0
+    for path in processed_dir.glob("**/*.jsonl"):
+        if path.is_file() and path.stat().st_mtime <= cutoff:
+            path.unlink()
+            deleted += 1
+
+    directories = sorted(
+        (path for path in processed_dir.glob("**") if path.is_dir()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for path in directories:
+        try:
+            path.rmdir()
+        except OSError:
+            continue
+    return deleted
+
+
+def finalize_sources(sources: list[Path]) -> None:
+    if PROCESSED_RETENTION_SECONDS == 0:
+        for path in sources:
+            path.unlink(missing_ok=True)
+        print(f"Deleted {len(sources)} processed audit source files", flush=True)
+        return
+
     archive_dir = WORK_DIR / "processed" / datetime.now(UTC).strftime("%Y-%m-%d")
     archive_dir.mkdir(parents=True, exist_ok=True)
     for path in sources:
         target = archive_dir / path.name.replace(".jsonl.processing", ".jsonl")
         shutil.move(str(path), target)
+    deleted = cleanup_processed_archives(PROCESSED_RETENTION_SECONDS)
+    print(
+        f"Archived {len(sources)} processed audit source files; "
+        f"deleted {deleted} expired archive files",
+        flush=True,
+    )
 
 
 def main() -> int:
@@ -260,6 +300,8 @@ def main() -> int:
         raise SystemExit("DWH_PROCESSING_STALE_SECONDS must be non-negative")
     if MAX_FILES_PER_RUN < 0:
         raise SystemExit("DWH_EXPORT_MAX_FILES_PER_RUN must be non-negative")
+    if PROCESSED_RETENTION_SECONDS < -1:
+        raise SystemExit("DWH_PROCESSED_RETENTION_SECONDS must be -1 or greater")
     validate_java_runtime()
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     sources = claim_ready_files()
@@ -278,7 +320,7 @@ def main() -> int:
             spark.stop()
         uploaded = upload_parquet(output_dir)
 
-    archive_sources(processed_sources)
+    finalize_sources(processed_sources)
     print(f"Uploaded {uploaded} parquet files from {len(processed_sources)} audit files")
     if failed_sources:
         print(

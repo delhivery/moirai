@@ -68,6 +68,7 @@ DWH_EXPORT_WORK_DIR=/home/fedora/.local/state/moirai/dwh-export
 DWH_PARQUET_COALESCE=50
 DWH_PROCESSING_STALE_SECONDS=1800
 DWH_EXPORT_MAX_FILES_PER_RUN=1000
+DWH_PROCESSED_RETENTION_SECONDS=0
 JAVA_HOME=/usr/lib/jvm/java-25-openjdk
 DWH_ALLOW_UNSUPPORTED_JAVA=true
 ```
@@ -88,6 +89,9 @@ If a previous exporter run crashes after claiming files, stale
 does not claim an unbounded live backlog into `*.jsonl.processing`. For Spark
 4.2 and Java 25 deployments, set `DWH_ALLOW_UNSUPPORTED_JAVA=true`; omit it when
 running the stable Java 17/21 Spark path.
+`DWH_PROCESSED_RETENTION_SECONDS=0` deletes local source JSONL immediately after
+successful parquet upload. Use a positive value to keep a short local recovery
+window, or `-1` to archive indefinitely.
 
 The exporter accepts both the new variable names and the old names:
 `DWH_BUCKET` or `STORAGE`, and `DWH_PREFIX` or `OUT_PFX`.
