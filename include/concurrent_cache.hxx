@@ -77,12 +77,14 @@ public:
     auto& shard = shard_for(key);
     std::unique_lock lock(shard.mutex);
 
+    if (shard.entries.size() >= m_shard_capacity) {
+      evict_one(shard);
+    }
+
     auto [iter, inserted] = shard.entries.try_emplace(
       std::move(key), SlotData(std::move(entry)));
     if (!inserted) {
       iter->second.entry = std::move(entry);
-    } else if (shard.entries.size() > m_shard_capacity) {
-      evict_one(shard);
     }
     iter->second.referenced.store(true, std::memory_order_relaxed);
   }

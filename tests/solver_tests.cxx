@@ -848,15 +848,15 @@ void test_real_route_fixture_scheduled_paths() {
   expect_true(routes != nullptr && moirai::json_size(*routes) > 0,
               "real route fixture has routes for path test");
 
-  const moirai::Json* restricted_route = nullptr;
+  std::optional<moirai::Json> restricted_route;
   for (const auto& route : *routes) {
     const auto* days = moirai::find_array_member(route, "days_of_week");
     if (days != nullptr && moirai::json_size(*days) < 7) {
-      restricted_route = &route;
+      restricted_route = route;
       break;
     }
   }
-  expect_true(restricted_route != nullptr,
+  expect_true(restricted_route.has_value(),
               "real fixture has restricted-day route");
 
   const auto specs = build_route_edge_specs(*restricted_route, IST_OFFSET);
