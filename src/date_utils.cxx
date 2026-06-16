@@ -17,7 +17,6 @@ constexpr auto DATE_DASH_3_OFFSET = 7U;
 constexpr auto DATE_TIME_SEPARATOR_OFFSET = 10U;
 constexpr auto TIME_HOUR_SEPARATOR_OFFSET = 13U;
 constexpr auto TIME_MINUTE_SEPARATOR_OFFSET = 16U;
-constexpr auto DATE_ONLY_LENGTH = 10U;
 
 auto parse_int(std::string_view input) -> int {
   int value = 0;
@@ -134,22 +133,22 @@ auto iso_to_date(const std::string &date_string) -> CLOCK {
 
 auto iso_to_date(const std::string &date_string, const bool is_offset)
     -> CLOCK {
-  std::string formatted_string{date_string};
-
   if (is_offset) {
-    formatted_string = std::format(
-        "{} {}", date_string.substr(0, DATE_ONLY_LENGTH), "04:00:00");
+    // 04:00:00 IST default cutoff applied to the local calendar day
+    return iso_to_date(date_string, DURATION{4 * 60});
   }
-
-  return parse_iso_datetime(formatted_string);
+  return parse_iso_datetime(date_string);
 }
 
 auto iso_to_date(const std::string &date_string, const TIME_OF_DAY &cutoff)
     -> CLOCK {
-  const std::string formatted_string =
-      std::format("{} {}", date_string.substr(0, DATE_ONLY_LENGTH), "00:00:00");
-  return parse_iso_datetime(formatted_string) + cutoff -
-         DURATION{IST_OFFSET_MINUTES};
+  // Datetimes are always UTC. We convert the UTC datetime to IST first,
+  // find the start of the local calendar day in IST, apply the IST cutoff,
+  // and convert the resulting local datetime back to UTC.
+  const CLOCK t_utc = parse_iso_datetime(date_string);
+  const CLOCK t_ist = t_utc + DURATION{IST_OFFSET_MINUTES};
+  const auto days_since_epoch = std::chrono::floor<std::chrono::days>(t_ist);
+  return CLOCK{days_since_epoch} + cutoff - DURATION{IST_OFFSET_MINUTES};
 }
 
 auto now_as_int64() -> std::int64_t {
