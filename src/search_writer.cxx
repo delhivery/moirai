@@ -588,16 +588,18 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
   }
   result.has_errors = true;
 
-  const auto* items = moirai::find_array_member(*parsed, "items");
-  if (items == nullptr) {
+  const auto* items_ptr = moirai::find_array_member(*parsed, "items");
+  if (items_ptr == nullptr) {
     result.retryable = documents;
     return result;
   }
+  const moirai::Json items = *items_ptr;
+  const auto items_size = moirai::json_size(items);
 
-  const auto count = std::min(moirai::json_size(*items), documents.size());
+  const auto count = std::min(items_size, documents.size());
   result.retryable.reserve(count);
   std::size_t index = 0;
-  for (const auto& item : *items) {
+  for (const auto& item : items) {
     if (index >= count) {
       break;
     }
@@ -617,10 +619,10 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
     }
     ++index;
   }
-  if (moirai::json_size(*items) < documents.size()) {
+  if (items_size < documents.size()) {
     result.retryable.insert(result.retryable.end(),
                             documents.begin() +
-                              static_cast<std::ptrdiff_t>(moirai::json_size(*items)),
+                              static_cast<std::ptrdiff_t>(items_size),
                             documents.end());
   }
 
@@ -960,7 +962,7 @@ SearchWriter::validate_index_definition()
     return;
   }
 
-  const moirai::Json* properties = nullptr;
+  std::optional<moirai::Json> properties;
   for (const auto& kv : parsed_mapping->get_object().value_unsafe()) {
     const auto& index_definition = kv.value;
     if (!index_definition.is_object()) {
@@ -975,11 +977,11 @@ SearchWriter::validate_index_definition()
     if (props == nullptr) {
       continue;
     }
-    properties = props;
+    properties = *props;
     break;
   }
 
-  if (properties == nullptr) {
+  if (!properties.has_value()) {
     app.logger().error("Search index {} mapping has no properties",
                        m_search_index);
     return;

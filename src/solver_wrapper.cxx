@@ -731,10 +731,10 @@ SolverWrapper::find_paths(
     }
     return m_path_cache->find(key);
   };
-  const auto cache_store = [this](std::string key, PathCacheEntry entry)
-      -> PathCacheEntry {
+  const auto cache_store = [this](const std::string& key,
+                                   PathCacheEntry entry) -> PathCacheEntry {
     if (m_path_cache) {
-      m_path_cache->insert(std::move(key), entry);
+      m_path_cache->insert(std::string(key), entry);
     }
     return entry;
   };
@@ -930,6 +930,10 @@ SolverWrapper::run(const std::stop_token& stop_token)
                 try {
                   const auto cn = std::string(*waybill_cn);
                   const auto ipdd = std::string(*waybill_ipdd);
+                  if (ipdd.length() <= MIN_IPDD_LENGTH) {
+                    throw std::runtime_error(
+                      std::format("ipdd_destination too short: '{}'", ipdd));
+                  }
                   auto waybill_tmax =
                     iso_to_date(ipdd, true);
                   if (const auto timing = m_facility_timings_map.find(cn);
