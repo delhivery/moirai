@@ -61,7 +61,7 @@ void expect_timestamp_matches_display(std::string_view display,
                                       std::int64_t timestamp,
                                       std::string_view label) {
   expect_eq(timestamp,
-            static_cast<std::int64_t>(display_epoch_minutes(display)),
+            static_cast<std::int64_t>(display_epoch_minutes(display)) * 60,
             label);
 }
 

@@ -852,7 +852,7 @@ SolverWrapper::find_paths(
   }
 
   response.pdd = format_clock(bag_pdd);
-  response.pdd_ts = bag_pdd.time_since_epoch().count();
+  response.pdd_ts = bag_pdd.time_since_epoch().count() * 60;
 
   return response;
 }

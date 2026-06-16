@@ -152,6 +152,12 @@ inline auto epoch_minutes(std::string_view timestamp) -> int32_t {
                                 .count());
 }
 
+inline auto epoch_seconds(std::string_view timestamp) -> int64_t {
+  return static_cast<int64_t>(iso_to_date(std::string(timestamp))
+                                .time_since_epoch()
+                                .count()) * 60;
+}
+
 inline auto parse_digits(std::string_view input) -> int {
   int value = 0;
   const auto [ptr, error] =

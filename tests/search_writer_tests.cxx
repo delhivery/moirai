@@ -10,6 +10,7 @@ namespace {
 using moirai_tests::ScopedLogCapture;
 using moirai_tests::display_epoch_minutes;
 using moirai_tests::epoch_minutes;
+using moirai_tests::epoch_seconds;
 using moirai_tests::expect_eq;
 using moirai_tests::expect_true;
 
@@ -82,12 +83,12 @@ auto document(std::string id, std::string package_id = "p1") -> SearchDocument {
   result.waybill = id;
   result.package_id = std::move(package_id);
   result.pdd = "06/08/26 12:00:00";
-  result.pdd_ts = epoch_minutes("2026-06-08 12:00:00");
+  result.pdd_ts = epoch_seconds("2026-06-08 12:00:00");
 
   SearchPathLocation location;
   location.code = "A";
   location.arrival = "06/08/26 08:00:00";
-  location.arrival_ts = epoch_minutes("2026-06-08 08:00:00");
+  location.arrival_ts = epoch_seconds("2026-06-08 08:00:00");
   result.earliest.locations.push_back(std::move(location));
   return result;
 }
@@ -488,21 +489,21 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
   expect_true(second_body.contains("updated_at"), "second body timestamp text");
   expect_eq(first_body["pdd_ts"].get<std::int64_t>(),
             static_cast<std::int64_t>(
-              display_epoch_minutes(first_body["pdd"].get<std::string>())),
+              display_epoch_minutes(first_body["pdd"].get<std::string>())) * 60,
             "first pdd_ts matches pdd display");
   expect_eq(second_body["pdd_ts"].get<std::int64_t>(),
             static_cast<std::int64_t>(
-              display_epoch_minutes(second_body["pdd"].get<std::string>())),
+              display_epoch_minutes(second_body["pdd"].get<std::string>())) * 60,
             "second pdd_ts matches pdd display");
   expect_eq(first_body["earliest"]["first"]["arrival_ts"].get<std::int64_t>(),
             static_cast<std::int64_t>(display_epoch_minutes(
-              first_body["earliest"]["first"]["arrival"].get<std::string>())),
+              first_body["earliest"]["first"]["arrival"].get<std::string>())) * 60,
             "first path arrival_ts matches arrival display");
   expect_eq(second_body["earliest"]["locations"][0]["arrival_ts"]
               .get<std::int64_t>(),
             static_cast<std::int64_t>(display_epoch_minutes(
               second_body["earliest"]["locations"][0]["arrival"]
-                .get<std::string>())),
+                .get<std::string>())) * 60,
             "locations arrival_ts matches arrival display");
   expect_true(first_body["updated_at_ts"].is_number_integer(),
               "first body epoch timestamp");

@@ -105,10 +105,10 @@ void test_find_paths_non_critical_returns_earliest_and_ultimate() {
             "ultimate has source and target");
   expect_eq(response.pdd_ts,
             static_cast<std::int64_t>(
-              iso_to_date("2026-06-08 12:00:00").time_since_epoch().count()),
+              iso_to_date("2026-06-08 12:00:00").time_since_epoch().count()) * 60,
             "pdd preserved");
   expect_eq(response.pdd_ts,
-            static_cast<std::int64_t>(display_epoch_minutes(response.pdd)),
+            static_cast<std::int64_t>(display_epoch_minutes(response.pdd)) * 60,
             "pdd_ts matches pdd display");
 }
 

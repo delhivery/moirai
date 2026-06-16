@@ -23,11 +23,11 @@ void parse_path_into<PathTraversalMode::FORWARD>(
         .code = step.node->code,
         .facility_name = step.node->name,
         .arrival = format_clock(step.distance),
-        .arrival_ts = step.distance.time_since_epoch().count(),
+        .arrival_ts = step.distance.time_since_epoch().count() * 60,
         .route = step.outbound->route_prefix,
         .route_name = step.outbound->name,
         .departure = format_clock(departure),
-        .departure_ts = departure.time_since_epoch().count(),
+        .departure_ts = departure.time_since_epoch().count() * 60,
         .has_departure = true,
       };
       response.push_back(std::move(entry));
@@ -36,7 +36,7 @@ void parse_path_into<PathTraversalMode::FORWARD>(
       terminal.code = step.node->code;
       terminal.facility_name = step.node->name;
       terminal.arrival = format_clock(step.distance);
-      terminal.arrival_ts = step.distance.time_since_epoch().count();
+      terminal.arrival_ts = step.distance.time_since_epoch().count() * 60;
       response.push_back(std::move(terminal));
     }
   }
@@ -59,7 +59,7 @@ void parse_path_into<PathTraversalMode::REVERSE>(
         terminal.code = step.node->code;
         terminal.facility_name = step.node->name;
         terminal.arrival = format_clock(arrival);
-        terminal.arrival_ts = arrival.time_since_epoch().count();
+        terminal.arrival_ts = arrival.time_since_epoch().count() * 60;
         response.push_back(std::move(terminal));
         continue;
       }
@@ -68,11 +68,11 @@ void parse_path_into<PathTraversalMode::REVERSE>(
         .code = step.node->code,
         .facility_name = step.node->name,
         .arrival = format_clock(arrival),
-        .arrival_ts = arrival.time_since_epoch().count(),
+        .arrival_ts = arrival.time_since_epoch().count() * 60,
         .route = step.outbound->route_prefix,
         .route_name = step.outbound->name,
         .departure = format_clock(step.distance),
-        .departure_ts = step.distance.time_since_epoch().count(),
+        .departure_ts = step.distance.time_since_epoch().count() * 60,
         .has_departure = true,
       };
       response.push_back(std::move(entry));
