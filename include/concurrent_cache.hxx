@@ -82,10 +82,8 @@ public:
     }
 
     auto [iter, inserted] = shard.entries.try_emplace(
-      std::move(key), SlotData(std::move(entry)));
-    if (!inserted) {
-      iter->second.entry = std::move(entry);
-    }
+      std::move(key), SlotData{});
+    iter->second.entry = std::move(entry);
     iter->second.referenced.store(true, std::memory_order_relaxed);
   }
 
