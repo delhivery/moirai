@@ -171,6 +171,7 @@ find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(TBB REQUIRED)
+find_package(simdjson REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(RdKafkaCPP QUIET)
 
@@ -238,7 +239,8 @@ target_link_libraries(
          TBB::tbb
          ZLIB::ZLIB
          OpenSSL::SSL
-         OpenSSL::Crypto)
+         OpenSSL::Crypto
+         simdjson::simdjson)
 
 if(ANALYZE)
   set_property(TARGET moirai_core PROPERTY CXX_INCLUDE_WHAT_YOU_USE

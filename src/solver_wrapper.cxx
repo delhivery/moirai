@@ -1,7 +1,6 @@
 module;
 
 #include "blocking_queue.hxx"
-#include <nlohmann/json.hpp>
 
 module moirai.solver_wrapper;
 
@@ -210,7 +209,7 @@ auto parse_route_expansion_threads(std::size_t route_count) -> std::size_t {
 
 auto expand_route_specs(const moirai::Json& routes)
     -> std::vector<std::expected<std::vector<RouteEdgeSpec>, std::string>> {
-  const auto route_count = routes.size();
+  const auto route_count = moirai::json_size(routes);
   std::vector<std::expected<std::vector<RouteEdgeSpec>, std::string>> expanded(
     route_count);
   const auto worker_count = parse_route_expansion_threads(route_count);
@@ -218,9 +217,16 @@ auto expand_route_specs(const moirai::Json& routes)
     return expanded;
   }
 
-  const auto expand_one = [&routes, &expanded](std::size_t index) -> void {
+  // Build a vector of element pointers for indexed access
+  std::vector<moirai::Json> route_elements;
+  route_elements.reserve(route_count);
+  for (const auto& route : routes) {
+    route_elements.push_back(route);
+  }
+
+  const auto expand_one = [&route_elements, &expanded](std::size_t index) -> void {
     try {
-      expanded[index] = build_route_edge_specs(routes[index], IST_OFFSET);
+      expanded[index] = build_route_edge_specs(route_elements[index], IST_OFFSET);
     } catch (const std::exception& exc) {
       expanded[index] = std::unexpected{
         std::format("route {}: {}", index, exc.what())
@@ -360,7 +366,7 @@ SolverWrapper::init_timings(
   }
 
   app.logger().debug("Found timings for {} facilities",
-                     facility_timings_json->size());
+                     moirai::json_size(*facility_timings_json));
 
   for (const auto& facility_timing_entry : *facility_timings_json) {
     const auto code = moirai::find_string_member(facility_timing_entry, "code");
@@ -403,7 +409,7 @@ SolverWrapper::init_timings(
                          "Invalid/missing fields: {}. "
                          "Payload: {}",
                          invalid_fields,
-                         facility_timing_entry.dump());
+                         moirai::dump(facility_timing_entry));
       continue;
     }
 
@@ -419,7 +425,7 @@ SolverWrapper::init_timings(
       app.logger().error("Skipping facility timings entry {}: {}. Payload: {}",
                          *code,
                          exc.what(),
-                         facility_timing_entry.dump());
+                         moirai::dump(facility_timing_entry));
     }
   }
 
@@ -464,7 +470,7 @@ SolverWrapper::init_nodes(int16_t page)
     }
 
     if (page == 1) {
-      m_solver->reserve_nodes(data->size() * static_cast<std::size_t>(*pages));
+      m_solver->reserve_nodes(moirai::json_size(*data) * static_cast<std::size_t>(*pages));
     }
 
     for (const auto& facility : *data) {
@@ -579,7 +585,7 @@ SolverWrapper::init_edges()
       return;
     }
 
-    app.logger().debug("Got {} routes", data->size());
+    app.logger().debug("Got {} routes", moirai::json_size(*data));
     const auto expansion_started = std::chrono::steady_clock::now();
     auto expanded_routes = expand_route_specs(*data);
     const auto expansion_ms =
@@ -640,7 +646,7 @@ SolverWrapper::init_edges()
     app.logger().information(
       "Route timings: routes={} expanded_edges={} inserted_edges={} "
       "expansion_ms={} insertion_ms={}",
-      data->size(),
+      moirai::json_size(*data),
       route_edge_count,
       inserted_edges,
       expansion_ms,
@@ -901,7 +907,7 @@ SolverWrapper::run(const std::stop_token& stop_token)
             packages.clear();
 
             if (load->items != nullptr) {
-              packages.reserve(load->items->size());
+              packages.reserve(moirai::json_size(*load->items));
               for (const auto& waybill : *load->items) {
                 const auto waybill_ipdd =
                   moirai::find_string_member(waybill, "ipdd_destination");
@@ -932,7 +938,7 @@ SolverWrapper::run(const std::stop_token& stop_token)
                     "Invalid/missing fields: {}. Waybill payload: {}",
                     load->id,
                     invalid_fields,
-                    waybill.dump());
+                    moirai::dump(waybill));
                   continue;
                 }
 
@@ -957,7 +963,7 @@ SolverWrapper::run(const std::stop_token& stop_token)
                     "Failed to parse waybill: {}. Waybill payload: {}",
                     load->id,
                     exc.what(),
-                    waybill.dump());
+                    moirai::dump(waybill));
                 }
               }
             }

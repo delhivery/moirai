@@ -1,3 +1,5 @@
+#include <nlohmann/json.hpp>
+
 import std;
 import moirai.date_utils;
 import moirai.json_utils;
@@ -12,6 +14,47 @@ import moirai.transportation;
 namespace {
 
 constexpr auto IST_OFFSET = DURATION{330};
+
+// Wrapper that owns a parser + the parsed element.
+// Each instance keeps its document alive independently.
+struct TestDoc {
+  std::unique_ptr<moirai::JsonParser> parser =
+    std::make_unique<moirai::JsonParser>();
+  std::string source;
+  moirai::Json element{};
+
+  TestDoc() = default;
+  TestDoc(const TestDoc&) = delete;
+  auto operator=(const TestDoc&) -> TestDoc& = delete;
+  TestDoc(TestDoc&&) = default;
+  auto operator=(TestDoc&&) -> TestDoc& = default;
+
+  static auto from(const nlohmann::json& json) -> TestDoc {
+    TestDoc doc;
+    doc.source = json.dump();
+    auto parsed = moirai::parse_json(*doc.parser, doc.source);
+    if (!parsed.has_value()) {
+      std::cerr << "TestDoc parse failed\n";
+      std::exit(1);
+    }
+    doc.element = *parsed;
+    return doc;
+  }
+
+  static auto from_string(std::string json_str) -> TestDoc {
+    TestDoc doc;
+    doc.source = std::move(json_str);
+    auto parsed = moirai::parse_json(*doc.parser, doc.source);
+    if (!parsed.has_value()) {
+      std::cerr << "TestDoc parse failed\n";
+      std::exit(1);
+    }
+    doc.element = *parsed;
+    return doc;
+  }
+
+  operator const moirai::Json&() const { return element; }
+};
 
 auto day_mask(int day) -> std::uint8_t {
   return static_cast<std::uint8_t>(1U << (((day % 7) + 7) % 7));
@@ -111,7 +154,7 @@ auto last_step(const Path& path) -> const PathStep& {
   return path.back();
 }
 
-auto make_base_route() -> moirai::Json {
+auto make_base_route_json() -> nlohmann::json {
   return {
     {"route_schedule_uuid", "route"},
     {"name", "Test Route"},
@@ -139,7 +182,11 @@ auto make_base_route() -> moirai::Json {
   };
 }
 
-auto load_json_fixture(std::string_view name) -> moirai::Json {
+auto make_base_route() -> TestDoc {
+  return TestDoc::from(make_base_route_json());
+}
+
+auto load_json_fixture(std::string_view name) -> TestDoc {
   const auto path = std::filesystem::path{MOIRAI_TEST_FIXTURE_DIR} / name;
   std::ifstream input(path);
   if (!input.is_open()) {
@@ -147,12 +194,8 @@ auto load_json_fixture(std::string_view name) -> moirai::Json {
     std::exit(1);
   }
 
-  auto parsed = moirai::parse_json(input);
-  if (!parsed.has_value()) {
-    std::cerr << "Failed to parse fixture " << path << '\n';
-    std::exit(1);
-  }
-  return *parsed;
+  std::string content(std::istreambuf_iterator<char>(input), {});
+  return TestDoc::from_string(std::move(content));
 }
 
 auto loading_stop_count(const moirai::Json& route) -> std::size_t {
@@ -161,13 +204,17 @@ auto loading_stop_count(const moirai::Json& route) -> std::size_t {
     return 0;
   }
 
-  return static_cast<std::size_t>(
-    std::ranges::count_if(*stops, [](const moirai::Json& stop) {
-      const auto* loading_allowed =
-        moirai::find_member(stop, "loading_allowed");
-      return loading_allowed == nullptr || !loading_allowed->is_boolean() ||
-             loading_allowed->get<bool>();
-    }));
+  std::size_t count = 0;
+  for (const auto& stop : *stops) {
+    const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
+    const auto bool_val = loading_allowed != nullptr
+                            ? moirai::get_bool(*loading_allowed)
+                            : std::nullopt;
+    if (!bool_val.has_value() || *bool_val) {
+      ++count;
+    }
+  }
+  return count;
 }
 
 auto has_blocked_stop(const moirai::Json& route) -> bool {
@@ -176,11 +223,16 @@ auto has_blocked_stop(const moirai::Json& route) -> bool {
     return false;
   }
 
-  return std::ranges::any_of(*stops, [](const moirai::Json& stop) {
+  for (const auto& stop : *stops) {
     const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
-    return loading_allowed != nullptr && loading_allowed->is_boolean() &&
-           !loading_allowed->get<bool>();
-  });
+    if (loading_allowed != nullptr) {
+      const auto bool_val = moirai::get_bool(*loading_allowed);
+      if (bool_val.has_value() && !*bool_val) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 auto has_day_prefixed_time(const moirai::Json& route) -> bool {
@@ -189,15 +241,15 @@ auto has_day_prefixed_time(const moirai::Json& route) -> bool {
     return false;
   }
 
-  return std::ranges::any_of(*stops, [](const moirai::Json& stop) {
+  for (const auto& stop : *stops) {
     for (const auto* key : {"rel_eta", "rel_etd"}) {
       const auto value = moirai::find_string_member(stop, key);
       if (value.has_value() && value->find("day,") != std::string_view::npos) {
         return true;
       }
     }
-    return false;
-  });
+  }
+  return false;
 }
 
 auto blocked_center_codes(const moirai::Json& route) -> std::vector<std::string> {
@@ -210,9 +262,11 @@ auto blocked_center_codes(const moirai::Json& route) -> std::vector<std::string>
   for (const auto& stop : *stops) {
     const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
     const auto center_code = moirai::find_string_member(stop, "center_code");
-    if (loading_allowed != nullptr && loading_allowed->is_boolean() &&
-        !loading_allowed->get<bool>() && center_code.has_value()) {
-      codes.emplace_back(*center_code);
+    if (loading_allowed != nullptr) {
+      const auto bool_val = moirai::get_bool(*loading_allowed);
+      if (bool_val.has_value() && !*bool_val && center_code.has_value()) {
+        codes.emplace_back(*center_code);
+      }
     }
   }
   return codes;
@@ -590,87 +644,116 @@ void test_route_edge_spec_expansion() {
             static_cast<std::uint8_t>(ALL_DAYS_OF_WEEK & ~day_mask(0)),
             "days copied to route edges");
 
-  auto carting_route = make_base_route();
-  carting_route["route_type"] = "carting";
-  const auto carting_specs = build_route_edge_specs(carting_route, IST_OFFSET);
-  expect_eq(carting_specs[0].edge.vehicle, VehicleType::SURFACE,
-            "carting maps to surface vehicle");
-  expect_eq(carting_specs[0].edge.movement, MovementType::CARTING,
-            "carting maps to carting movement");
-
-  auto unknown_route = make_base_route();
-  unknown_route["route_type"] = "rail";
-  const auto unknown_specs = build_route_edge_specs(unknown_route, IST_OFFSET);
-  expect_eq(unknown_specs[0].edge.vehicle, VehicleType::SURFACE,
-            "unknown route type maps to surface vehicle");
-  expect_eq(unknown_specs[0].edge.movement, MovementType::LINEHAUL,
-            "unknown route type maps to linehaul movement");
-
-  auto one_stop_route = make_base_route();
-  one_stop_route["halt_centers"] = moirai::Json::array(
-    {one_stop_route["halt_centers"][0]});
-  expect_eq(build_route_edge_specs(one_stop_route, IST_OFFSET).empty(), true,
-            "one stop route produces no edges");
-
-  auto all_blocked_route = make_base_route();
-  for (auto& stop : all_blocked_route["halt_centers"]) {
-    stop["loading_allowed"] = false;
+  {
+    auto j = make_base_route_json();
+    j["route_type"] = "carting";
+    const auto carting_route = TestDoc::from(j);
+    const auto carting_specs = build_route_edge_specs(carting_route, IST_OFFSET);
+    expect_eq(carting_specs[0].edge.vehicle, VehicleType::SURFACE,
+              "carting maps to surface vehicle");
+    expect_eq(carting_specs[0].edge.movement, MovementType::CARTING,
+              "carting maps to carting movement");
   }
-  expect_eq(build_route_edge_specs(all_blocked_route, IST_OFFSET).empty(), true,
-            "all non-loading route produces no edges");
 
-  auto non_boolean_loading_route = make_base_route();
-  non_boolean_loading_route["halt_centers"][1]["loading_allowed"] = "false";
-  const auto non_boolean_specs =
-    build_route_edge_specs(non_boolean_loading_route, IST_OFFSET);
-  expect_eq(non_boolean_specs.size(), std::size_t{6},
-            "non-boolean loading_allowed remains included");
+  {
+    auto j = make_base_route_json();
+    j["route_type"] = "rail";
+    const auto unknown_route = TestDoc::from(j);
+    const auto unknown_specs = build_route_edge_specs(unknown_route, IST_OFFSET);
+    expect_eq(unknown_specs[0].edge.vehicle, VehicleType::SURFACE,
+              "unknown route type maps to surface vehicle");
+    expect_eq(unknown_specs[0].edge.movement, MovementType::LINEHAUL,
+              "unknown route type maps to linehaul movement");
+  }
 
-  auto invalid_route = make_base_route();
-  invalid_route.erase("route_schedule_uuid");
-  expect_eq(build_route_edge_specs(invalid_route, IST_OFFSET).empty(), true,
-            "missing route fields return no specs");
+  {
+    auto j = make_base_route_json();
+    j["halt_centers"] = nlohmann::json::array({j["halt_centers"][0]});
+    const auto one_stop_route = TestDoc::from(j);
+    expect_eq(build_route_edge_specs(one_stop_route, IST_OFFSET).empty(), true,
+              "one stop route produces no edges");
+  }
 
-  auto invalid_stop_route = make_base_route();
-  invalid_stop_route["halt_centers"][2].erase("center_code");
-  const auto invalid_stop_specs =
-    build_route_edge_specs(invalid_stop_route, IST_OFFSET);
-  expect_eq(invalid_stop_specs.size(), std::size_t{1},
-            "invalid halt center skips affected edges only");
-  expect_eq(invalid_stop_specs[0].source_center_code, std::string{"A"},
-            "remaining valid source after invalid stop");
-  expect_eq(invalid_stop_specs[0].target_center_code, std::string{"D"},
-            "remaining valid target after invalid stop");
+  {
+    auto j = make_base_route_json();
+    for (auto& stop : j["halt_centers"]) {
+      stop["loading_allowed"] = false;
+    }
+    const auto all_blocked_route = TestDoc::from(j);
+    expect_eq(build_route_edge_specs(all_blocked_route, IST_OFFSET).empty(), true,
+              "all non-loading route produces no edges");
+  }
 
-  auto negative_duration_route = make_base_route();
-  negative_duration_route["halt_centers"][2]["rel_eta"] = "0:30";
-  const auto negative_specs =
-    build_route_edge_specs(negative_duration_route, IST_OFFSET);
-  expect_eq(negative_specs.size(), std::size_t{2},
-            "negative duration skips affected edges");
-  expect_eq(negative_specs[0].target_center_code, std::string{"D"},
-            "negative duration keeps valid A-D edge");
-  expect_eq(negative_specs[1].source_center_code, std::string{"C"},
-            "negative duration keeps valid C-D edge");
+  {
+    auto j = make_base_route_json();
+    j["halt_centers"][1]["loading_allowed"] = "false";
+    const auto non_boolean_loading_route = TestDoc::from(j);
+    const auto non_boolean_specs =
+      build_route_edge_specs(non_boolean_loading_route, IST_OFFSET);
+    expect_eq(non_boolean_specs.size(), std::size_t{6},
+              "non-boolean loading_allowed remains included");
+  }
 
-  auto default_days_route = make_base_route();
-  default_days_route["days_of_week"] = moirai::Json::array({"bad", true});
-  const auto default_days_specs =
-    build_route_edge_specs(default_days_route, IST_OFFSET);
-  expect_eq(default_days_specs[0].edge.days_of_week, ALL_DAYS_OF_WEEK,
-            "invalid days default to all days");
+  {
+    auto j = make_base_route_json();
+    j.erase("route_schedule_uuid");
+    const auto invalid_route = TestDoc::from(j);
+    expect_eq(build_route_edge_specs(invalid_route, IST_OFFSET).empty(), true,
+              "missing route fields return no specs");
+  }
 
-  auto negative_offset_route = make_base_route();
-  negative_offset_route["reporting_time"] = "01:00";
-  negative_offset_route["halt_centers"][0]["rel_etd"] = "0:30";
-  const auto negative_offset_specs =
-    build_route_edge_specs(negative_offset_route, IST_OFFSET);
-  expect_eq(negative_offset_specs[0].edge.departure.count(), -240,
-            "negative reporting offset is preserved");
+  {
+    auto j = make_base_route_json();
+    j["halt_centers"][2].erase("center_code");
+    const auto invalid_stop_route = TestDoc::from(j);
+    const auto invalid_stop_specs =
+      build_route_edge_specs(invalid_stop_route, IST_OFFSET);
+    expect_eq(invalid_stop_specs.size(), std::size_t{1},
+              "invalid halt center skips affected edges only");
+    expect_eq(invalid_stop_specs[0].source_center_code, std::string{"A"},
+              "remaining valid source after invalid stop");
+    expect_eq(invalid_stop_specs[0].target_center_code, std::string{"D"},
+              "remaining valid target after invalid stop");
+  }
+
+  {
+    auto j = make_base_route_json();
+    j["halt_centers"][2]["rel_eta"] = "0:30";
+    const auto negative_duration_route = TestDoc::from(j);
+    const auto negative_specs =
+      build_route_edge_specs(negative_duration_route, IST_OFFSET);
+    expect_eq(negative_specs.size(), std::size_t{2},
+              "negative duration skips affected edges");
+    expect_eq(negative_specs[0].target_center_code, std::string{"D"},
+              "negative duration keeps valid A-D edge");
+    expect_eq(negative_specs[1].source_center_code, std::string{"C"},
+              "negative duration keeps valid C-D edge");
+  }
+
+  {
+    auto j = make_base_route_json();
+    j["days_of_week"] = nlohmann::json::array({"bad", true});
+    const auto default_days_route = TestDoc::from(j);
+    const auto default_days_specs =
+      build_route_edge_specs(default_days_route, IST_OFFSET);
+    expect_eq(default_days_specs[0].edge.days_of_week, ALL_DAYS_OF_WEEK,
+              "invalid days default to all days");
+  }
+
+  {
+    auto j = make_base_route_json();
+    j["reporting_time"] = "01:00";
+    j["halt_centers"][0]["rel_etd"] = "0:30";
+    const auto negative_offset_route = TestDoc::from(j);
+    const auto negative_offset_specs =
+      build_route_edge_specs(negative_offset_route, IST_OFFSET);
+    expect_eq(negative_offset_specs[0].edge.departure.count(), -240,
+              "negative reporting offset is preserved");
+  }
 }
 
 void test_large_route_edge_spec_expansion() {
-  moirai::Json stops = moirai::Json::array();
+  nlohmann::json stops = nlohmann::json::array();
   for (int index = 0; index < 12; ++index) {
     stops.push_back({
       {"center_code", std::format("N{}", index)},
@@ -680,7 +763,7 @@ void test_large_route_edge_spec_expansion() {
     });
   }
 
-  const moirai::Json route = {
+  nlohmann::json route_json = {
     {"route_schedule_uuid", "large-route"},
     {"name", "Large Route"},
     {"route_type", "carting"},
@@ -689,6 +772,7 @@ void test_large_route_edge_spec_expansion() {
     {"halt_centers", stops},
   };
 
+  const auto route = TestDoc::from(route_json);
   const auto started = std::chrono::steady_clock::now();
   const auto specs = build_route_edge_specs(route, IST_OFFSET);
   const auto elapsed = std::chrono::steady_clock::now() - started;
@@ -707,7 +791,7 @@ void test_large_route_edge_spec_expansion() {
 void test_real_route_fixture_edge_expansion() {
   const auto fixture = load_json_fixture("real_routes.json");
   const auto* routes = moirai::find_array_member(fixture, "data");
-  expect_true(routes != nullptr && !routes->empty(),
+  expect_true(routes != nullptr && moirai::json_size(*routes) > 0,
               "real route fixture has routes");
 
   bool saw_blocked_stop = false;
@@ -726,7 +810,7 @@ void test_real_route_fixture_edge_expansion() {
     const auto days = parse_route_days_of_week(route);
     const auto* days_json = moirai::find_array_member(route, "days_of_week");
     saw_restricted_days =
-      saw_restricted_days || (days_json != nullptr && days_json->size() < 7);
+      saw_restricted_days || (days_json != nullptr && moirai::json_size(*days_json) < 7);
     saw_blocked_stop = saw_blocked_stop || has_blocked_stop(route);
     saw_day_prefixed_time =
       saw_day_prefixed_time || has_day_prefixed_time(route);
@@ -761,13 +845,13 @@ void test_real_route_fixture_edge_expansion() {
 void test_real_route_fixture_scheduled_paths() {
   const auto fixture = load_json_fixture("real_routes.json");
   const auto* routes = moirai::find_array_member(fixture, "data");
-  expect_true(routes != nullptr && !routes->empty(),
+  expect_true(routes != nullptr && moirai::json_size(*routes) > 0,
               "real route fixture has routes for path test");
 
   const moirai::Json* restricted_route = nullptr;
   for (const auto& route : *routes) {
     const auto* days = moirai::find_array_member(route, "days_of_week");
-    if (days != nullptr && days->size() < 7) {
+    if (days != nullptr && moirai::json_size(*days) < 7) {
       restricted_route = &route;
       break;
     }

@@ -1,3 +1,5 @@
+#include <nlohmann/json.hpp>
+
 import std;
 import moirai.date_utils;
 import moirai.json_utils;
@@ -49,8 +51,39 @@ void add_edge(Solver& solver, NodeId source, NodeId target, std::string code,
   }
 }
 
-auto make_route_fixture(std::string uuid, int stop_count) -> moirai::Json {
-  moirai::Json stops = moirai::Json::array();
+struct OwnedDoc {
+  std::unique_ptr<moirai::JsonParser> parser =
+    std::make_unique<moirai::JsonParser>();
+  std::string source;
+  moirai::Json element{};
+
+  static auto from_nlohmann(const nlohmann::json& j) -> OwnedDoc {
+    OwnedDoc doc;
+    doc.source = j.dump();
+    auto parsed = moirai::parse_json(*doc.parser, doc.source);
+    if (!parsed.has_value()) {
+      throw std::runtime_error("OwnedDoc parse failed");
+    }
+    doc.element = *parsed;
+    return doc;
+  }
+
+  static auto from_string(std::string json_str) -> OwnedDoc {
+    OwnedDoc doc;
+    doc.source = std::move(json_str);
+    auto parsed = moirai::parse_json(*doc.parser, doc.source);
+    if (!parsed.has_value()) {
+      throw std::runtime_error("OwnedDoc parse failed");
+    }
+    doc.element = *parsed;
+    return doc;
+  }
+
+  operator const moirai::Json&() const { return element; }
+};
+
+auto make_route_fixture(std::string uuid, int stop_count) -> OwnedDoc {
+  nlohmann::json stops = nlohmann::json::array();
   for (int index = 0; index < stop_count; ++index) {
     stops.push_back({
       {"center_code", std::format("B{}", index)},
@@ -60,7 +93,7 @@ auto make_route_fixture(std::string uuid, int stop_count) -> moirai::Json {
     });
   }
 
-  return {
+  nlohmann::json route = {
     {"route_schedule_uuid", std::move(uuid)},
     {"name", "Benchmark Route"},
     {"route_type", "carting"},
@@ -68,6 +101,8 @@ auto make_route_fixture(std::string uuid, int stop_count) -> moirai::Json {
     {"days_of_week", {1, 2, 3, 4, 5, 6}},
     {"halt_centers", std::move(stops)},
   };
+
+  return OwnedDoc::from_nlohmann(route);
 }
 
 auto make_graph(std::string_view name, int node_count, int fanout)
@@ -121,12 +156,12 @@ auto make_real_fixture_graph() -> BenchmarkGraph {
   }
 
   const auto* routes = moirai::find_array_member(*parsed, "data");
-  if (routes == nullptr || routes->empty()) {
+  if (routes == nullptr || moirai::json_size(*routes) == 0) {
     throw std::runtime_error("real route fixture has no route data");
   }
 
   std::vector<RouteEdgeSpec> specs;
-  specs.reserve(routes->size() * 2U);
+  specs.reserve(moirai::json_size(*routes) * 2U);
   std::unordered_set<std::string> centers;
   for (const auto& route : *routes) {
     auto route_specs = build_route_edge_specs(route, DURATION{330});
@@ -172,12 +207,12 @@ auto make_fixture_graph(const std::filesystem::path& fixture) -> BenchmarkGraph 
   }
 
   const auto* routes = moirai::find_array_member(*parsed, "data");
-  if (routes == nullptr || routes->empty()) {
+  if (routes == nullptr || moirai::json_size(*routes) == 0) {
     throw std::runtime_error("route fixture has no data[] routes");
   }
 
   std::vector<RouteEdgeSpec> specs;
-  specs.reserve(routes->size() * 8U);
+  specs.reserve(moirai::json_size(*routes) * 8U);
   std::unordered_set<std::string> centers;
   for (const auto& route : *routes) {
     auto route_specs = build_route_edge_specs(route, DURATION{330});
@@ -213,53 +248,30 @@ auto make_fixture_graph(const std::filesystem::path& fixture) -> BenchmarkGraph 
   return {.solver = solver, .source = *source, .target = *target};
 }
 
-auto load_json_records(const std::filesystem::path& fixture)
-    -> std::vector<moirai::Json> {
+auto make_load_queries(const Solver& solver, const std::filesystem::path& fixture)
+    -> std::vector<LoadQuery> {
   std::ifstream input(fixture);
   if (!input.is_open()) {
     throw std::runtime_error(std::format("failed to open load fixture {}",
                                          fixture.string()));
   }
-  std::vector<moirai::Json> records;
-  if (fixture.extension() == ".jsonl") {
-    std::string line;
-    while (std::getline(input, line)) {
-      if (line.empty()) {
-        continue;
-      }
-      auto parsed = moirai::parse_json(line);
-      if (parsed.has_value() && parsed->is_object()) {
-        records.push_back(std::move(*parsed));
-      }
-    }
-    return records;
-  }
 
-  auto parsed = moirai::parse_json(input);
-  if (parsed.has_value() && parsed->is_array()) {
-    for (auto& record : *parsed) {
-      if (record.is_object()) {
-        records.push_back(record);
-      }
-    }
-  }
-  return records;
-}
-
-auto make_load_queries(const Solver& solver, const std::filesystem::path& fixture)
-    -> std::vector<LoadQuery> {
   std::vector<LoadQuery> queries;
-  for (const auto& record : load_json_records(fixture)) {
+
+  const auto extract_from_record = [&](const moirai::Json& record) {
+    if (!record.is_object()) {
+      return;
+    }
     const auto location = moirai::find_string_member(record, "location");
     const auto destination = moirai::find_string_member(record, "destination");
     const auto time = moirai::find_string_member(record, "time");
     if (!location.has_value() || !destination.has_value() || !time.has_value()) {
-      continue;
+      return;
     }
     const auto source = solver.find_node(*location);
     const auto target = solver.find_node(*destination);
     if (!source.has_value() || !target.has_value()) {
-      continue;
+      return;
     }
     try {
       queries.push_back(LoadQuery{
@@ -268,6 +280,28 @@ auto make_load_queries(const Solver& solver, const std::filesystem::path& fixtur
         .start = iso_to_date(std::string(*time)),
       });
     } catch (const std::exception&) {
+    }
+  };
+
+  if (fixture.extension() == ".jsonl") {
+    std::string line;
+    while (std::getline(input, line)) {
+      if (line.empty()) {
+        continue;
+      }
+      auto parsed = moirai::parse_json(line);
+      if (parsed.has_value()) {
+        extract_from_record(*parsed);
+      }
+    }
+    return queries;
+  }
+
+  std::string content(std::istreambuf_iterator<char>(input), {});
+  auto parsed = moirai::parse_json(content);
+  if (parsed.has_value() && parsed->is_array()) {
+    for (const auto& record : *parsed) {
+      extract_from_record(record);
     }
   }
   return queries;

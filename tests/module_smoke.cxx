@@ -14,7 +14,14 @@ auto main() -> int {
   const DURATION one_hour{60};
   const auto monday = iso_to_date("2026-06-08 00:00:00");
   const TransportEdge edge("module-edge", "Module Edge");
-  const moirai::Json route{{"days_of_week", {1, 2, 3}}};
+
+  moirai::JsonParser parser;
+  std::string route_json = R"({"days_of_week":[1,2,3]})";
+  auto parsed = moirai::parse_json(parser, route_json);
+  if (!parsed.has_value()) {
+    return 1;
+  }
+  const moirai::Json& route = *parsed;
   Solver solver;
   moirai::Application::instance().logger().set_level("error");
 

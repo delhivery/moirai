@@ -14,7 +14,7 @@ export struct RouteEdgeSpec {
 export inline auto parse_route_days_of_week(const moirai::Json& route)
     -> std::uint8_t {
   const auto* days = moirai::find_array_member(route, "days_of_week");
-  if (days == nullptr || days->empty()) {
+  if (days == nullptr || moirai::json_size(*days) == 0) {
     return ALL_DAYS_OF_WEEK;
   }
 
@@ -68,22 +68,24 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
       ist_offset;
   const auto scheduled_days = parse_route_days_of_week(route);
 
-  std::vector<const moirai::Json*> loading_stop_values;
-  loading_stop_values.reserve(stops->size());
+  std::vector<moirai::Json> loading_stop_values;
+  loading_stop_values.reserve(moirai::json_size(*stops));
   for (const auto& stop : *stops) {
     const auto* loading_allowed = moirai::find_member(stop, "loading_allowed");
-    if (loading_allowed != nullptr && loading_allowed->is_boolean() &&
-        !loading_allowed->get<bool>()) {
-      continue;
+    if (loading_allowed != nullptr) {
+      const auto bool_value = moirai::get_bool(*loading_allowed);
+      if (bool_value.has_value() && !*bool_value) {
+        continue;
+      }
     }
 
-    loading_stop_values.push_back(&stop);
+    loading_stop_values.push_back(stop);
   }
 
   std::vector<RouteStopSpec> loading_stops;
   loading_stops.reserve(loading_stop_values.size());
   for (std::size_t index = 0; index < loading_stop_values.size(); ++index) {
-    const auto& stop = *loading_stop_values[index];
+    const auto& stop = loading_stop_values[index];
     RouteStopSpec spec{
         .center_code = moirai::find_string_member(stop, "center_code"),
         .relative_arrival = std::nullopt,

@@ -1,6 +1,6 @@
 module;
 
-#include <nlohmann/json.hpp>
+#include "simdjson_module.hxx"
 
 export module moirai.json_utils;
 
@@ -8,37 +8,59 @@ export import std;
 
 export namespace moirai {
 
-using Json = nlohmann::json;
+using Json = simdjson::dom::element;
+using JsonParser = simdjson::dom::parser;
+
+inline auto thread_local_parser() -> JsonParser& {
+  thread_local JsonParser parser;
+  return parser;
+}
 
 inline auto parse_json(std::string_view input) -> std::optional<Json> {
-  auto parsed = Json::parse(input, nullptr, false);
-  if (parsed.is_discarded()) {
+  auto& parser = thread_local_parser();
+  auto result = parser.parse(input.data(), input.size());
+  if (result.error() != simdjson::SUCCESS) {
     return std::nullopt;
   }
 
-  return parsed;
+  return result.value_unsafe();
+}
+
+inline auto parse_json(JsonParser& parser, std::string_view input)
+    -> std::optional<Json> {
+  auto result = parser.parse(input.data(), input.size());
+  if (result.error() != simdjson::SUCCESS) {
+    return std::nullopt;
+  }
+
+  return result.value_unsafe();
 }
 
 inline auto parse_json(std::istream& input) -> std::optional<Json> {
-  auto parsed = Json::parse(input, nullptr, false);
-  if (parsed.is_discarded()) {
-    return std::nullopt;
-  }
-
-  return parsed;
+  std::string content(std::istreambuf_iterator<char>(input), {});
+  return parse_json(content);
 }
 
+// simdjson::dom::element is a lightweight tape pointer (16 bytes).
+// We store results in a thread-local ring buffer so callers can hold
+// pointers to multiple results simultaneously.
 inline auto find_member(const Json& object, const char* key) -> const Json* {
   if (!object.is_object()) {
     return nullptr;
   }
 
-  const auto iter = object.find(key);
-  if (iter == object.end()) {
+  auto result = object[key];
+  if (result.error() != simdjson::SUCCESS) {
     return nullptr;
   }
 
-  return &*iter;
+  constexpr std::size_t SLOT_COUNT = 32;
+  thread_local std::array<Json, SLOT_COUNT> slots;
+  thread_local std::size_t next_slot = 0;
+  auto& slot = slots[next_slot % SLOT_COUNT];
+  next_slot++;
+  slot = result.value_unsafe();
+  return &slot;
 }
 
 inline auto find_object_member(const Json& object, const char* key)
@@ -61,12 +83,38 @@ inline auto find_array_member(const Json& object, const char* key)
   return value;
 }
 
+inline auto json_size(const Json& value) -> std::size_t {
+  if (value.is_array()) {
+    return value.get_array().value_unsafe().size();
+  }
+  if (value.is_object()) {
+    return value.get_object().value_unsafe().size();
+  }
+  return 0;
+}
+
+// Note: simdjson::to_string() cannot be used in GCC modules due to
+// TU-local entity issues. Callers needing JSON serialization for logging
+// should use simdjson::to_string() directly from an implementation file
+// that includes simdjson.h, or pass string_view fields for logging.
+inline auto dump(const Json& /*value*/) -> std::string {
+  return "<json>";
+}
+
 inline auto get_string(const Json& value) -> std::optional<std::string_view> {
   if (!value.is_string()) {
     return std::nullopt;
   }
 
-  return value.template get_ref<const std::string&>();
+  return value.get_string().value_unsafe();
+}
+
+inline auto get_bool(const Json& value) -> std::optional<bool> {
+  if (!value.is_bool()) {
+    return std::nullopt;
+  }
+
+  return value.get_bool().value_unsafe();
 }
 
 inline auto find_string_member(const Json& object, const char* key)
@@ -98,8 +146,8 @@ template <typename Integer>
 inline auto get_integer(const Json& value) -> std::optional<Integer> {
   static_assert(std::is_integral_v<Integer>);
 
-  if (value.is_number_integer()) {
-    const auto number = value.template get<std::int64_t>();
+  if (value.is_int64()) {
+    const auto number = value.get_int64().value_unsafe();
     if (number < std::numeric_limits<Integer>::min() ||
         number > std::numeric_limits<Integer>::max()) {
       return std::optional<Integer>{};
@@ -107,9 +155,9 @@ inline auto get_integer(const Json& value) -> std::optional<Integer> {
     return static_cast<Integer>(number);
   }
 
-  if (value.is_number_unsigned()) {
-    const auto number = value.template get<std::uint64_t>();
-    if (number > std::numeric_limits<Integer>::max()) {
+  if (value.is_uint64()) {
+    const auto number = value.get_uint64().value_unsafe();
+    if (number > static_cast<std::uint64_t>(std::numeric_limits<Integer>::max())) {
       return std::optional<Integer>{};
     }
     return static_cast<Integer>(number);
@@ -133,5 +181,6 @@ inline auto find_integer_member(const Json& object, const char* key)
 
   return get_integer<Integer>(*value);
 }
+
 
 } // namespace moirai

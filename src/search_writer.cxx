@@ -579,7 +579,11 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
   result.parsed = true;
 
   const auto* errors = moirai::find_member(*parsed, "errors");
-  if (errors == nullptr || !errors->is_boolean() || !errors->get<bool>()) {
+  if (errors == nullptr) {
+    return result;
+  }
+  const auto errors_bool = moirai::get_bool(*errors);
+  if (!errors_bool.has_value() || !*errors_bool) {
     return result;
   }
   result.has_errors = true;
@@ -590,15 +594,19 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
     return result;
   }
 
-  const auto count = std::min(items->size(), documents.size());
+  const auto count = std::min(moirai::json_size(*items), documents.size());
   result.retryable.reserve(count);
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto& item = (*items)[index];
+  std::size_t index = 0;
+  for (const auto& item : *items) {
+    if (index >= count) {
+      break;
+    }
     const auto* operation = moirai::find_object_member(item, "index");
     if (operation == nullptr) {
       operation = moirai::find_object_member(item, "create");
     }
     if (operation == nullptr) {
+      ++index;
       continue;
     }
     const auto status = moirai::find_integer_member<int>(*operation, "status");
@@ -607,59 +615,16 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
     } else if (status.has_value() && *status >= 300) {
       ++result.permanent_failures;
     }
+    ++index;
   }
-  if (items->size() < documents.size()) {
+  if (moirai::json_size(*items) < documents.size()) {
     result.retryable.insert(result.retryable.end(),
                             documents.begin() +
-                              static_cast<std::ptrdiff_t>(items->size()),
+                              static_cast<std::ptrdiff_t>(moirai::json_size(*items)),
                             documents.end());
   }
 
   return result;
-}
-
-auto keyword_mapping(std::size_t ignore_above = 256) -> moirai::Json {
-  return { { "type", "keyword" }, { "ignore_above", ignore_above } };
-}
-
-auto long_mapping() -> moirai::Json {
-  return { { "type", "long" } };
-}
-
-auto display_date_mapping() -> moirai::Json {
-  return { { "type", "date" },
-           { "format", std::string{ DISPLAY_DATE_FORMAT } } };
-}
-
-auto location_mapping() -> moirai::Json {
-  return { { "type", "object" },
-           { "dynamic", false },
-           { "properties",
-             {
-               { "code", keyword_mapping(128) },
-               { "facility_name", keyword_mapping(256) },
-               { "arrival", display_date_mapping() },
-               { "arrival_ts", long_mapping() },
-               { "route", keyword_mapping(512) },
-               { "route_name", keyword_mapping(512) },
-               { "departure", display_date_mapping() },
-               { "departure_ts", long_mapping() },
-             } } };
-}
-
-auto path_section_mapping() -> moirai::Json {
-  return { { "type", "object" },
-           { "dynamic", false },
-           { "properties",
-             {
-               { "locations",
-                 {
-                   { "type", "object" },
-                   { "enabled", false },
-                 } },
-               { "first", location_mapping() },
-               { "second", location_mapping() },
-             } } };
 }
 
 auto mapping_at(const moirai::Json& properties, std::string_view field)
@@ -668,21 +633,23 @@ auto mapping_at(const moirai::Json& properties, std::string_view field)
   while (true) {
     const auto dot = field.find('.');
     const auto segment = field.substr(0, dot);
-    const auto iter = current_properties->find(std::string(segment));
-    if (iter == current_properties->end() || !iter->is_object()) {
+    const auto* member = moirai::find_member(*current_properties,
+                                             std::string(segment).c_str());
+    if (member == nullptr || !member->is_object()) {
       return nullptr;
     }
 
     if (dot == std::string_view::npos) {
-      return &*iter;
+      return member;
     }
 
-    const auto properties_iter = iter->find("properties");
-    if (properties_iter == iter->end() || !properties_iter->is_object()) {
+    const auto* nested_properties = moirai::find_object_member(*member,
+                                                                "properties");
+    if (nested_properties == nullptr) {
       return nullptr;
     }
 
-    current_properties = &*properties_iter;
+    current_properties = nested_properties;
     field.remove_prefix(dot + 1);
   }
 }
@@ -694,12 +661,8 @@ auto field_type(const moirai::Json& properties, std::string_view field)
     return std::nullopt;
   }
 
-  const auto type_iter = mapping->find("type");
-  if (type_iter == mapping->end() || !type_iter->is_string()) {
-    return std::nullopt;
-  }
-
-  return type_iter->template get<std::string>();
+  return moirai::find_string_member(*mapping, "type")
+    .transform([](std::string_view sv) { return std::string(sv); });
 }
 
 auto field_bool(const moirai::Json& properties, std::string_view field,
@@ -709,12 +672,12 @@ auto field_bool(const moirai::Json& properties, std::string_view field,
     return std::nullopt;
   }
 
-  const auto iter = mapping->find(std::string(key));
-  if (iter == mapping->end() || !iter->is_boolean()) {
+  const auto* member = moirai::find_member(*mapping, std::string(key).c_str());
+  if (member == nullptr) {
     return std::nullopt;
   }
 
-  return iter->template get<bool>();
+  return moirai::get_bool(*member);
 }
 
 auto field_string(const moirai::Json& properties, std::string_view field,
@@ -724,20 +687,23 @@ auto field_string(const moirai::Json& properties, std::string_view field,
     return std::nullopt;
   }
 
-  const auto iter = mapping->find(std::string(key));
-  if (iter == mapping->end() || !iter->is_string()) {
+  const auto* member = moirai::find_member(*mapping, std::string(key).c_str());
+  if (member == nullptr) {
     return std::nullopt;
   }
-
-  return iter->template get<std::string>();
+  const auto sv = moirai::get_string(*member);
+  if (!sv.has_value()) {
+    return std::nullopt;
+  }
+  return std::string(*sv);
 }
 
 auto integer_from_json(const moirai::Json& value) -> std::optional<std::int64_t> {
-  if (value.is_number_integer()) {
-    return value.template get<std::int64_t>();
+  if (value.is_int64()) {
+    return value.get_int64().value_unsafe();
   }
-  if (value.is_number_unsigned()) {
-    const auto number = value.template get<std::uint64_t>();
+  if (value.is_uint64()) {
+    const auto number = value.get_uint64().value_unsafe();
     if (number > static_cast<std::uint64_t>(
                    std::numeric_limits<std::int64_t>::max())) {
       return std::nullopt;
@@ -748,7 +714,7 @@ auto integer_from_json(const moirai::Json& value) -> std::optional<std::int64_t>
     return std::nullopt;
   }
 
-  const auto text = value.template get_ref<const std::string&>();
+  const auto text = value.get_string().value_unsafe();
   std::int64_t parsed{};
   const auto [ptr, error] =
     std::from_chars(text.data(), text.data() + text.size(), parsed);
@@ -759,14 +725,20 @@ auto integer_from_json(const moirai::Json& value) -> std::optional<std::int64_t>
 }
 
 auto decimal_from_json(const moirai::Json& value) -> std::optional<double> {
-  if (value.is_number()) {
-    return value.template get<double>();
+  if (value.is_double()) {
+    return value.get_double().value_unsafe();
+  }
+  if (value.is_int64()) {
+    return static_cast<double>(value.get_int64().value_unsafe());
+  }
+  if (value.is_uint64()) {
+    return static_cast<double>(value.get_uint64().value_unsafe());
   }
   if (!value.is_string()) {
     return std::nullopt;
   }
 
-  const auto text = value.template get_ref<const std::string&>();
+  const auto text = value.get_string().value_unsafe();
   double parsed{};
   const auto [ptr, error] =
     std::from_chars(text.data(), text.data() + text.size(), parsed);
@@ -904,31 +876,38 @@ SearchWriter::bulk_headers(bool compressed) const -> std::vector<std::string>
 auto
 SearchWriter::create_index_body() const -> std::string
 {
-  moirai::Json body = {
-    { "settings",
-      { { "index",
-          { { "number_of_shards", m_index_config.shards },
-            { "number_of_replicas", m_index_config.replicas },
-            { "refresh_interval", m_index_config.refresh_interval } } } } },
-    { "mappings",
-      { { "dynamic", false },
-        { "properties",
-          { { "waybill", keyword_mapping(128) },
-            { "package", keyword_mapping(128) },
-            { "cs_slid", keyword_mapping(128) },
-            { "cs_act", keyword_mapping(128) },
-            { "pid", keyword_mapping(128) },
-            { "fail", keyword_mapping(8191) },
-            { "pdd", display_date_mapping() },
-            { "pdd_ts", long_mapping() },
-            { "updated_at", { { "type", "date" } } },
-            { "updated_at_ts", long_mapping() },
-            { "earliest", path_section_mapping() },
-            { "ultimate", path_section_mapping() },
-            { "critical", path_section_mapping() } } } } }
+  const auto keyword = [](std::size_t ignore_above) -> std::string {
+    return std::format(R"({{"type":"keyword","ignore_above":{}}})", ignore_above);
   };
+  const auto long_type = R"({"type":"long"})";
+  const auto display_date = std::format(
+    R"({{"type":"date","format":"{}"}})", DISPLAY_DATE_FORMAT);
+  const auto location = std::format(
+    R"({{"type":"object","dynamic":false,"properties":{{)"
+    R"("code":{},"facility_name":{},"arrival":{},"arrival_ts":{},"route":{},"route_name":{},"departure":{},"departure_ts":{})"
+    R"(}}}})",
+    keyword(128), keyword(256), display_date, long_type, keyword(512), keyword(512), display_date, long_type);
+  const auto path_section = std::format(
+    R"({{"type":"object","dynamic":false,"properties":{{)"
+    R"("locations":{{"type":"object","enabled":false}},)"
+    R"("first":{},"second":{})"
+    R"(}}}})",
+    location, location);
 
-  return body.dump();
+  return std::format(
+    R"({{"settings":{{"index":{{"number_of_shards":{},"number_of_replicas":{},"refresh_interval":"{}"}}}},)"
+    R"("mappings":{{"dynamic":false,"properties":{{)"
+    R"("waybill":{},"package":{},"cs_slid":{},"cs_act":{},"pid":{},"fail":{},)"
+    R"("pdd":{},"pdd_ts":{},"updated_at":{{"type":"date"}},"updated_at_ts":{},)"
+    R"("earliest":{},"ultimate":{},"critical":{})"
+    R"(}}}}}})",
+    m_index_config.shards,
+    m_index_config.replicas,
+    m_index_config.refresh_interval,
+    keyword(128), keyword(128), keyword(128), keyword(128), keyword(128),
+    keyword(8191),
+    display_date, long_type, long_type,
+    path_section, path_section, path_section);
 }
 
 void
@@ -982,22 +961,21 @@ SearchWriter::validate_index_definition()
   }
 
   const moirai::Json* properties = nullptr;
-  for (auto iter = parsed_mapping->begin(); iter != parsed_mapping->end();
-       ++iter) {
-    const auto& index_definition = iter.value();
+  for (const auto& kv : parsed_mapping->get_object().value_unsafe()) {
+    const auto& index_definition = kv.value;
     if (!index_definition.is_object()) {
       continue;
     }
-    const auto mappings_iter = index_definition.find("mappings");
-    if (mappings_iter == index_definition.end() || !mappings_iter->is_object()) {
+    const auto* mappings = moirai::find_object_member(index_definition,
+                                                       "mappings");
+    if (mappings == nullptr) {
       continue;
     }
-    const auto properties_iter = mappings_iter->find("properties");
-    if (properties_iter == mappings_iter->end() ||
-        !properties_iter->is_object()) {
+    const auto* props = moirai::find_object_member(*mappings, "properties");
+    if (props == nullptr) {
       continue;
     }
-    properties = &*properties_iter;
+    properties = props;
     break;
   }
 
@@ -1110,9 +1088,8 @@ SearchWriter::validate_index_definition()
     return;
   }
 
-  for (auto iter = parsed_settings->begin(); iter != parsed_settings->end();
-       ++iter) {
-    const auto& index_definition = iter.value();
+  for (const auto& kv : parsed_settings->get_object().value_unsafe()) {
+    const auto& index_definition = kv.value;
     const auto* settings = moirai::find_object_member(index_definition,
                                                       "settings");
     if (settings == nullptr) {

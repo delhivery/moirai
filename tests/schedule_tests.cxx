@@ -6,6 +6,27 @@ import moirai.transportation;
 
 namespace {
 
+struct TestDoc {
+  std::unique_ptr<moirai::JsonParser> parser =
+    std::make_unique<moirai::JsonParser>();
+  std::string source;
+  moirai::Json element{};
+
+  static auto from_string(std::string json_str) -> TestDoc {
+    TestDoc doc;
+    doc.source = std::move(json_str);
+    auto parsed = moirai::parse_json(*doc.parser, doc.source);
+    if (!parsed.has_value()) {
+      std::cerr << "TestDoc parse failed\n";
+      std::exit(1);
+    }
+    doc.element = *parsed;
+    return doc;
+  }
+
+  operator const moirai::Json&() const { return element; }
+};
+
 auto day_mask(int day) -> std::uint8_t {
   return static_cast<std::uint8_t>(1U << (((day % 7) + 7) % 7));
 }
@@ -27,23 +48,28 @@ void expect_eq(const T& actual, const U& expected, std::string_view label,
 }
 
 void test_route_days_of_week_parsing() {
-  expect_eq(parse_route_days_of_week(moirai::Json::object()), ALL_DAYS_OF_WEEK,
+  auto empty_obj = TestDoc::from_string("{}");
+  expect_eq(parse_route_days_of_week(empty_obj), ALL_DAYS_OF_WEEK,
             "missing days default to all days");
-  expect_eq(parse_route_days_of_week({{"days_of_week", moirai::Json::array()}}),
+  auto empty_days = TestDoc::from_string(R"({"days_of_week":[]})");
+  expect_eq(parse_route_days_of_week(empty_days),
             ALL_DAYS_OF_WEEK, "empty days default to all days");
 
-  const auto monday_to_saturday =
-      parse_route_days_of_week({{"days_of_week", {1, 2, 3, 4, 5, 6}}});
+  auto mon_sat = TestDoc::from_string(R"({"days_of_week":[1,2,3,4,5,6]})");
+  const auto monday_to_saturday = parse_route_days_of_week(mon_sat);
   expect_eq(monday_to_saturday,
             static_cast<std::uint8_t>(ALL_DAYS_OF_WEEK & ~day_mask(0)),
             "Monday to Saturday mask");
 
-  expect_eq(parse_route_days_of_week({{"days_of_week", {0, 7, 14}}}),
+  auto sundays = TestDoc::from_string(R"({"days_of_week":[0,7,14]})");
+  expect_eq(parse_route_days_of_week(sundays),
             day_mask(0), "Sunday aliases normalize to Sunday");
-  expect_eq(parse_route_days_of_week({{"days_of_week", {-1, "8", "bad"}}}),
+  auto mixed = TestDoc::from_string(R"({"days_of_week":[-1,"8","bad"]})");
+  expect_eq(parse_route_days_of_week(mixed),
             static_cast<std::uint8_t>(day_mask(6) | day_mask(1)),
             "negative and string days normalize");
-  expect_eq(parse_route_days_of_week({{"days_of_week", {"bad", true, {}}}}),
+  auto invalid_days = TestDoc::from_string(R"({"days_of_week":["bad",true,{}]})");
+  expect_eq(parse_route_days_of_week(invalid_days),
             ALL_DAYS_OF_WEEK, "fully invalid days default to all days");
 }
 
