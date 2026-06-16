@@ -30,7 +30,7 @@ void parse_path_into<PathTraversalMode::FORWARD>(
         .departure_ts = departure.time_since_epoch().count(),
         .has_departure = true,
       };
-      response.push_back(entry);
+      response.push_back(std::move(entry));
     } else {
       SearchPathLocation terminal;
       terminal.code = step.node->code;
@@ -75,7 +75,7 @@ void parse_path_into<PathTraversalMode::REVERSE>(
         .departure_ts = step.distance.time_since_epoch().count(),
         .has_departure = true,
       };
-      response.push_back(entry);
+      response.push_back(std::move(entry));
       arrival = step.distance + step.outbound->duration;
     }
   }

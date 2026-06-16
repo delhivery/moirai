@@ -22,7 +22,7 @@ namespace {
 constexpr long HTTP_STATUS_OK = 200;
 constexpr auto IST_OFFSET = DURATION{ 330 };
 constexpr std::size_t SOLVER_BATCH_SIZE = 64;
-constexpr std::size_t MIN_IPDD_LENGTH = 11;
+constexpr std::size_t MIN_IPDD_LENGTH = 18;
 constexpr std::string_view ROUTE_EXPANSION_THREADS_ENV =
   "MOIRAI_ROUTE_EXPANSION_THREADS";
 constexpr std::string_view PATH_CACHE_ENABLED_ENV = "MOIRAI_PATH_CACHE_ENABLED";
@@ -484,7 +484,7 @@ SolverWrapper::init_nodes(int16_t page)
       }
 
       const auto facility_name =
-        moirai::find_string_member(facility, "facility_name");
+        moirai::find_string_member(facility, "name");
       auto transport_center = TransportCenter{
         std::string(*facility_code),
         facility_name.has_value() ? std::string(*facility_name) : std::string{}
