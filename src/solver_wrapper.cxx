@@ -714,27 +714,29 @@ SolverWrapper::find_paths(
              : timestamp.time_since_epoch().count() /
                  m_cache_config.bucket_minutes;
   };
+  std::array<char, 48> key_buf{};
   const auto cache_key = [&](std::string_view mode,
                              NodeId source_node,
                              NodeId target_node,
-                             CLOCK timestamp) -> std::string {
-    return std::format("{}:{}:{}:{}",
-                       mode,
-                       source_node,
-                       target_node,
-                       cache_bucket(timestamp));
+                             CLOCK timestamp) -> std::string_view {
+    const auto result = std::format_to_n(
+      key_buf.data(), key_buf.size() - 1,
+      "{}:{}:{}:{}",
+      mode, source_node, target_node, cache_bucket(timestamp));
+    return {key_buf.data(), static_cast<std::size_t>(result.size)};
   };
-  const auto cache_lookup = [this](const std::string& key)
+  const auto cache_lookup = [this](std::string_view key)
       -> std::shared_ptr<const PathCache::Entry> {
     if (!m_path_cache) {
       return nullptr;
     }
     return m_path_cache->find(key);
   };
-  const auto cache_store = [this](const std::string& key,
+  const auto cache_store = [this](std::string_view key,
                                    PathCacheEntry entry) -> PathCacheEntry {
     if (m_path_cache) {
-      m_path_cache->insert(std::string(key), entry);
+      PathCacheEntry copy = entry;
+      m_path_cache->insert(std::string(key), std::move(copy));
     }
     return entry;
   };

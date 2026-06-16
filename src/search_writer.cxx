@@ -631,11 +631,12 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
 
 auto mapping_at(const moirai::Json& properties, std::string_view field)
     -> const moirai::Json* {
-  const moirai::Json* current_properties = &properties;
-  while (true) {
+  moirai::Json current = properties;
+  constexpr std::size_t MAX_DEPTH = 8;
+  for (std::size_t depth = 0; depth < MAX_DEPTH; ++depth) {
     const auto dot = field.find('.');
     const auto segment = field.substr(0, dot);
-    const auto* member = moirai::find_member(*current_properties,
+    const auto* member = moirai::find_member(current,
                                              std::string(segment).c_str());
     if (member == nullptr || !member->is_object()) {
       return nullptr;
@@ -651,9 +652,10 @@ auto mapping_at(const moirai::Json& properties, std::string_view field)
       return nullptr;
     }
 
-    current_properties = nested_properties;
+    current = *nested_properties;
     field.remove_prefix(dot + 1);
   }
+  return nullptr;
 }
 
 auto field_type(const moirai::Json& properties, std::string_view field)
