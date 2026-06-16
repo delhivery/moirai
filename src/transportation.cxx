@@ -14,6 +14,9 @@ auto route_prefix_from_code(const std::string& code) -> std::string {
 TransportCenter::TransportCenter(std::string center_code)
     : code(std::move(center_code)) {}
 
+TransportCenter::TransportCenter(std::string center_code, std::string center_name)
+    : code(std::move(center_code)), name(std::move(center_name)) {}
+
 TransportEdge::TransportEdge(std::string edge_code, std::string edge_name)
     : code(std::move(edge_code)), name(std::move(edge_name)),
       route_prefix(route_prefix_from_code(code)),

@@ -26,11 +26,14 @@ export template <MovementType, ProcessType> using Latency = DURATION;
 export struct TransportCenter {
   static constexpr std::size_t LATENCY_SLOT_COUNT = 6;
   std::string code;
+  std::string name;
 
 public:
   TransportCenter() = default;
 
   TransportCenter(std::string center_code);
+
+  TransportCenter(std::string center_code, std::string center_name);
 
   template <MovementType M, ProcessType P>
   void set_latency(Latency<M, P> latency) {

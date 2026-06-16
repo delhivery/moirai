@@ -483,7 +483,12 @@ SolverWrapper::init_nodes(int16_t page)
         app.logger().debug("No timings found for facility: {}", *facility_code);
       }
 
-      auto transport_center = TransportCenter{std::string(*facility_code)};
+      const auto facility_name =
+        moirai::find_string_member(facility, "facility_name");
+      auto transport_center = TransportCenter{
+        std::string(*facility_code),
+        facility_name.has_value() ? std::string(*facility_name) : std::string{}
+      };
       transport_center
         .set_latency<MovementType::CARTING, ProcessType::INBOUND>(
           DURATION(std::get<0>(facility_timings)));

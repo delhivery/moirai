@@ -411,10 +411,16 @@ void append_location(std::string& output, const SearchPathLocation& location) {
   output.push_back('{');
   bool first = true;
   append_string_field(output, "code", location.code, first);
+  if (!location.facility_name.empty()) {
+    append_string_field(output, "facility_name", location.facility_name, first);
+  }
   append_string_field(output, "arrival", location.arrival, first);
   append_int_field(output, "arrival_ts", location.arrival_ts, first);
   if (location.has_departure) {
     append_string_field(output, "route", location.route, first);
+    if (!location.route_name.empty()) {
+      append_string_field(output, "route_name", location.route_name, first);
+    }
     append_string_field(output, "departure", location.departure, first);
     append_int_field(output, "departure_ts", location.departure_ts, first);
   }
@@ -631,9 +637,11 @@ auto location_mapping() -> moirai::Json {
            { "properties",
              {
                { "code", keyword_mapping(128) },
+               { "facility_name", keyword_mapping(256) },
                { "arrival", display_date_mapping() },
                { "arrival_ts", long_mapping() },
                { "route", keyword_mapping(512) },
+               { "route_name", keyword_mapping(512) },
                { "departure", display_date_mapping() },
                { "departure_ts", long_mapping() },
              } } };
@@ -1044,9 +1052,11 @@ SearchWriter::validate_index_definition()
   constexpr std::array path_positions{ "first", "second" };
   constexpr std::array path_location_fields{
     std::pair{ "code", "keyword" },
+    std::pair{ "facility_name", "keyword" },
     std::pair{ "arrival", "date" },
     std::pair{ "arrival_ts", "long" },
     std::pair{ "route", "keyword" },
+    std::pair{ "route_name", "keyword" },
     std::pair{ "departure", "date" },
     std::pair{ "departure_ts", "long" },
   };

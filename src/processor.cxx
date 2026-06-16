@@ -21,9 +21,11 @@ void parse_path_into<PathTraversalMode::FORWARD>(
         get_departure(step.distance, step.outbound->departure);
       SearchPathLocation entry = {
         .code = step.node->code,
+        .facility_name = step.node->name,
         .arrival = format_clock(step.distance),
         .arrival_ts = step.distance.time_since_epoch().count(),
         .route = step.outbound->route_prefix,
+        .route_name = step.outbound->name,
         .departure = format_clock(departure),
         .departure_ts = departure.time_since_epoch().count(),
         .has_departure = true,
@@ -32,6 +34,7 @@ void parse_path_into<PathTraversalMode::FORWARD>(
     } else {
       SearchPathLocation terminal;
       terminal.code = step.node->code;
+      terminal.facility_name = step.node->name;
       terminal.arrival = format_clock(step.distance);
       terminal.arrival_ts = step.distance.time_since_epoch().count();
       response.push_back(std::move(terminal));
@@ -54,6 +57,7 @@ void parse_path_into<PathTraversalMode::REVERSE>(
       if (step.outbound == nullptr) {
         SearchPathLocation terminal;
         terminal.code = step.node->code;
+        terminal.facility_name = step.node->name;
         terminal.arrival = format_clock(arrival);
         terminal.arrival_ts = arrival.time_since_epoch().count();
         response.push_back(std::move(terminal));
@@ -62,9 +66,11 @@ void parse_path_into<PathTraversalMode::REVERSE>(
 
       SearchPathLocation entry = {
         .code = step.node->code,
+        .facility_name = step.node->name,
         .arrival = format_clock(arrival),
         .arrival_ts = arrival.time_since_epoch().count(),
         .route = step.outbound->route_prefix,
+        .route_name = step.outbound->name,
         .departure = format_clock(step.distance),
         .departure_ts = step.distance.time_since_epoch().count(),
         .has_departure = true,

@@ -5,9 +5,11 @@ export import moirai.date_utils;
 
 export struct SearchPathLocation {
   std::string code;
+  std::string facility_name;
   std::string arrival;
   std::int64_t arrival_ts{};
   std::string route;
+  std::string route_name;
   std::string departure;
   std::int64_t departure_ts{};
   bool has_departure{false};
