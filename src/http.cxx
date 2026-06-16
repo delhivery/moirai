@@ -86,7 +86,7 @@ perform_request(CURL* curl,
   curl_easy_setopt(curl, CURLOPT_URL, uri.str().c_str());
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
   curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
   curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);

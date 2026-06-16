@@ -107,7 +107,7 @@ set(MOIRAI_PGO_DIR
     "${CMAKE_BINARY_DIR}/pgo"
     CACHE PATH "Profile data directory for MOIRAI_PGO_MODE")
 set(MOIRAI_SOLVER_QUEUE
-    "binary"
+    "bucket"
     CACHE STRING "Solver queue implementation: binary or bucket")
 option(MOIRAI_ENABLE_GCC_LTO
        "Enable GCC LTO for Release builds; disabled by default while GCC modules support is unstable"
