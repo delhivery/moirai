@@ -1,6 +1,7 @@
 module;
 
 #include "blocking_queue_fwd.hxx"
+#include "concurrent_cache.hxx"
 
 export module moirai.solver_wrapper;
 
@@ -10,6 +11,21 @@ export import moirai.http;
 export import moirai.search_document;
 export import moirai.solver;
 export import moirai.transportation;
+
+export struct PathCacheEntry {
+  std::vector<SearchPathLocation> locations;
+  CLOCK first_distance{};
+  CLOCK last_distance{};
+  bool found{false};
+};
+
+export using PathCache = ConcurrentCache<PathCacheEntry>;
+
+export struct PathCacheConfig {
+  bool enabled{true};
+  std::size_t max_entries{65'536};
+  std::uint32_t bucket_minutes{1};
+};
 
 export class SolverWrapper {
 public:
@@ -31,23 +47,6 @@ public:
   };
 
 private:
-  struct PathCacheEntry {
-    std::vector<SearchPathLocation> locations;
-    CLOCK first_distance{};
-    CLOCK last_distance{};
-    bool found{false};
-  };
-
-  struct PathCacheState {
-    bool enabled{true};
-    std::size_t max_entries{65'536};
-    std::uint32_t bucket_minutes{1};
-    mutable std::unordered_map<std::string, PathCacheEntry> entries;
-    mutable std::deque<std::string> order;
-    mutable std::uint64_t hits{};
-    mutable std::uint64_t misses{};
-  };
-
   std::shared_ptr<Solver> m_solver;
 
   moirai::Uri m_node_init_uri;
@@ -69,11 +68,13 @@ private:
   BlockingQueue<std::string>& m_load_queue;
   BlockingQueue<SearchDocument>& m_solution_queue;
   HttpGet m_http_get;
-  mutable PathCacheState m_path_cache;
+  std::shared_ptr<PathCache> m_path_cache;
+  PathCacheConfig m_cache_config;
 
 public:
   SolverWrapper(RuntimeQueues queues, const std::shared_ptr<Solver>& solver,
                 const std::filesystem::path& center_timings_filename,
+                std::shared_ptr<PathCache> cache = nullptr,
                 HttpGet http_get = moirai::http_get);
 
   SolverWrapper(RuntimeQueues queues, InitEndpoints endpoints,
@@ -92,6 +93,7 @@ public:
       -> std::vector<std::shared_ptr<TransportCenter>>;
 
   [[nodiscard]] auto get_solver() const -> std::shared_ptr<Solver>;
+  [[nodiscard]] auto get_cache() const -> std::shared_ptr<PathCache>;
 
   auto find_paths(
       std::string bag, std::string bag_source, std::string bag_target,

@@ -36,11 +36,6 @@ using FacilityTimings =
   std::tuple<int16_t, int16_t, int16_t, int16_t, TIME_OF_DAY>;
 using PackageInfo = std::tuple<std::string, std::int32_t, std::string>;
 
-struct PathCacheConfig {
-  bool enabled{true};
-  std::size_t max_entries{65'536};
-  std::uint32_t bucket_minutes{1};
-};
 
 struct LoadPayload {
   std::string id;
@@ -265,16 +260,18 @@ SolverWrapper::SolverWrapper(
   RuntimeQueues queues,
   const std::shared_ptr<Solver>& solver,
   const std::filesystem::path& center_timings_filename,
+  std::shared_ptr<PathCache> cache,
   HttpGet http_get)
   : m_solver(solver)
   , m_load_queue(*queues.load)
   , m_solution_queue(*queues.solution)
   , m_http_get(std::move(http_get))
+  , m_path_cache(std::move(cache))
+  , m_cache_config(path_cache_config_from_environment())
 {
-  const auto cache_config = path_cache_config_from_environment();
-  m_path_cache.enabled = cache_config.enabled;
-  m_path_cache.max_entries = cache_config.max_entries;
-  m_path_cache.bucket_minutes = cache_config.bucket_minutes;
+  if (!m_path_cache && m_cache_config.enabled) {
+    m_path_cache = std::make_shared<PathCache>(m_cache_config.max_entries);
+  }
   init_timings(center_timings_filename);
 }
 
@@ -303,10 +300,10 @@ SolverWrapper::SolverWrapper(
     return elapsed;
   };
 
-  const auto cache_config = path_cache_config_from_environment();
-  m_path_cache.enabled = cache_config.enabled;
-  m_path_cache.max_entries = cache_config.max_entries;
-  m_path_cache.bucket_minutes = cache_config.bucket_minutes;
+  m_cache_config = path_cache_config_from_environment();
+  if (m_cache_config.enabled) {
+    m_path_cache = std::make_shared<PathCache>(m_cache_config.max_entries);
+  }
 
   m_solver = std::make_shared<Solver>();
   init_timings(center_timings_filename);
@@ -340,9 +337,9 @@ SolverWrapper::SolverWrapper(
     routes_ms,
     finalize_ms,
     milliseconds_since(total_started, std::chrono::steady_clock::now()),
-    m_path_cache.enabled,
-    m_path_cache.max_entries,
-    m_path_cache.bucket_minutes);
+    m_cache_config.enabled,
+    m_cache_config.max_entries,
+    m_cache_config.bucket_minutes);
 }
 
 void
@@ -437,6 +434,12 @@ auto
 SolverWrapper::get_solver() const -> std::shared_ptr<Solver>
 {
   return m_solver;
+}
+
+auto
+SolverWrapper::get_cache() const -> std::shared_ptr<PathCache>
+{
+  return m_path_cache;
 }
 
 void
@@ -706,10 +709,10 @@ SolverWrapper::find_paths(
   }
 
   const auto cache_bucket = [this](CLOCK timestamp) -> std::uint32_t {
-    return m_path_cache.bucket_minutes == 0
+    return m_cache_config.bucket_minutes == 0
              ? timestamp.time_since_epoch().count()
              : timestamp.time_since_epoch().count() /
-                 m_path_cache.bucket_minutes;
+                 m_cache_config.bucket_minutes;
   };
   const auto cache_key = [&](std::string_view mode,
                              NodeId source_node,
@@ -721,32 +724,24 @@ SolverWrapper::find_paths(
                        target_node,
                        cache_bucket(timestamp));
   };
-  const auto remember = [this](std::string key, PathCacheEntry entry)
+  const auto cache_lookup = [this](const std::string& key)
+      -> std::shared_ptr<const PathCache::Entry> {
+    if (!m_path_cache) {
+      return nullptr;
+    }
+    return m_path_cache->find(key);
+  };
+  const auto cache_store = [this](std::string key, PathCacheEntry entry)
       -> PathCacheEntry {
-    if (!m_path_cache.enabled) {
-      return entry;
+    if (m_path_cache) {
+      m_path_cache->insert(std::move(key), entry);
     }
-    if (m_path_cache.entries.size() >= m_path_cache.max_entries &&
-        !m_path_cache.order.empty()) {
-      m_path_cache.entries.erase(m_path_cache.order.front());
-      m_path_cache.order.pop_front();
-    }
-    auto [iter, inserted] =
-      m_path_cache.entries.emplace(std::move(key), std::move(entry));
-    if (inserted) {
-      m_path_cache.order.push_back(iter->first);
-    }
-    return iter->second;
+    return entry;
   };
   const auto forward_path = [&]() -> PathCacheEntry {
     const auto key = cache_key("F:S", *source, *target, start);
-    if (m_path_cache.enabled) {
-      if (const auto cached = m_path_cache.entries.find(key);
-          cached != m_path_cache.entries.end()) {
-        ++m_path_cache.hits;
-        return cached->second;
-      }
-      ++m_path_cache.misses;
+    if (auto cached = cache_lookup(key)) {
+      return cached->value;
     }
     const auto path =
       m_solver->find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
@@ -758,7 +753,7 @@ SolverWrapper::find_paths(
       entry.last_distance = path.back().distance;
       parse_path_into<PathTraversalMode::FORWARD>(path, entry.locations);
     }
-    return remember(key, std::move(entry));
+    return cache_store(key, std::move(entry));
   }();
 
   bool critical = false;
@@ -785,13 +780,8 @@ SolverWrapper::find_paths(
         const auto child_key =
           cache_key("R:S", *child_target, *target, child_pdd);
         const auto child_critical_path = [&]() -> PathCacheEntry {
-          if (m_path_cache.enabled) {
-            if (const auto cached = m_path_cache.entries.find(child_key);
-                cached != m_path_cache.entries.end()) {
-              ++m_path_cache.hits;
-              return cached->second;
-            }
-            ++m_path_cache.misses;
+          if (auto cached = cache_lookup(child_key)) {
+            return cached->value;
           }
           const auto path =
             m_solver
@@ -804,7 +794,7 @@ SolverWrapper::find_paths(
             entry.last_distance = path.back().distance;
             parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
           }
-          return remember(child_key, std::move(entry));
+          return cache_store(child_key, std::move(entry));
         }();
 
         if (child_critical_path.found) {
@@ -831,13 +821,8 @@ SolverWrapper::find_paths(
   if (!critical) {
     const auto key = cache_key("R:S", *target, *source, bag_pdd);
     const auto ultimate_path = [&]() -> PathCacheEntry {
-      if (m_path_cache.enabled) {
-        if (const auto cached = m_path_cache.entries.find(key);
-            cached != m_path_cache.entries.end()) {
-          ++m_path_cache.hits;
-          return cached->second;
-        }
-        ++m_path_cache.misses;
+      if (auto cached = cache_lookup(key)) {
+        return cached->value;
       }
       const auto path =
         m_solver->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
@@ -849,7 +834,7 @@ SolverWrapper::find_paths(
         entry.last_distance = path.back().distance;
         parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
       }
-      return remember(key, std::move(entry));
+      return cache_store(key, std::move(entry));
     }();
     if (ultimate_path.found) {
       response.ultimate.locations = ultimate_path.locations;
@@ -1017,10 +1002,15 @@ SolverWrapper::run(const std::stop_token& stop_token)
       app.logger().error("Exception occurred: {}", exc.what());
     }
   }
-  app.logger().information(
-    "Path cache metrics: enabled={} entries={} hits={} misses={}",
-    m_path_cache.enabled,
-    m_path_cache.entries.size(),
-    m_path_cache.hits,
-    m_path_cache.misses);
+  if (m_path_cache) {
+    const auto cache_metrics = m_path_cache->metrics();
+    app.logger().information(
+      "Path cache metrics: enabled=true entries={} hits={} misses={} evictions={}",
+      cache_metrics.occupied,
+      cache_metrics.hits,
+      cache_metrics.misses,
+      cache_metrics.evictions);
+  } else {
+    app.logger().information("Path cache metrics: enabled=false");
+  }
 }

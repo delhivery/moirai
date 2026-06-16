@@ -378,7 +378,8 @@ auto Moirai::run_pipeline() -> int {
                                        .edge = nullptr,
                                        .load = &load_queue,
                                        .solution = &solution_queue},
-          wrapper.get_solver(), m_facility_timings_filename);
+          wrapper.get_solver(), m_facility_timings_filename,
+          wrapper.get_cache());
       secondary.push_back(secondary_wrapper);
       threads.emplace_back(
           [&app, &solution_queue, &active_solver_threads,
