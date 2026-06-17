@@ -54,7 +54,7 @@ inline auto find_member(const Json& object, const char* key) -> const Json* {
     return nullptr;
   }
 
-  constexpr std::size_t SLOT_COUNT = 32;
+  constexpr std::size_t SLOT_COUNT = 256;
   thread_local std::array<Json, SLOT_COUNT> slots;
   thread_local std::size_t next_slot = 0;
   auto& slot = slots[next_slot % SLOT_COUNT];
