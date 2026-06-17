@@ -97,6 +97,7 @@ add_compile_options(
 
 set(MOIRAI_PROJECT_WARNINGS -Wall -Wextra -Wpedantic -Werror)
 set(MOIRAI_GNU_WARNINGS -Wno-maybe-uninitialized
+                        -Wno-error=expose-global-module-tu-local
                         -Wno-expose-global-module-tu-local)
 set(MOIRAI_CLANG_WARNINGS -Wno-reserved-module-identifier)
 
@@ -231,6 +232,24 @@ target_compile_options(
           "$<$<CXX_COMPILER_ID:Clang>:${MOIRAI_CLANG_WARNINGS}>")
 if(MOIRAI_SOLVER_QUEUE STREQUAL "bucket")
   target_compile_definitions(moirai_core PRIVATE MOIRAI_SOLVER_QUEUE_BUCKET=1)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+   CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  find_file(MOIRAI_SYSTEM_SIMDJSON_H simdjson.h PATHS /usr/include REQUIRED)
+  set(MOIRAI_SIMDJSON_PATCHED_DIR "${CMAKE_CURRENT_BINARY_DIR}/patched_include")
+  set(MOIRAI_SIMDJSON_PATCHED "${MOIRAI_SIMDJSON_PATCHED_DIR}/simdjson.h")
+  file(MAKE_DIRECTORY "${MOIRAI_SIMDJSON_PATCHED_DIR}")
+  add_custom_command(
+    OUTPUT "${MOIRAI_SIMDJSON_PATCHED}"
+    COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_simdjson.py"
+            "${MOIRAI_SYSTEM_SIMDJSON_H}" "${MOIRAI_SIMDJSON_PATCHED}"
+    DEPENDS "${MOIRAI_SYSTEM_SIMDJSON_H}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_simdjson.py"
+    COMMENT "Patching simdjson.h for GCC 16 module compatibility"
+    VERBATIM)
+  add_custom_target(simdjson_patched DEPENDS "${MOIRAI_SIMDJSON_PATCHED}")
+  add_dependencies(moirai_core simdjson_patched)
+  target_include_directories(moirai_core BEFORE PUBLIC "${MOIRAI_SIMDJSON_PATCHED_DIR}")
 endif()
 target_link_libraries(
   moirai_core
