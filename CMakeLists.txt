@@ -172,7 +172,6 @@ endif()
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(TBB REQUIRED)
 find_package(simdjson REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(RdKafkaCPP QUIET)
@@ -256,7 +255,6 @@ target_link_libraries(
   moirai_core
   PUBLIC CURL::libcurl
          ${MOIRAI_RDKAFKA_TARGET}
-         TBB::tbb
          ZLIB::ZLIB
          OpenSSL::SSL
          OpenSSL::Crypto
