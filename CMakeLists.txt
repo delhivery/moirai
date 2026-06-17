@@ -152,7 +152,8 @@ endif()
 
 if(MOIRAI_PGO_MODE STREQUAL "generate")
   file(MAKE_DIRECTORY "${MOIRAI_PGO_DIR}")
-  add_compile_options(-fprofile-generate=${MOIRAI_PGO_DIR})
+  add_compile_options(-fprofile-generate=${MOIRAI_PGO_DIR}
+                      -fprofile-update=atomic)
   add_link_options(-fprofile-generate=${MOIRAI_PGO_DIR})
 elseif(MOIRAI_PGO_MODE STREQUAL "use")
   add_compile_options(-fprofile-use=${MOIRAI_PGO_DIR}
