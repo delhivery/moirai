@@ -46,7 +46,7 @@ struct LoadPayload {
   std::string cs_slid;
   std::string cs_act;
   std::string pid;
-  const moirai::Json* items{nullptr};
+  std::optional<moirai::Json> items;
 };
 
 struct WrapperScratch {
@@ -128,9 +128,9 @@ auto extract_load_payload(const moirai::Json& data)
     return std::unexpected{"missing id, location, destination, or time"};
   }
 
-  auto* items = moirai::find_array_member(data, "items");
-  if (items == nullptr) {
-    items = moirai::find_array_member(data, "item");
+  const auto* items_ptr = moirai::find_array_member(data, "items");
+  if (items_ptr == nullptr) {
+    items_ptr = moirai::find_array_member(data, "item");
   }
 
   return LoadPayload{
@@ -142,7 +142,8 @@ auto extract_load_payload(const moirai::Json& data)
     .cs_slid = optional_string(data, "cs_slid"),
     .cs_act = optional_string(data, "cs_act"),
     .pid = optional_string(data, "pid"),
-    .items = items,
+    .items = items_ptr != nullptr ? std::optional<moirai::Json>(*items_ptr)
+                                  : std::nullopt,
   };
 }
 
@@ -893,7 +894,7 @@ SolverWrapper::run(const std::stop_token& stop_token)
             auto& packages = wrapper_scratch.packages;
             packages.clear();
 
-            if (load->items != nullptr) {
+            if (load->items.has_value()) {
               packages.reserve(moirai::json_size(*load->items));
               for (const auto& waybill : *load->items) {
                 const auto waybill_ipdd =
