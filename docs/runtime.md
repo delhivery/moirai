@@ -81,6 +81,13 @@ DWH_AUDIT_DIR=/var/log/expath/audit
 DWH_AUDIT_ROTATE_RECORDS=100000
 DWH_AUDIT_ROTATE_BYTES=134217728
 DWH_AUDIT_ROTATE_SECONDS=300
+DWH_AUDIT_KAFKA_ENABLED=false
+DWH_AUDIT_KAFKA_TOPIC=Expected-Path-Prioritization-ESP.audit
+DWH_AUDIT_KAFKA_BROKERS=
+DWH_AUDIT_KAFKA_REQUIRED=true
+DWH_AUDIT_KAFKA_FLUSH_TIMEOUT_MS=30000
+DWH_AUDIT_KAFKA_QUEUE_RETRIES=3
+DWH_AUDIT_KAFKA_CONFIG=
 DWH_BUCKET=dwh-prod-datalake
 DWH_PREFIX=expectedpath
 DWH_EXPORT_WORK_DIR=/home/fedora/.local/state/moirai/dwh-export
@@ -96,6 +103,26 @@ The application writes active files as `*.jsonl.open` and atomically publishes
 closed files as `*.jsonl`. Each line is the same data document body sent to
 OpenSearch, without bulk `index` metadata, so the stream remains append-only for
 DWH even though OpenSearch upserts by waybill.
+
+Prefer `DWH_AUDIT_KAFKA_ENABLED=true` when DWH can consume from Kafka directly.
+The Kafka audit sink publishes the same append JSON body that the file audit sink
+writes, keyed by the stable document id/waybill, to `DWH_AUDIT_KAFKA_TOPIC`.
+`DWH_AUDIT_KAFKA_BROKERS` defaults to `BROKER_URI` when omitted. Producer
+credentials default to the existing `KAFKA_SECURITY_PROTOCOL`,
+`KAFKA_SASL_MECHANISMS`, `KAFKA_SASL_USERNAME`, and `KAFKA_SASL_PASSWORD`
+variables, with `DWH_AUDIT_KAFKA_*` credential overrides available when the DWH
+topic uses a different Kafka principal. Additional producer properties can be
+passed as comma-separated `key=value` entries in `DWH_AUDIT_KAFKA_CONFIG`.
+With the default `DWH_AUDIT_KAFKA_REQUIRED=true`, a Kafka audit enqueue or flush
+failure fails the writer thread so the service does not silently lose DWH append
+records. Set it to `false` only if OpenSearch freshness is more important than a
+complete DWH audit stream during Kafka outages.
+
+Kafka audit topics must be append-retaining topics. Do not enable compaction if
+DWH needs every historical expected-path record. Once DWH confirms the Kafka
+topic is the durable handoff, set `DWH_AUDIT_ENABLED=false` and disable
+`moirai-dwh-export.timer` / `moirai-dwh-cleanup.timer` on the host to remove the
+local JSONL, Spark, Java, and S3-export path.
 
 The export timer only consumes closed files. It applies the same flattening
 contract as the previous `autoconvert.py`: nested structs are flattened with

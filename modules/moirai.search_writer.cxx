@@ -29,6 +29,13 @@ export struct SearchIndexConfig {
   std::size_t audit_rotate_records{100'000};
   std::size_t audit_rotate_bytes{128U * 1024U * 1024U};
   std::chrono::seconds audit_rotate_interval{300};
+  bool audit_kafka_enabled{false};
+  std::string audit_kafka_brokers;
+  std::string audit_kafka_topic;
+  std::unordered_map<std::string, std::string> audit_kafka_properties;
+  std::chrono::milliseconds audit_kafka_flush_timeout{30'000};
+  std::size_t audit_kafka_queue_retries{3};
+  bool audit_kafka_required{true};
 
   static auto from_environment() -> SearchIndexConfig;
 };
@@ -39,6 +46,9 @@ export using SearchHttpRequest =
                                      std::string_view,
                                      const std::vector<std::string>&)>;
 
+export using AuditPublish =
+  std::function<void(std::string_view, std::string_view)>;
+
 export class SearchWriter {
 private:
   moirai::Uri m_uri;
@@ -48,6 +58,7 @@ private:
   const SearchIndexConfig m_index_config;
   BlockingQueue<SearchDocument>& m_solution_queue;
   SearchHttpRequest m_http_request;
+  AuditPublish m_audit_publish;
   bool m_index_ready{false};
   bool m_shared_index_guard{false};
 
@@ -71,6 +82,13 @@ public:
                BlockingQueue<SearchDocument>* solution_queue,
                SearchIndexConfig index_config,
                SearchHttpRequest http_request);
+
+  SearchWriter(moirai::Uri uri, std::string search_user,
+               std::string search_pass, std::string search_index,
+               BlockingQueue<SearchDocument>* solution_queue,
+               SearchIndexConfig index_config,
+               SearchHttpRequest http_request,
+               AuditPublish audit_publish);
 
   void ensure_index_ready();
   void run(const std::stop_token& stop_token);

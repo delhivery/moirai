@@ -32,6 +32,16 @@ struct FakeSearchState {
   std::vector<RecordedCall> calls;
 };
 
+struct RecordedAudit {
+  std::string key;
+  std::string body;
+};
+
+struct FakeAuditState {
+  std::vector<RecordedAudit> records;
+  bool fail{false};
+};
+
 auto test_config() -> SearchIndexConfig {
   SearchIndexConfig config;
   config.bulk_gzip = false;
@@ -75,6 +85,32 @@ auto writer_with(std::shared_ptr<FakeSearchState> state,
                       &queue,
                       std::move(config),
                       fake_http(std::move(state)));
+}
+
+auto fake_audit(std::shared_ptr<FakeAuditState> state) -> AuditPublish {
+  return [state](std::string_view key, std::string_view body) -> void {
+    if (state->fail) {
+      throw std::runtime_error("audit publish failed");
+    }
+    state->records.push_back(RecordedAudit{
+      .key = std::string{key},
+      .body = std::string{body},
+    });
+  };
+}
+
+auto writer_with(std::shared_ptr<FakeSearchState> state,
+                 BlockingQueue<SearchDocument>& queue,
+                 SearchIndexConfig config,
+                 AuditPublish audit_publish) -> SearchWriter {
+  return SearchWriter(moirai::parse_uri("http://search.test"),
+                      "user",
+                      "pass",
+                      "moirai",
+                      &queue,
+                      std::move(config),
+                      fake_http(std::move(state)),
+                      std::move(audit_publish));
 }
 
 auto document(std::string id, std::string package_id = "p1") -> SearchDocument {
@@ -701,6 +737,151 @@ void test_audit_sink_writes_closed_append_records() {
   std::filesystem::remove_all(audit_dir);
 }
 
+void test_kafka_audit_publishes_append_records_with_waybill_key() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-kafka-1", "p1"));
+  queue.enqueue(document("wb-kafka-2", "p2"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+  auto config = test_config();
+  config.audit_kafka_enabled = true;
+  config.audit_kafka_topic = "moirai.audit";
+  auto audit_state = std::make_shared<FakeAuditState>();
+
+  auto writer = writer_with(state, queue, config, fake_audit(audit_state));
+  writer.run(std::stop_token{});
+
+  expect_eq(audit_state->records.size(),
+            std::size_t{2},
+            "kafka audit record count");
+  expect_eq(audit_state->records[0].key,
+            std::string{"wb-kafka-1"},
+            "first kafka audit key");
+  expect_eq(audit_state->records[1].key,
+            std::string{"wb-kafka-2"},
+            "second kafka audit key");
+  for (const auto& record : audit_state->records) {
+    const auto parsed = nlohmann::json::parse(record.body);
+    expect_eq(parsed["waybill"].get<std::string>(),
+              record.key,
+              "kafka audit body waybill matches key");
+    expect_true(parsed.contains("updated_at_ts"),
+                "kafka audit body includes update timestamp");
+    expect_true(!parsed.contains("_id"),
+                "kafka audit body omits OpenSearch id");
+  }
+}
+
+void test_file_and_kafka_audit_can_run_together() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-both", "p1"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+  auto config = test_config();
+  const auto audit_dir = unique_temp_dir("moirai-audit-both-test");
+  config.audit_enabled = true;
+  config.audit_dir = audit_dir;
+  config.audit_kafka_enabled = true;
+  config.audit_kafka_topic = "moirai.audit";
+  auto audit_state = std::make_shared<FakeAuditState>();
+
+  auto writer = writer_with(state, queue, config, fake_audit(audit_state));
+  writer.run(std::stop_token{});
+
+  const auto file_lines = read_audit_lines(audit_dir);
+  expect_eq(file_lines.size(), std::size_t{1}, "file audit line count");
+  expect_eq(audit_state->records.size(),
+            std::size_t{1},
+            "kafka audit line count");
+  expect_eq(nlohmann::json::parse(file_lines[0])["waybill"].get<std::string>(),
+            std::string{"wb-both"},
+            "file audit waybill");
+  expect_eq(nlohmann::json::parse(audit_state->records[0].body)["waybill"]
+              .get<std::string>(),
+            std::string{"wb-both"},
+            "kafka audit waybill");
+
+  std::filesystem::remove_all(audit_dir);
+}
+
+void test_kafka_audit_best_effort_does_not_block_search_indexing() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-best-effort", "p1"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+  auto config = test_config();
+  config.audit_kafka_enabled = true;
+  config.audit_kafka_topic = "moirai.audit";
+  config.audit_kafka_required = false;
+  auto audit_state = std::make_shared<FakeAuditState>();
+  audit_state->fail = true;
+
+  ScopedLogCapture logs;
+  auto writer = writer_with(state, queue, config, fake_audit(audit_state));
+  writer.run(std::stop_token{});
+
+  expect_eq(state->calls.back().method, std::string{"POST"}, "bulk still posted");
+  expect_true(logs.contains("DWH audit kafka publish failed"),
+              "best effort failure logged");
+}
+
+void test_kafka_audit_required_failure_blocks_search_indexing() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-required", "p1"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+  };
+  auto config = test_config();
+  config.audit_kafka_enabled = true;
+  config.audit_kafka_topic = "moirai.audit";
+  auto audit_state = std::make_shared<FakeAuditState>();
+  audit_state->fail = true;
+
+  auto writer = writer_with(state, queue, config, fake_audit(audit_state));
+  bool threw = false;
+  try {
+    writer.run(std::stop_token{});
+  } catch (const std::runtime_error& exc) {
+    threw = std::string_view{exc.what()}.find("audit publish failed") !=
+            std::string_view::npos;
+  }
+
+  expect_true(threw, "required kafka audit failure throws");
+  expect_eq(state->calls.size(),
+            std::size_t{4},
+            "bulk is not posted after required audit failure");
+}
+
 void test_shard_skew_logs_warning_and_critical_thresholds() {
   BlockingQueue<SearchDocument> warning_queue;
   auto warning_state = std::make_shared<FakeSearchState>();
@@ -750,6 +931,10 @@ auto main() -> int {
   test_adaptive_bulk_sizing_grows_after_success();
   test_bulk_gzip_adds_content_encoding_and_compresses_body();
   test_audit_sink_writes_closed_append_records();
+  test_kafka_audit_publishes_append_records_with_waybill_key();
+  test_file_and_kafka_audit_can_run_together();
+  test_kafka_audit_best_effort_does_not_block_search_indexing();
+  test_kafka_audit_required_failure_blocks_search_indexing();
   test_shard_skew_logs_warning_and_critical_thresholds();
   return 0;
 }

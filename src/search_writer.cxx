@@ -1,6 +1,7 @@
 module;
 
 #include "blocking_queue.hxx"
+#include <librdkafka/rdkafkacpp.h>
 #include <zlib.h>
 
 module moirai.search_writer;
@@ -23,6 +24,8 @@ constexpr long HTTP_STATUS_NOT_FOUND = 404;
 constexpr std::size_t GZIP_CHUNK_BYTES = 16U * 1024U;
 constexpr std::string_view DISPLAY_DATE_FORMAT =
   "MM/dd/yy HH:mm:ss||strict_date_optional_time";
+const auto SASL_PROPERTIES = std::to_array<std::string_view>(
+  { "sasl.mechanism", "sasl.mechanisms", "sasl.username", "sasl.password" });
 
 struct BulkDocument {
   std::string id;
@@ -126,6 +129,60 @@ auto parse_bool_env(const char* name, bool fallback) -> bool {
   throw std::runtime_error(std::format("Invalid {} value '{}'", name, input));
 }
 
+auto parse_optional_string_env(std::initializer_list<const char*> names)
+    -> std::string {
+  for (const char* name : names) {
+    const char* value = std::getenv(name);
+    if (value != nullptr && !std::string_view{value}.empty()) {
+      return value;
+    }
+  }
+  return {};
+}
+
+void merge_kafka_property(std::unordered_map<std::string, std::string>& output,
+                          std::string_view key,
+                          std::string value) {
+  if (!value.empty()) {
+    output.insert_or_assign(std::string{key}, std::move(value));
+  }
+}
+
+void parse_kafka_config_list(std::unordered_map<std::string, std::string>& output,
+                             std::string_view input,
+                             const char* env_name) {
+  while (!input.empty()) {
+    const auto separator = input.find(',');
+    auto item = input.substr(0, separator);
+    if (separator == std::string_view::npos) {
+      input = {};
+    } else {
+      input.remove_prefix(separator + 1);
+    }
+    if (item.empty()) {
+      continue;
+    }
+    const auto equals = item.find('=');
+    if (equals == std::string_view::npos || equals == 0 ||
+        equals == item.size() - 1) {
+      throw std::runtime_error(
+        std::format("Invalid {} entry '{}'. Expected key=value",
+                    env_name,
+                    item));
+    }
+    output.insert_or_assign(std::string{item.substr(0, equals)},
+                            std::string{item.substr(equals + 1)});
+  }
+}
+
+auto has_sasl_configuration(
+  const std::unordered_map<std::string, std::string>& properties) -> bool {
+  return std::ranges::any_of(SASL_PROPERTIES,
+                             [&properties](std::string_view key) -> bool {
+                               return properties.contains(std::string(key));
+                             });
+}
+
 auto parse_gzip_level_env(const char* name, int fallback) -> int {
   const char* value = std::getenv(name);
   if (value == nullptr || std::string_view{value}.empty()) {
@@ -204,22 +261,201 @@ auto is_retryable_item_status(int status_code) -> bool {
          status_code == 504;
 }
 
+class KafkaAuditProducer {
+public:
+  explicit KafkaAuditProducer(const SearchIndexConfig& config)
+    : m_topic(config.audit_kafka_topic)
+    , m_flush_timeout(config.audit_kafka_flush_timeout)
+    , m_queue_retries(config.audit_kafka_queue_retries)
+  {
+    auto& app = moirai::Application::instance();
+    using ConfigPtr = std::unique_ptr<RdKafka::Conf, void (*)(RdKafka::Conf*)>;
+    ConfigPtr kafka_config(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL),
+                           [](RdKafka::Conf* conf) -> void { delete conf; });
+
+    std::string error_string;
+    const auto set_config = [&app, &kafka_config,
+                             &error_string](const std::string& key,
+                                            const std::string& value) -> void {
+      if (kafka_config->set(key, value, error_string) !=
+          RdKafka::Conf::CONF_OK) {
+        app.logger().error("Error setting audit kafka property {}: {}",
+                           key,
+                           error_string);
+        throw std::runtime_error(error_string);
+      }
+    };
+
+    set_config("bootstrap.servers", config.audit_kafka_brokers);
+    set_config("acks", "all");
+    set_config("enable.idempotence", "true");
+    set_config("delivery.timeout.ms", "300000");
+    set_config("queue.buffering.max.messages", "100000");
+    set_config("linger.ms", "10");
+    if (has_sasl_configuration(config.audit_kafka_properties) &&
+        !config.audit_kafka_properties.contains("security.protocol")) {
+      app.logger().information(
+        "Detected SASL audit kafka properties; defaulting security.protocol to "
+        "SASL_SSL");
+      set_config("security.protocol", "SASL_SSL");
+    }
+
+    for (const auto& [key, value] : config.audit_kafka_properties) {
+      set_config(key, value);
+    }
+    if (kafka_config->set("dr_cb", &m_delivery_report, error_string) !=
+        RdKafka::Conf::CONF_OK) {
+      throw std::runtime_error(error_string);
+    }
+
+    m_producer.reset(RdKafka::Producer::create(kafka_config.get(), error_string));
+    if (!m_producer) {
+      app.logger().error("Error creating audit kafka producer. {}", error_string);
+      throw std::runtime_error(error_string);
+    }
+  }
+
+  KafkaAuditProducer(const KafkaAuditProducer&) = delete;
+  auto operator=(const KafkaAuditProducer&) -> KafkaAuditProducer& = delete;
+
+  ~KafkaAuditProducer()
+  {
+    try {
+      close(false);
+    } catch (...) {
+    }
+  }
+
+  void publish(std::string_view key, std::string_view body)
+  {
+    if (!m_producer) {
+      return;
+    }
+    if (m_delivery_report.failed() != 0) {
+      throw std::runtime_error("DWH audit kafka delivery failure was reported");
+    }
+
+    for (std::size_t attempt = 0; attempt <= m_queue_retries; ++attempt) {
+      const auto error = m_producer->produce(
+        m_topic,
+        RdKafka::Topic::PARTITION_UA,
+        RdKafka::Producer::RK_MSG_COPY,
+        const_cast<char*>(body.data()),
+        body.size(),
+        key.data(),
+        key.size(),
+        0,
+        nullptr);
+      m_producer->poll(0);
+
+      if (m_delivery_report.failed() != 0) {
+        throw std::runtime_error("DWH audit kafka delivery failure was reported");
+      }
+      if (error == RdKafka::ERR_NO_ERROR) {
+        return;
+      }
+      if (error != RdKafka::ERR__QUEUE_FULL || attempt == m_queue_retries) {
+        throw std::runtime_error(
+          std::format("Unable to enqueue DWH audit kafka record: {}",
+                      RdKafka::err2str(error)));
+      }
+      m_producer->poll(100);
+    }
+  }
+
+  void close(bool required)
+  {
+    if (!m_producer) {
+      return;
+    }
+    const auto timeout_ms = static_cast<int>(std::clamp<std::int64_t>(
+      m_flush_timeout.count(), 0, std::numeric_limits<int>::max()));
+    const auto flush_error = m_producer->flush(timeout_ms);
+    m_producer.reset();
+    const auto failed = m_delivery_report.failed();
+    if (required && (flush_error != RdKafka::ERR_NO_ERROR || failed != 0)) {
+      throw std::runtime_error(
+        std::format("DWH audit kafka flush incomplete: flush={} failed={}",
+                    RdKafka::err2str(flush_error),
+                    failed));
+    }
+  }
+
+private:
+  class DeliveryReport final : public RdKafka::DeliveryReportCb {
+  public:
+    void dr_cb(RdKafka::Message& message) override
+    {
+      if (message.err() == RdKafka::ERR_NO_ERROR) {
+        m_delivered.fetch_add(1, std::memory_order_relaxed);
+        return;
+      }
+
+      m_failed.fetch_add(1, std::memory_order_relaxed);
+      moirai::Application::instance().logger().error(
+        "DWH audit kafka delivery failed: {}", message.errstr());
+    }
+
+    [[nodiscard]] auto failed() const -> std::uint64_t
+    {
+      return m_failed.load(std::memory_order_relaxed);
+    }
+
+  private:
+    std::atomic<std::uint64_t> m_delivered{0};
+    std::atomic<std::uint64_t> m_failed{0};
+  };
+
+  struct ProducerDeleter {
+    void operator()(RdKafka::Producer* producer) const { delete producer; }
+  };
+
+  std::string m_topic;
+  std::chrono::milliseconds m_flush_timeout;
+  std::size_t m_queue_retries{3};
+  DeliveryReport m_delivery_report;
+  std::unique_ptr<RdKafka::Producer, ProducerDeleter> m_producer;
+};
+
 class AuditSink {
 public:
-  explicit AuditSink(const SearchIndexConfig& config)
-    : m_enabled(config.audit_enabled)
+  explicit AuditSink(const SearchIndexConfig& config,
+                     AuditPublish audit_publish = {})
+    : m_file_enabled(config.audit_enabled)
     , m_dir(config.audit_dir)
     , m_rotate_records(config.audit_rotate_records)
     , m_rotate_bytes(config.audit_rotate_bytes)
     , m_rotate_interval(config.audit_rotate_interval)
+    , m_kafka_enabled(config.audit_kafka_enabled)
+    , m_kafka_required(config.audit_kafka_required)
+    , m_kafka_publish(std::move(audit_publish))
   {
-    if (!m_enabled) {
-      return;
-    }
-    if (m_dir.empty()) {
+    if (m_file_enabled && m_dir.empty()) {
       throw std::runtime_error("DWH_AUDIT_DIR is required when DWH_AUDIT_ENABLED=true");
     }
-    std::filesystem::create_directories(m_dir);
+    if (m_file_enabled) {
+      std::filesystem::create_directories(m_dir);
+    }
+    if (!m_kafka_enabled) {
+      return;
+    }
+    if (config.audit_kafka_topic.empty()) {
+      throw std::runtime_error(
+        "DWH_AUDIT_KAFKA_TOPIC is required when DWH_AUDIT_KAFKA_ENABLED=true");
+    }
+    if (!m_kafka_publish) {
+      if (config.audit_kafka_brokers.empty()) {
+        throw std::runtime_error(
+          "DWH_AUDIT_KAFKA_BROKERS or BROKER_URI is required when "
+          "DWH_AUDIT_KAFKA_ENABLED=true");
+      }
+      m_kafka_producer = std::make_unique<KafkaAuditProducer>(config);
+      m_kafka_publish = [producer = m_kafka_producer.get()](
+                          std::string_view key,
+                          std::string_view body) -> void {
+        producer->publish(key, body);
+      };
+    }
   }
 
   AuditSink(const AuditSink&) = delete;
@@ -233,12 +469,60 @@ public:
     }
   }
 
-  void write(std::string_view body)
+  void write(std::string_view key, std::string_view body)
   {
-    if (!m_enabled) {
-      return;
+    if (m_file_enabled) {
+      write_file(body);
     }
 
+    if (!m_kafka_enabled) {
+      return;
+    }
+    try {
+      m_kafka_publish(key, body);
+    } catch (const std::exception& exc) {
+      ++m_kafka_failures;
+      if (m_kafka_required) {
+        throw;
+      }
+      if (m_kafka_failures <= 10 || m_kafka_failures % 1000 == 0) {
+        moirai::Application::instance().logger().error(
+          "DWH audit kafka publish failed; continuing because "
+          "DWH_AUDIT_KAFKA_REQUIRED=false. failures={} error={}",
+          m_kafka_failures,
+          exc.what());
+      }
+    }
+  }
+
+  void close()
+  {
+    close_file();
+    if (m_kafka_producer) {
+      m_kafka_producer->close(m_kafka_required);
+    }
+  }
+
+private:
+  bool m_file_enabled{false};
+  std::filesystem::path m_dir;
+  std::size_t m_rotate_records{100'000};
+  std::size_t m_rotate_bytes{128U * 1024U * 1024U};
+  std::chrono::seconds m_rotate_interval{300};
+  std::ofstream m_stream;
+  std::filesystem::path m_open_path;
+  std::filesystem::path m_ready_path;
+  std::size_t m_records{0};
+  std::size_t m_bytes{0};
+  std::chrono::steady_clock::time_point m_opened_at{};
+  bool m_kafka_enabled{false};
+  bool m_kafka_required{true};
+  AuditPublish m_kafka_publish;
+  std::unique_ptr<KafkaAuditProducer> m_kafka_producer;
+  std::uint64_t m_kafka_failures{0};
+
+  void write_file(std::string_view body)
+  {
     if (!m_stream.is_open()) {
       open_file();
     }
@@ -249,7 +533,7 @@ public:
         (m_records >= m_rotate_records ||
          m_bytes + next_bytes > m_rotate_bytes ||
          elapsed >= m_rotate_interval)) {
-      close();
+      close_file();
       open_file();
     }
 
@@ -263,7 +547,7 @@ public:
     m_bytes += next_bytes;
   }
 
-  void close()
+  void close_file()
   {
     if (!m_stream.is_open()) {
       return;
@@ -295,19 +579,6 @@ public:
     m_open_path.clear();
     m_ready_path.clear();
   }
-
-private:
-  bool m_enabled{false};
-  std::filesystem::path m_dir;
-  std::size_t m_rotate_records{100'000};
-  std::size_t m_rotate_bytes{128U * 1024U * 1024U};
-  std::chrono::seconds m_rotate_interval{300};
-  std::ofstream m_stream;
-  std::filesystem::path m_open_path;
-  std::filesystem::path m_ready_path;
-  std::size_t m_records{0};
-  std::size_t m_bytes{0};
-  std::chrono::steady_clock::time_point m_opened_at{};
 
   void open_file()
   {
@@ -804,11 +1075,61 @@ SearchIndexConfig::from_environment() -> SearchIndexConfig
                    static_cast<std::size_t>(
                      config.audit_rotate_interval.count()))
   };
+  config.audit_kafka_enabled =
+    parse_bool_env("DWH_AUDIT_KAFKA_ENABLED", config.audit_kafka_enabled);
+  config.audit_kafka_topic =
+    parse_string_env("DWH_AUDIT_KAFKA_TOPIC", config.audit_kafka_topic);
+  config.audit_kafka_brokers =
+    parse_optional_string_env({ "DWH_AUDIT_KAFKA_BROKERS",
+                                "DWH_AUDIT_KAFKA_BROKER",
+                                "BROKER_URI" });
+  config.audit_kafka_flush_timeout = std::chrono::milliseconds{
+    parse_size_env("DWH_AUDIT_KAFKA_FLUSH_TIMEOUT_MS",
+                   static_cast<std::size_t>(
+                     config.audit_kafka_flush_timeout.count()))
+  };
+  config.audit_kafka_queue_retries =
+    parse_size_env("DWH_AUDIT_KAFKA_QUEUE_RETRIES",
+                   config.audit_kafka_queue_retries,
+                   true);
+  config.audit_kafka_required =
+    parse_bool_env("DWH_AUDIT_KAFKA_REQUIRED", config.audit_kafka_required);
+  merge_kafka_property(config.audit_kafka_properties,
+                       "security.protocol",
+                       parse_optional_string_env({ "DWH_AUDIT_KAFKA_SECURITY_PROTOCOL",
+                                                   "KAFKA_SECURITY_PROTOCOL" }));
+  merge_kafka_property(config.audit_kafka_properties,
+                       "sasl.mechanisms",
+                       parse_optional_string_env({ "DWH_AUDIT_KAFKA_SASL_MECHANISMS",
+                                                   "KAFKA_SASL_MECHANISMS" }));
+  merge_kafka_property(config.audit_kafka_properties,
+                       "sasl.username",
+                       parse_optional_string_env({ "DWH_AUDIT_KAFKA_SASL_USERNAME",
+                                                   "KAFKA_SASL_USERNAME" }));
+  merge_kafka_property(config.audit_kafka_properties,
+                       "sasl.password",
+                       parse_optional_string_env({ "DWH_AUDIT_KAFKA_SASL_PASSWORD",
+                                                   "KAFKA_SASL_PASSWORD" }));
+  if (const auto properties = parse_optional_string_env({ "DWH_AUDIT_KAFKA_CONFIG" });
+      !properties.empty()) {
+    parse_kafka_config_list(config.audit_kafka_properties,
+                            properties,
+                            "DWH_AUDIT_KAFKA_CONFIG");
+  }
   config.bulk_min_records =
     std::min(config.bulk_min_records, config.bulk_max_records);
   if (config.audit_enabled && config.audit_dir.empty()) {
     throw std::runtime_error(
       "DWH_AUDIT_DIR is required when DWH_AUDIT_ENABLED=true");
+  }
+  if (config.audit_kafka_enabled && config.audit_kafka_topic.empty()) {
+    throw std::runtime_error(
+      "DWH_AUDIT_KAFKA_TOPIC is required when DWH_AUDIT_KAFKA_ENABLED=true");
+  }
+  if (config.audit_kafka_enabled && config.audit_kafka_brokers.empty()) {
+    throw std::runtime_error(
+      "DWH_AUDIT_KAFKA_BROKERS or BROKER_URI is required when "
+      "DWH_AUDIT_KAFKA_ENABLED=true");
   }
   if (config.shard_critical_ratio < config.shard_warning_ratio) {
     throw std::runtime_error(
@@ -841,6 +1162,25 @@ SearchWriter::SearchWriter(moirai::Uri uri,
                            BlockingQueue<SearchDocument>* solution_queue,
                            SearchIndexConfig index_config,
                            SearchHttpRequest http_request)
+  : SearchWriter(std::move(uri),
+                 std::move(search_user),
+                 std::move(search_pass),
+                 std::move(search_index),
+                 solution_queue,
+                 std::move(index_config),
+                 std::move(http_request),
+                 {})
+{
+}
+
+SearchWriter::SearchWriter(moirai::Uri uri,
+                           std::string search_user,
+                           std::string search_pass,
+                           std::string search_index,
+                           BlockingQueue<SearchDocument>* solution_queue,
+                           SearchIndexConfig index_config,
+                           SearchHttpRequest http_request,
+                           AuditPublish audit_publish)
   : m_uri(std::move(uri))
   , m_username(std::move(search_user))
   , m_password(std::move(search_pass))
@@ -848,6 +1188,7 @@ SearchWriter::SearchWriter(moirai::Uri uri,
   , m_index_config(std::move(index_config))
   , m_solution_queue(*solution_queue)
   , m_http_request(std::move(http_request))
+  , m_audit_publish(std::move(audit_publish))
 {
 }
 
@@ -1278,7 +1619,7 @@ SearchWriter::run(const stop_token& stop_token)
   auto& app = moirai::Application::instance();
   ensure_index_ready();
   BulkMetrics metrics;
-  AuditSink audit_sink{m_index_config};
+  AuditSink audit_sink{m_index_config, m_audit_publish};
 
   auto report_metrics = [&]() -> void {
     if (m_index_config.metrics_interval.count() == 0) {
@@ -1490,7 +1831,7 @@ SearchWriter::run(const stop_token& stop_token)
                                         indexed_at_text,
                                         indexed_at_seconds),
       };
-      audit_sink.write(document.body);
+      audit_sink.write(document.id, document.body);
       ++metrics.audited_records;
       const auto estimated_bytes =
         document.id.size() + document.body.size() + m_search_index.size() + 64U;
