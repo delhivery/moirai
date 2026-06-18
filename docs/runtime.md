@@ -65,7 +65,7 @@ the historical append stream of every produced expected-path record.
 
 ```sh
 DWH_AUDIT_ENABLED=true
-DWH_AUDIT_DIR=/home/fedora/.local/state/moirai/audit
+DWH_AUDIT_DIR=/var/log/expath/audit
 DWH_AUDIT_ROTATE_RECORDS=100000
 DWH_AUDIT_ROTATE_BYTES=134217728
 DWH_AUDIT_ROTATE_SECONDS=300
@@ -102,6 +102,19 @@ window, or `-1` to archive indefinitely.
 
 The exporter accepts both the new variable names and the old names:
 `DWH_BUCKET` or `STORAGE`, and `DWH_PREFIX` or `OUT_PFX`.
+
+During PGO training, keep both profile data and append audit output on attached
+data volumes instead of the root volume. The generated compiler profile files
+should stay under the repo mount, for example
+`-DMOIRAI_PGO_DIR=/home/fedora/moirai/.pgo`. The high-volume audit stream should
+use the larger log volume:
+
+```sh
+mkdir -p /var/log/expath/pgo-audit
+mkdir -p ~/.config/systemd/user/moirai-pgo-train.service.d
+printf '[Service]\nEnvironment=DWH_AUDIT_DIR=/var/log/expath/pgo-audit\n' > ~/.config/systemd/user/moirai-pgo-train.service.d/pgo-audit-dir.conf
+systemctl --user daemon-reload
+```
 
 ```sh
 python3 -m venv ~/.local/share/moirai-exporter-venv
