@@ -238,11 +238,16 @@ auto Solver::valid_node(const NodeId node) const -> bool {
 }
 
 void Solver::invalidate_graph() {
-  m_csr_dirty = true;
+  m_csr_dirty.store(true, std::memory_order_release);
 }
 
 void Solver::rebuild_csr() const {
-  if (!m_csr_dirty) {
+  if (!m_csr_dirty.load(std::memory_order_acquire)) {
+    return;
+  }
+
+  std::scoped_lock lock(m_csr_mutex);
+  if (!m_csr_dirty.load(std::memory_order_relaxed)) {
     return;
   }
 
@@ -267,7 +272,7 @@ void Solver::rebuild_csr() const {
     m_incoming_edges[incoming_cursor[edge.target]++] = edge.id;
   }
 
-  m_csr_dirty = false;
+  m_csr_dirty.store(false, std::memory_order_release);
 }
 
 void Solver::finalize_graph() const {

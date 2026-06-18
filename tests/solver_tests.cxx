@@ -377,6 +377,55 @@ void test_value_overloads_and_csr_invalidation() {
   expect_eq(missing_path.empty(), true, "isolated node has empty adjacency");
 }
 
+void test_concurrent_lazy_csr_rebuild_is_thread_safe() {
+  GraphBuilder graph;
+  constexpr std::size_t node_count = 256;
+  std::vector<NodeId> nodes;
+  nodes.reserve(node_count);
+  for (std::size_t index = 0; index < node_count; ++index) {
+    nodes.push_back(graph.add_center(std::format("N{}", index)));
+  }
+
+  for (std::size_t index = 0; index + 1 < node_count; ++index) {
+    graph.add_edge(nodes[index],
+                   nodes[index + 1],
+                   std::format("E{}", index),
+                   0,
+                   0);
+  }
+  graph.add_edge(nodes.front(), nodes.back(), "direct", 0, 1);
+
+  constexpr std::size_t worker_count = 16;
+  constexpr std::size_t iterations = 100;
+  std::barrier start_line(worker_count + 1);
+  std::atomic_bool failed{false};
+  std::vector<std::jthread> workers;
+  workers.reserve(worker_count);
+  const auto start = iso_to_date("2026-06-08 00:00:00");
+
+  for (std::size_t worker = 0; worker < worker_count; ++worker) {
+    workers.emplace_back([&]() {
+      start_line.arrive_and_wait();
+      for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
+        const auto path =
+          graph.solver
+            .find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+              nodes.front(), nodes.back(), start);
+        if (path.empty() || path.front().node->code != "N0" ||
+            path.back().node->code != std::format("N{}", node_count - 1)) {
+          failed.store(true, std::memory_order_relaxed);
+          return;
+        }
+      }
+    });
+  }
+
+  start_line.arrive_and_wait();
+  workers.clear();
+  expect_eq(failed.load(std::memory_order_relaxed), false,
+            "concurrent lazy CSR rebuild returns stable paths");
+}
+
 void test_forward_path_selection() {
   GraphBuilder graph;
   const auto a = graph.add_center("A");
@@ -906,6 +955,7 @@ void test_real_route_fixture_scheduled_paths() {
 auto main() -> int {
   test_graph_basics();
   test_value_overloads_and_csr_invalidation();
+  test_concurrent_lazy_csr_rebuild_is_thread_safe();
   test_forward_path_selection();
   test_reverse_path_selection();
   test_days_of_week_graph_behavior();

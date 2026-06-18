@@ -94,7 +94,8 @@ private:
   mutable std::vector<EdgeId> m_incoming_edges;
   mutable std::vector<std::uint32_t> m_outgoing_offsets;
   mutable std::vector<std::uint32_t> m_incoming_offsets;
-  mutable bool m_csr_dirty{true};
+  mutable std::mutex m_csr_mutex;
+  mutable std::atomic_bool m_csr_dirty{true};
   std::unordered_map<std::string,
                      NodeId,
                      TransparentStringHash,
