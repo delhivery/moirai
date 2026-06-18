@@ -119,13 +119,21 @@ During PGO training, keep both profile data and append audit output on attached
 data volumes instead of the root volume. The generated compiler profile files
 should stay under the repo mount, for example
 `-DMOIRAI_PGO_DIR=/home/fedora/moirai/.pgo`. The high-volume audit stream should
-use the larger log volume:
+use the larger log volume.
+
+Use a dedicated PGO config file rather than inline `Environment=` overrides in a
+unit that also has `EnvironmentFile=%h/.config/moirai/moirai.conf`. systemd
+loads environment files at exec time, so the production config can override
+inline PGO values such as `SEARCH_INDEX` and `KAFKA_GROUP_ID`.
 
 ```sh
+PGO_RUN_ID=$(date -u +%Y%m%d%H%M%S)
 mkdir -p /var/log/expath/pgo-audit
-mkdir -p ~/.config/systemd/user/moirai-pgo-train.service.d
-printf '[Service]\nEnvironment=DWH_AUDIT_DIR=/var/log/expath/pgo-audit\n' > ~/.config/systemd/user/moirai-pgo-train.service.d/pgo-audit-dir.conf
+grep -Ev '^(MOIRAI_ROUTE_EXPANSION_THREADS|MOIRAI_BINARY|KAFKA_GROUP_ID|KAFKA_AUTO_OFFSET_RESET|SEARCH_INDEX|DWH_AUDIT_ENABLED|DWH_AUDIT_DIR)=' ~/.config/moirai/moirai.conf > ~/.config/moirai/moirai-pgo-train.conf
+printf 'MOIRAI_ROUTE_EXPANSION_THREADS=1\nMOIRAI_BINARY=%s/moirai/build-pgo-gen/moirai\nKAFKA_GROUP_ID=MOIRAI_PGO_TRAIN_%s\nKAFKA_AUTO_OFFSET_RESET=earliest\nSEARCH_INDEX=moirai.pgo.train.%s\nDWH_AUDIT_ENABLED=true\nDWH_AUDIT_DIR=/var/log/expath/pgo-audit\n' "$HOME" "$PGO_RUN_ID" "$PGO_RUN_ID" >> ~/.config/moirai/moirai-pgo-train.conf
+cp moirai-pgo-train.service ~/.config/systemd/user/
 systemctl --user daemon-reload
+systemctl --user start moirai-pgo-train.service
 ```
 
 ```sh

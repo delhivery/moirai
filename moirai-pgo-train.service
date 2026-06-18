@@ -1,0 +1,18 @@
+[Unit]
+Description=Moirai PGO training on production Kafka data
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/moirai/build-pgo-gen
+EnvironmentFile=%h/.config/moirai/moirai-pgo-train.conf
+ExecStart=%h/.local/bin/moirai-run
+Restart=no
+RuntimeMaxSec=45min
+TimeoutStopSec=120s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
