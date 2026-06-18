@@ -38,6 +38,7 @@ verify_one() {
   cmake -S "${ROOT}" -B "${build_dir}" -G Ninja \
     -DCMAKE_CXX_COMPILER="${cxx}" \
     -DCMAKE_CXX_STANDARD_LIBRARY="${stdlib}" \
+    -DMOIRAI_SOLVER_QUEUE=binary \
     -Wno-dev 2>&1 | tee -a "${verify_log}"
   cmake --build "${build_dir}" -j "${BUILD_JOBS}" 2>&1 | tee -a "${verify_log}"
   ctest --test-dir "${build_dir}" --output-on-failure 2>&1 | tee -a "${verify_log}"

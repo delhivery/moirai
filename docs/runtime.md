@@ -50,6 +50,13 @@ index has dynamically inferred fields such as `earliest.first.arrival` as `text`
 create a replacement index with the new mapping and reindex, or delete/recreate
 the index during a controlled maintenance window.
 
+## Solver Queue
+
+Production builds should use the default binary heap solver queue:
+`-DMOIRAI_SOLVER_QUEUE=binary`. Existing CMake build directories keep cached
+values, so pass this flag explicitly or remove old build directories before
+rebuilding. The bucket queue is kept as an experimental option only.
+
 ## DWH Append Audit
 
 OpenSearch is written with stable waybill document ids, so it stores the current
