@@ -45,6 +45,7 @@ endif()
 
 project(moirai LANGUAGES C CXX)
 include(CTest)
+include(FetchContent)
 
 if(NOT CMAKE_GENERATOR MATCHES "Ninja")
   message(FATAL_ERROR "C++ modules/import std require a Ninja generator")
@@ -110,6 +111,10 @@ set(MOIRAI_PGO_DIR
 set(MOIRAI_SOLVER_QUEUE
     "binary"
     CACHE STRING "Solver queue implementation: binary or bucket")
+set(MOIRAI_SIMDJSON_PROVIDER
+    "fetch"
+    CACHE STRING "simdjson provider: fetch or system")
+set_property(CACHE MOIRAI_SIMDJSON_PROVIDER PROPERTY STRINGS fetch system)
 option(MOIRAI_ENABLE_GCC_LTO
        "Enable GCC LTO for Release builds; disabled by default while GCC modules support is unstable"
        OFF)
@@ -170,10 +175,107 @@ if(NOT MOIRAI_SOLVER_QUEUE STREQUAL "binary" AND
 endif()
 message(STATUS "Using ${MOIRAI_SOLVER_QUEUE} solver queue")
 
+if(NOT MOIRAI_SIMDJSON_PROVIDER STREQUAL "fetch" AND
+   NOT MOIRAI_SIMDJSON_PROVIDER STREQUAL "system")
+  message(FATAL_ERROR "MOIRAI_SIMDJSON_PROVIDER must be fetch or system")
+endif()
+
+function(moirai_read_simdjson_version header include_dir)
+  file(READ "${header}" MOIRAI_SIMDJSON_VERSION_TEXT)
+  string(REGEX MATCH "SIMDJSON_VERSION_MAJOR[ \t\r\n]*=[ \t]*([0-9]+)"
+               MOIRAI_SIMDJSON_VERSION_MAJOR_MATCH
+               "${MOIRAI_SIMDJSON_VERSION_TEXT}")
+  if(NOT MOIRAI_SIMDJSON_VERSION_MAJOR_MATCH AND include_dir AND
+     EXISTS "${include_dir}/simdjson/simdjson_version.h")
+    file(READ "${include_dir}/simdjson/simdjson_version.h"
+         MOIRAI_SIMDJSON_VERSION_TEXT)
+    string(REGEX MATCH "SIMDJSON_VERSION_MAJOR[ \t\r\n]*=[ \t]*([0-9]+)"
+                 MOIRAI_SIMDJSON_VERSION_MAJOR_MATCH
+                 "${MOIRAI_SIMDJSON_VERSION_TEXT}")
+  endif()
+  if(NOT MOIRAI_SIMDJSON_VERSION_MAJOR_MATCH)
+    message(FATAL_ERROR "Unable to read SIMDJSON_VERSION_MAJOR from ${header}")
+  endif()
+  set(MOIRAI_SIMDJSON_VERSION_MAJOR
+      "${CMAKE_MATCH_1}"
+      PARENT_SCOPE)
+
+  string(REGEX MATCH "SIMDJSON_VERSION_MINOR[ \t\r\n]*=[ \t]*([0-9]+)"
+               MOIRAI_SIMDJSON_VERSION_MINOR_MATCH
+               "${MOIRAI_SIMDJSON_VERSION_TEXT}")
+  if(NOT MOIRAI_SIMDJSON_VERSION_MINOR_MATCH)
+    message(FATAL_ERROR "Unable to read SIMDJSON_VERSION_MINOR from ${header}")
+  endif()
+  set(MOIRAI_SIMDJSON_VERSION_MINOR
+      "${CMAKE_MATCH_1}"
+      PARENT_SCOPE)
+
+  string(REGEX MATCH "SIMDJSON_VERSION_REVISION[ \t\r\n]*=[ \t]*([0-9]+)"
+               MOIRAI_SIMDJSON_VERSION_REVISION_MATCH
+               "${MOIRAI_SIMDJSON_VERSION_TEXT}")
+  if(NOT MOIRAI_SIMDJSON_VERSION_REVISION_MATCH)
+    message(FATAL_ERROR "Unable to read SIMDJSON_VERSION_REVISION from ${header}")
+  endif()
+  set(MOIRAI_SIMDJSON_VERSION_REVISION
+      "${CMAKE_MATCH_1}"
+      PARENT_SCOPE)
+endfunction()
+
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(simdjson REQUIRED)
+
+if(MOIRAI_SIMDJSON_PROVIDER STREQUAL "fetch")
+  set(SIMDJSON_INSTALL
+      OFF
+      CACHE BOOL "Install fetched simdjson" FORCE)
+  set(SIMDJSON_BUILD_STATIC_LIB
+      OFF
+      CACHE BOOL "Build fetched simdjson_static" FORCE)
+  set(SIMDJSON_STATIC_REFLECTION
+      OFF
+      CACHE BOOL "Enable simdjson static reflection" FORCE)
+  FetchContent_Declare(
+    simdjson
+    URL https://github.com/simdjson/simdjson/archive/refs/tags/v4.6.4.tar.gz
+    URL_HASH
+      SHA256=b091107844fe928158c5c2265c20360fff312889ddf7ebc4528a0f0f8f2ff9cd)
+  FetchContent_MakeAvailable(simdjson)
+  set(MOIRAI_SIMDJSON_HEADER "${simdjson_SOURCE_DIR}/singleheader/simdjson.h")
+  set(MOIRAI_SIMDJSON_INCLUDE_DIR "${simdjson_SOURCE_DIR}/singleheader")
+else()
+  find_package(simdjson 4.6 CONFIG REQUIRED)
+  get_target_property(MOIRAI_SIMDJSON_INCLUDE_DIRS simdjson::simdjson
+                      INTERFACE_INCLUDE_DIRECTORIES)
+  foreach(MOIRAI_SIMDJSON_CANDIDATE IN LISTS MOIRAI_SIMDJSON_INCLUDE_DIRS)
+    string(REGEX REPLACE "^\\$<BUILD_INTERFACE:(.*)>$" "\\1"
+                         MOIRAI_SIMDJSON_CANDIDATE
+                         "${MOIRAI_SIMDJSON_CANDIDATE}")
+    if(EXISTS "${MOIRAI_SIMDJSON_CANDIDATE}/simdjson.h")
+      set(MOIRAI_SIMDJSON_INCLUDE_DIR "${MOIRAI_SIMDJSON_CANDIDATE}")
+      break()
+    endif()
+  endforeach()
+  if(NOT MOIRAI_SIMDJSON_INCLUDE_DIR)
+    find_path(MOIRAI_SIMDJSON_INCLUDE_DIR simdjson.h REQUIRED)
+  endif()
+  set(MOIRAI_SIMDJSON_HEADER "${MOIRAI_SIMDJSON_INCLUDE_DIR}/simdjson.h")
+endif()
+
+moirai_read_simdjson_version("${MOIRAI_SIMDJSON_HEADER}"
+                             "${MOIRAI_SIMDJSON_INCLUDE_DIR}")
+set(MOIRAI_SIMDJSON_VERSION
+    "${MOIRAI_SIMDJSON_VERSION_MAJOR}.${MOIRAI_SIMDJSON_VERSION_MINOR}.${MOIRAI_SIMDJSON_VERSION_REVISION}")
+if(MOIRAI_SIMDJSON_PROVIDER STREQUAL "system" AND DEFINED simdjson_VERSION AND
+   NOT simdjson_VERSION VERSION_EQUAL MOIRAI_SIMDJSON_VERSION)
+  message(FATAL_ERROR
+          "simdjson package/header version mismatch: CMake package is ${simdjson_VERSION}, "
+          "but ${MOIRAI_SIMDJSON_HEADER} reports ${MOIRAI_SIMDJSON_VERSION}. "
+          "Install matching simdjson headers and library, or use -DMOIRAI_SIMDJSON_PROVIDER=fetch.")
+endif()
+message(STATUS
+        "Using simdjson ${MOIRAI_SIMDJSON_VERSION} from ${MOIRAI_SIMDJSON_PROVIDER} provider")
+
 find_package(PkgConfig REQUIRED)
 find_package(RdKafkaCPP QUIET)
 
@@ -234,17 +336,21 @@ target_compile_options(
 if(MOIRAI_SOLVER_QUEUE STREQUAL "bucket")
   target_compile_definitions(moirai_core PRIVATE MOIRAI_SOLVER_QUEUE_BUCKET=1)
 endif()
+target_compile_definitions(
+  moirai_core
+  PUBLIC MOIRAI_SIMDJSON_VERSION_MAJOR=${MOIRAI_SIMDJSON_VERSION_MAJOR}
+         MOIRAI_SIMDJSON_VERSION_MINOR=${MOIRAI_SIMDJSON_VERSION_MINOR}
+         MOIRAI_SIMDJSON_VERSION_REVISION=${MOIRAI_SIMDJSON_VERSION_REVISION})
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
    CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
-  find_file(MOIRAI_SYSTEM_SIMDJSON_H simdjson.h PATHS /usr/include REQUIRED)
   set(MOIRAI_SIMDJSON_PATCHED_DIR "${CMAKE_CURRENT_BINARY_DIR}/patched_include")
   set(MOIRAI_SIMDJSON_PATCHED "${MOIRAI_SIMDJSON_PATCHED_DIR}/simdjson.h")
   file(MAKE_DIRECTORY "${MOIRAI_SIMDJSON_PATCHED_DIR}")
   add_custom_command(
     OUTPUT "${MOIRAI_SIMDJSON_PATCHED}"
     COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_simdjson.py"
-            "${MOIRAI_SYSTEM_SIMDJSON_H}" "${MOIRAI_SIMDJSON_PATCHED}"
-    DEPENDS "${MOIRAI_SYSTEM_SIMDJSON_H}"
+            "${MOIRAI_SIMDJSON_HEADER}" "${MOIRAI_SIMDJSON_PATCHED}"
+    DEPENDS "${MOIRAI_SIMDJSON_HEADER}"
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_simdjson.py"
     COMMENT "Patching simdjson.h for GCC 16 module compatibility"
     VERBATIM)

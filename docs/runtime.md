@@ -57,6 +57,18 @@ Production builds should use the default binary heap solver queue:
 values, so pass this flag explicitly or remove old build directories before
 rebuilding. The bucket queue is kept as an experimental option only.
 
+## simdjson Provider
+
+Production builds default to a pinned source build of simdjson 4.6.4:
+`-DMOIRAI_SIMDJSON_PROVIDER=fetch`. This is the intended Fedora path because the
+distribution package can lag the required library version. Do not manually copy a
+new `simdjson.h` over the system header; that only upgrades the compile-time
+header and can still link against an older `libsimdjson`.
+
+Use `-DMOIRAI_SIMDJSON_PROVIDER=system` only when the host has a matching
+simdjson 4.6 or newer CMake package, headers, and library installed. The build
+fails if the package version and header version disagree.
+
 ## DWH Append Audit
 
 OpenSearch is written with stable waybill document ids, so it stores the current
