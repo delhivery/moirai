@@ -715,16 +715,15 @@ SolverWrapper::find_paths(
              : timestamp.time_since_epoch().count() /
                  m_cache_config.bucket_minutes;
   };
-  std::array<char, 48> key_buf{};
   const auto cache_key = [&](std::string_view mode,
                              NodeId source_node,
                              NodeId target_node,
-                             CLOCK timestamp) -> std::string_view {
-    const auto result = std::format_to_n(
-      key_buf.data(), key_buf.size() - 1,
-      "{}:{}:{}:{}",
-      mode, source_node, target_node, cache_bucket(timestamp));
-    return {key_buf.data(), static_cast<std::size_t>(result.size)};
+                             CLOCK timestamp) -> std::string {
+    return std::format("{}:{}:{}:{}",
+                       mode,
+                       source_node,
+                       target_node,
+                       cache_bucket(timestamp));
   };
   const auto cache_lookup = [this](std::string_view key)
       -> std::shared_ptr<const PathCache::Entry> {

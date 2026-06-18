@@ -3,8 +3,11 @@
 #include "test_helpers.hxx"
 
 import std;
+import moirai.app;
 import moirai.date_utils;
+import moirai.search_document;
 import moirai.solver;
+import moirai.solver_wrapper;
 import moirai.transportation;
 
 namespace {
@@ -61,13 +64,15 @@ auto add_edge(Solver& solver, NodeId source, NodeId target,
   expect_true(edge_id != INVALID_EDGE, "edge added");
 }
 
-auto make_wrapper(std::shared_ptr<Solver> solver) -> SolverWrapper {
+auto make_wrapper(std::shared_ptr<Solver> solver,
+                  std::shared_ptr<PathCache> cache = nullptr) -> SolverWrapper {
   static const auto timings_path =
     std::filesystem::temp_directory_path() / "moirae-wrapper-empty-timings.json";
-  {
+  static std::once_flag timings_once;
+  std::call_once(timings_once, [] {
     std::ofstream timings(timings_path);
     timings << "[]";
-  }
+  });
 
   static BlockingQueue<std::string> load_queue;
   static BlockingQueue<SearchDocument> solution_queue;
@@ -77,7 +82,7 @@ auto make_wrapper(std::shared_ptr<Solver> solver) -> SolverWrapper {
     .load = &load_queue,
     .solution = &solution_queue,
   };
-  return SolverWrapper(queues, solver, timings_path);
+  return SolverWrapper(queues, solver, timings_path, std::move(cache));
 }
 
 void test_find_paths_non_critical_returns_earliest_and_ultimate() {
@@ -183,6 +188,69 @@ void test_find_paths_child_can_make_parent_critical() {
             "child critical omits ultimate");
 }
 
+void test_find_paths_shared_cache_is_thread_safe() {
+  auto solver = std::make_shared<Solver>();
+  std::vector<NodeId> nodes;
+  nodes.reserve(32);
+  for (int index = 0; index < 32; ++index) {
+    nodes.push_back(add_center(*solver, std::format("N{}", index)));
+  }
+  for (int index = 0; index < 31; ++index) {
+    add_edge(*solver,
+             nodes[static_cast<std::size_t>(index)],
+             nodes[static_cast<std::size_t>(index + 1)],
+             std::format("N{}-N{}", index, index + 1),
+             (8 * 60) + index,
+             30);
+    if (index + 2 < 32) {
+      add_edge(*solver,
+               nodes[static_cast<std::size_t>(index)],
+               nodes[static_cast<std::size_t>(index + 2)],
+               std::format("N{}-N{}", index, index + 2),
+               (9 * 60) + index,
+               45);
+    }
+  }
+  solver->finalize_graph();
+
+  auto cache = std::make_shared<PathCache>(256);
+  constexpr int worker_count = 8;
+  constexpr int iterations = 200;
+  std::vector<std::jthread> workers;
+  std::atomic<int> failures{0};
+  workers.reserve(worker_count);
+
+  for (int worker = 0; worker < worker_count; ++worker) {
+    workers.emplace_back([solver, cache, worker, &failures]() {
+      auto wrapper = make_wrapper(solver, cache);
+      std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+      packages.emplace_back("N31",
+                            epoch_minutes("2026-06-08 18:00:00"),
+                            std::format("child-{}", worker));
+      for (int iteration = 0; iteration < iterations; ++iteration) {
+        const auto source_index = iteration % 8;
+        const auto target_index = 24 + (iteration % 8);
+        const auto response = wrapper.find_paths(
+          std::format("bag-{}-{}", worker, iteration),
+          std::format("N{}", source_index),
+          std::format("N{}", target_index),
+          epoch_minutes("2026-06-08 07:00:00") + (iteration % 3),
+          iso_to_date("2026-06-10 12:00:00"),
+          packages);
+        if (response.failed() || response.earliest.locations.empty()) {
+          failures.fetch_add(1, std::memory_order_relaxed);
+        }
+      }
+    });
+  }
+
+  workers.clear();
+  expect_eq(failures.load(), 0, "shared path cache concurrent failures");
+  const auto metrics = cache->metrics();
+  expect_true(metrics.hits > 0, "shared path cache records hits");
+  expect_true(metrics.misses > 0, "shared path cache records misses");
+}
+
 } // namespace
 
 auto main() -> int {
@@ -190,5 +258,6 @@ auto main() -> int {
   test_find_paths_critical_omits_ultimate();
   test_find_paths_missing_node_returns_fail();
   test_find_paths_child_can_make_parent_critical();
+  test_find_paths_shared_cache_is_thread_safe();
   return 0;
 }
