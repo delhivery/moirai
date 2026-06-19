@@ -21,7 +21,7 @@ The resulting binary is `build/moirai`.
 
 Install with your distribution's package manager:
 
-- `gcc` 15+ (or 16+ for full module support) with matching `libstdc++`
+- `gcc` 16+ with matching `libstdc++` (module source required for `import std`)
 - `cmake` 4.3+
 - `ninja-build`
 - `libcurl-devel`
@@ -158,10 +158,13 @@ provides the variable-to-CLI mapping.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `MOIRAI_ROUTE_EXPANSION_THREADS` | `nproc - 2` | Solver thread count |
+| `MOIRAI_ROUTE_EXPANSION_THREADS` | `nproc` | Threads for route spec expansion at startup |
 | `MOIRAI_PATH_CACHE_ENABLED` | `true` | Enable path result caching |
-| `MOIRAI_PATH_CACHE_MAX_ENTRIES` | `10000` | Maximum cached paths |
-| `MOIRAI_PATH_CACHE_BUCKET_MINUTES` | `15` | Cache time-bucket granularity |
+| `MOIRAI_PATH_CACHE_MAX_ENTRIES` | `65536` | Maximum cached paths |
+| `MOIRAI_PATH_CACHE_BUCKET_MINUTES` | `1` | Cache time-bucket granularity (minutes) |
+
+Solver thread count is not configurable -- it is always
+`max(1, hardware_concurrency - 2)`.
 
 #### OpenSearch Writer
 

@@ -26,16 +26,14 @@ operational visibility and downstream consumption.
 | --- | --- |
 | CMake | 4.3 |
 | Ninja | any |
-| GCC | 15 (16+ recommended) |
-| libstdc++ | matching GCC, with `import std` module source |
+| GCC | 16 (supported baseline for `import std`) |
+| libstdc++ | matching GCC, with standard library module source |
 | libcurl | any |
 | OpenSSL | 1.1+ |
 | zlib | any |
 | librdkafka | any C++ API build |
 | simdjson | 4.6.4 (fetched automatically) |
 | mold linker | any (GCC Release builds) |
-
-Clang 18.1.2+ with libstdc++ is also supported but GCC is the primary target.
 
 ## Quick Start
 
@@ -78,9 +76,9 @@ Moirai runs a fixed thread pipeline:
 
 1. **Reader thread** -- `KafkaReader` (or `FileReader`) polls batches of load
    payloads into a bounded queue.
-2. **Solver threads** (N = hardware_concurrency - 2) -- each dequeues loads,
-   resolves forward/reverse paths through the transportation graph, and enqueues
-   `SearchDocument` results.
+2. **Solver threads** (N = max(1, hardware_concurrency - 2)) -- each dequeues
+   loads, resolves forward/reverse paths through the transportation graph, and
+   enqueues `SearchDocument` results.
 3. **Writer threads** (configurable) -- bulk-index documents into OpenSearch and
    optionally emit DWH audit records.
 
