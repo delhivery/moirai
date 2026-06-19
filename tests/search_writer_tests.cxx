@@ -638,6 +638,42 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
             "batch timestamps are consistent");
 }
 
+void test_failed_document_omits_empty_date_fields() {
+  SearchDocument failed;
+  failed.id = "wb-failed";
+  failed.waybill = "wb-failed";
+  failed.package_id = "wb-failed";
+  failed.fail = "pathing failed";
+  failed.is_critical = true;
+
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(std::move(failed));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+
+  auto writer = writer_with(state, queue);
+  writer.run(std::stop_token{});
+
+  const auto lines = split_lines(state->calls.back().body);
+  expect_eq(lines.size(), std::size_t{2}, "failed document bulk line count");
+  const auto body = nlohmann::json::parse(lines[1]);
+  expect_eq(body["fail"].get<std::string>(),
+            std::string{"pathing failed"},
+            "failed document preserves reason");
+  expect_true(!body.contains("pdd"),
+              "failed document omits empty pdd date");
+  expect_true(!body.contains("pdd_ts"),
+              "failed document omits meaningless pdd_ts");
+}
+
 void test_path_summaries_are_deduplicated_and_include_routes() {
   BlockingQueue<SearchDocument> queue;
   auto routed = document("wb-routed", "p1");
@@ -770,6 +806,46 @@ void test_bulk_partial_failure_retries_retryable_items_only() {
               "retry body contains retryable id");
   expect_true(posts[1].body.find("wb-ok") == std::string::npos,
               "retry body excludes successful id");
+}
+
+void test_bulk_permanent_failure_logs_error_sample() {
+  BlockingQueue<SearchDocument> queue;
+  queue.enqueue(document("wb-bad", "p1"));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({
+      "errors": true,
+      "items": [
+        {"index": {
+          "status": 400,
+          "_id": "wb-bad",
+          "error": {
+            "type": "mapper_parsing_exception",
+            "reason": "failed to parse field [pdd] of type [date]"
+          }
+        }}
+      ]
+    })" } },
+  };
+
+  ScopedLogCapture logs;
+  auto writer = writer_with(state, queue);
+  writer.run(std::stop_token{});
+
+  expect_true(logs.contains("Bulk response had 1 permanent failures"),
+              "permanent failure count logged");
+  expect_true(logs.contains("id=wb-bad status=400"),
+              "bulk failure id and status logged");
+  expect_true(logs.contains("mapper_parsing_exception"),
+              "bulk failure type logged");
+  expect_true(logs.contains("failed to parse field [pdd]"),
+              "bulk failure reason logged");
 }
 
 void test_adaptive_bulk_sizing_grows_after_success() {
@@ -1084,9 +1160,11 @@ auto main() -> int {
   test_incompatible_mapping_is_logged_without_destructive_change();
   test_bootstrap_failure_prevents_bulk_indexing();
   test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing();
+  test_failed_document_omits_empty_date_fields();
   test_path_summaries_are_deduplicated_and_include_routes();
   test_bulk_flushes_when_byte_limit_is_reached();
   test_bulk_partial_failure_retries_retryable_items_only();
+  test_bulk_permanent_failure_logs_error_sample();
   test_adaptive_bulk_sizing_grows_after_success();
   test_bulk_gzip_adds_content_encoding_and_compresses_body();
   test_audit_sink_writes_closed_append_records();

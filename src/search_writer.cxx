@@ -50,6 +50,7 @@ struct BulkItemFailures {
   bool has_errors{false};
   std::size_t permanent_failures{0};
   std::vector<BulkDocument> retryable;
+  std::vector<std::string> samples;
 };
 
 std::atomic<std::uint64_t> audit_file_sequence{0};
@@ -819,8 +820,10 @@ auto serialize_document_body(const SearchDocument& document,
   append_bool_field(output, "is_critical", document.is_critical, first);
   append_path_section(output, "earliest", document.earliest, first);
   append_path_section(output, "ultimate", document.ultimate, first);
-  append_string_field(output, "pdd", document.pdd, first);
-  append_int_field(output, "pdd_ts", document.pdd_ts, first);
+  if (!document.pdd.empty()) {
+    append_string_field(output, "pdd", document.pdd, first);
+    append_int_field(output, "pdd_ts", document.pdd_ts, first);
+  }
   append_string_field(output, "updated_at", updated_at, first);
   append_int_field(output, "updated_at_ts", updated_at_ts, first);
   output.push_back('}');
@@ -914,6 +917,62 @@ auto document_ids(const std::vector<BulkDocument>& documents)
   return ids;
 }
 
+auto truncated_for_log(std::string_view value,
+                       std::size_t max_size = 240) -> std::string {
+  if (value.size() <= max_size) {
+    return std::string{value};
+  }
+  return std::format("{}...", value.substr(0, max_size));
+}
+
+auto bulk_failure_sample(const moirai::Json& operation,
+                         const BulkDocument& document,
+                         int status,
+                         bool retryable) -> std::string {
+  std::string id = document.id;
+  if (const auto response_id = moirai::find_string_member(operation, "_id");
+      response_id.has_value() && !response_id->empty()) {
+    id = std::string{*response_id};
+  }
+
+  std::string type;
+  std::string reason;
+  if (const auto* error = moirai::find_object_member(operation, "error");
+      error != nullptr) {
+    if (const auto error_type = moirai::find_string_member(*error, "type");
+        error_type.has_value()) {
+      type = std::string{*error_type};
+    }
+    if (const auto error_reason = moirai::find_string_member(*error, "reason");
+        error_reason.has_value()) {
+      reason = truncated_for_log(*error_reason);
+    }
+  }
+
+  return std::format("id={} status={} retryable={} type={} reason={}",
+                     id,
+                     status,
+                     retryable,
+                     type.empty() ? "-" : type,
+                     reason.empty() ? "-" : reason);
+}
+
+auto format_bulk_failure_samples(const BulkItemFailures& failures)
+    -> std::string {
+  if (failures.samples.empty()) {
+    return "-";
+  }
+
+  std::string output;
+  for (std::size_t index = 0; index < failures.samples.size(); ++index) {
+    if (index > 0) {
+      output += " | ";
+    }
+    output += failures.samples[index];
+  }
+  return output;
+}
+
 auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
                               std::string_view response_body)
     -> BulkItemFailures {
@@ -959,10 +1018,17 @@ auto parse_bulk_item_failures(const std::vector<BulkDocument>& documents,
       continue;
     }
     const auto status = moirai::find_integer_member<int>(*operation, "status");
-    if (status.has_value() && is_retryable_item_status(*status)) {
-      result.retryable.push_back(documents[index]);
-    } else if (status.has_value() && *status >= 300) {
-      ++result.permanent_failures;
+    if (status.has_value() && *status >= 300) {
+      const auto retryable = is_retryable_item_status(*status);
+      if (retryable) {
+        result.retryable.push_back(documents[index]);
+      } else {
+        ++result.permanent_failures;
+      }
+      if (result.samples.size() < 5) {
+        result.samples.push_back(
+          bulk_failure_sample(*operation, documents[index], *status, retryable));
+      }
     }
     ++index;
   }
@@ -1975,19 +2041,21 @@ SearchWriter::run(const stop_token& stop_token)
             metrics.retried_records += failures.retryable.size();
             app.logger().error(
               "Bulk response had {} retryable and {} permanent failures; "
-              "retrying attempt {}",
+              "retrying attempt {}. Samples: {}",
               failures.retryable.size(),
               failures.permanent_failures,
-              attempt + 1);
+              attempt + 1,
+              format_bulk_failure_samples(failures));
             documents = failures.retryable;
           } else {
             reduce_bulk_target();
             metrics.failed_records += failures.retryable.size();
             app.logger().error(
               "Bulk response had {} permanent failures and {} exhausted "
-              "retryable failures",
+              "retryable failures. Samples: {}",
               failures.permanent_failures,
-              failures.retryable.size());
+              failures.retryable.size(),
+              format_bulk_failure_samples(failures));
             return;
           }
         } else if (is_retryable_status(response.status_code) &&
