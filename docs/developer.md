@@ -125,6 +125,249 @@ At startup, `SolverWrapper`:
 
 ---
 
+## CSR Graph Representation
+
+The solver stores the transportation network as a Compressed Sparse Row (CSR)
+graph. This layout provides O(1) adjacency lookup per node and keeps edge data
+cache-friendly for traversal.
+
+### Storage Layout
+
+```
+m_nodes:            [TransportCenter...]        Dense node array indexed by NodeId
+m_edges:            [SolverEdgeHot...]          Dense edge array indexed by EdgeId
+m_edge_details:     [SolverEdgeCold...]         Cold edge data (full TransportEdge)
+m_outgoing_offsets: [uint32...]                 Prefix-sum offsets (size = nodes+1)
+m_outgoing_edges:   [EdgeId...]                 Edge ids sorted by source node
+m_incoming_offsets: [uint32...]                 Prefix-sum offsets (size = nodes+1)
+m_incoming_edges:   [EdgeId...]                 Edge ids sorted by target node
+```
+
+For a node `n`, its outgoing edges are the slice
+`m_outgoing_edges[m_outgoing_offsets[n] .. m_outgoing_offsets[n+1]]`, and
+similarly for incoming edges.
+
+### Build Process
+
+`rebuild_csr()` constructs the offset and edge-id arrays from the flat edge
+list:
+
+1. **Count pass** -- iterate all edges, incrementing `outgoing_offsets[source+1]`
+   and `incoming_offsets[target+1]`.
+2. **Prefix-sum** -- convert counts into cumulative offsets.
+3. **Scatter pass** -- iterate edges again, placing each edge id at its
+   computed position using a running cursor per node.
+
+The rebuild is lazy (triggered by `m_csr_dirty` flag) and protected by a mutex
+with double-checked locking. Any `add_node` or `add_edge` call sets the dirty
+flag. Solver threads calling `outgoing_edges()` or `incoming_edges()` trigger
+a rebuild if needed; once built, subsequent calls return a `std::span` slice
+with no locking.
+
+### Hot/Cold Edge Split
+
+Edge data is split into two parallel arrays:
+
+- **`SolverEdgeHot`** -- fields accessed on every traversal: source/target node
+  ids, pre-computed weekly schedules (up to 7 departure minutes per direction),
+  forward/reverse durations, vehicle type, movement type. Sized ~80 bytes per
+  edge for cache-line efficiency.
+- **`SolverEdgeCold`** -- the full `TransportEdge` struct with string fields
+  (route code, name, prefix). Only accessed during path reconstruction, never
+  during the main Dijkstra loop.
+
+The `cold` field in `SolverEdgeHot` is an index into `m_edge_details` for
+path-building.
+
+### Node and Edge Lookup
+
+Transparent hash maps (`m_node_by_name`, `m_edge_by_name`) provide O(1) lookup
+by string code without allocating a `std::string` for each query (heterogeneous
+lookup via `std::string_view`).
+
+---
+
+## Solver Algorithm
+
+The pathfinding algorithm is a modified Dijkstra that operates in minutes since
+the Unix epoch and accounts for schedule constraints (routes only depart on
+specific days/times).
+
+### Time Model
+
+All solver-internal times are `SolverMinute` (uint32_t minutes since epoch).
+This gives a range of ~8,171 years, far exceeding operational needs, while
+keeping comparisons cheap (integer ops, no chrono overhead in the hot loop).
+
+### Traversal Modes
+
+The solver supports two traversal modes, both using the same `find_path_impl`
+template:
+
+- **FORWARD** -- finds the earliest arrival path from source to target, starting
+  at a given time. Relaxation condition: `next < current_best` (minimize arrival
+  time). Priority queue ordered as min-heap by distance.
+- **REVERSE** -- finds the latest departure path from target back to source that
+  still arrives by a deadline. Relaxation condition: `next > current_best`
+  (maximize departure time). Priority queue ordered as max-heap by distance.
+
+### Edge Traversal (Schedule Resolution)
+
+The `traverse<P>()` function computes the arrival time at the next node given a
+departure time and an edge's weekly schedule:
+
+**Forward**: Given current time `t`, find the next scheduled departure on or
+after `t` (mod week). The result is `t + wait_for_departure + transit_duration`.
+Uses `std::lower_bound` over the sorted schedule array. If no departure exists
+in the remainder of the week, wraps to the first departure of the following
+week.
+
+**Reverse**: Given a deadline `t`, find the latest scheduled departure on or
+before `t` (mod week). The result is `t - wait_since_departure -
+transit_duration`. Uses `std::upper_bound` then steps back. Includes the source
+node's outbound processing latency (`reverse_outbound_latency`).
+
+### Weekly Schedule Precomputation
+
+When an edge is added, the build computes up to 7 departure-minute-of-week
+values from the route's `days_of_week` bitmask and `schedule_offset`. These are
+stored sorted in a fixed `std::array<SolverMinute, 7>` with a count field.
+This avoids any allocation or branching during traversal -- the hot path is a
+binary search over at most 7 values.
+
+### Thread-Local Scratch Buffers
+
+Each solver thread maintains a `thread_local SolverScratch` struct containing:
+
+- `distances[N]` -- best-known distance to each node
+- `predecessors[N]` -- edge id used to reach each node on the best path
+- `generations[N]` -- generation counter to avoid clearing arrays between queries
+- `heap` -- binary heap entries
+- `path_nodes`, `path_edges` -- reused buffers for path reconstruction
+
+The generation counter trick: instead of clearing `distances[]` (O(N)) between
+queries, a per-query generation is incremented. A node's distance is valid only
+if `generations[node] == current_generation`. This makes per-query setup O(1)
+regardless of graph size.
+
+### Vehicle Type Filtering
+
+Edges are filtered by vehicle type during traversal. `VehicleType` is an enum
+where `SURFACE < AIR`. Querying with `VehicleType::AIR` allows both surface and
+air edges; querying with `VehicleType::SURFACE` restricts to surface-only. This
+is checked per-edge via `edge.vehicle <= V`.
+
+### Path Reconstruction
+
+After Dijkstra terminates (target node popped from the queue), the path is
+reconstructed by following `predecessors[]` from target back to source:
+
+- **Forward**: trace backwards source←target, reverse the result to get
+  chronological order. Each step records the node, outbound edge (from cold
+  storage), and arrival time.
+- **Reverse**: trace forwards from target along predecessor edges. Each step
+  records the node, the outbound edge, and the departure time (distance +
+  outbound latency for the source node).
+
+---
+
+## Priority Queues
+
+The solver supports two priority queue implementations, selected at compile time
+via `-DMOIRAI_SOLVER_QUEUE=binary|bucket`.
+
+### Binary Heap (default, production)
+
+A standard `std::vector`-backed binary heap using `std::push_heap` /
+`std::pop_heap` with a custom comparator:
+
+- Forward mode: min-heap (smallest distance first)
+- Reverse mode: max-heap (largest distance first)
+
+Stale entries (where `entry.distance != scratch.distance(entry.node)`) are
+skipped on pop rather than decreased-key, making this a lazy-deletion Dijkstra.
+This avoids the complexity of an indexed heap while being efficient for
+transportation networks where the number of stale entries is small relative to
+graph size.
+
+Complexity: O((V + E) log V) per query.
+
+### Bucket Queue (experimental)
+
+A `std::map<SolverMinute, std::vector<NodeId>>` keyed by distance. Forward
+mode uses `std::less` ordering (smallest bucket first); reverse mode uses
+`std::greater` (largest bucket first).
+
+Pop extracts from the back of the first bucket's vector. Empty buckets are
+erased. This provides O(1) amortized pop when edge weights cluster into few
+distinct values, but has higher constant factors than the binary heap due to
+map node allocation.
+
+The bucket queue is retained as an experimental option. Production deployments
+should use the binary heap.
+
+---
+
+## BlockingQueue
+
+The inter-thread communication channels use a custom `BlockingQueue<T>` that
+wraps `moodycamel::ConcurrentQueue` with bounded capacity, blocking semantics,
+and cooperative shutdown.
+
+### Design
+
+```cpp
+BlockingQueue<T>(capacity)
+```
+
+- **Bounded MPMC** -- multiple producers and consumers, with a configurable
+  capacity. Producers block when the queue is full; consumers block when empty.
+- **Stop-token aware** -- all blocking operations accept `std::stop_token` and
+  unblock when cancellation is requested.
+- **Closeable** -- `close()` wakes all waiters and rejects further enqueues.
+  Items enqueued concurrently with close are discarded.
+
+### Operations
+
+| Method | Behavior |
+| --- | --- |
+| `wait_enqueue(value, stop_token)` | Block until slot available or closed/stopped. Returns false on rejection. |
+| `wait_dequeue_bulk(span, stop_token)` | Block until at least one item available. Dequeues up to `span.size()` items. Returns 0 on close. |
+| `try_dequeue_bulk(items, count)` | Non-blocking bulk dequeue. Returns number dequeued (may be 0). |
+| `close()` | Permanently shuts down the queue. Wakes all waiters. |
+| `size_approx()` | Current logical size (items enqueued minus dequeued). |
+
+### Synchronization
+
+The queue combines lock-free enqueue/dequeue (from moodycamel) with a mutex +
+condition variables for blocking and capacity tracking:
+
+- `m_not_full` -- signaled when items are consumed, waking blocked producers.
+- `m_not_empty` -- signaled when items are produced, waking blocked consumers.
+- `m_size` -- logical count maintained under the mutex for capacity enforcement.
+- `m_pending_pushes` -- tracks in-flight enqueues between reservation and
+  completion to prevent over-admission.
+
+This hybrid avoids spinning while still allowing the underlying lock-free queue
+to handle the actual data movement without contention.
+
+### Pipeline Queues
+
+The application creates four queues:
+
+| Queue | Type | Capacity | Purpose |
+| --- | --- | --- | --- |
+| `node_queue` | TransportCenter batch | 1 | Facility initialization (single batch) |
+| `edge_queue` | TransportEdge batch | 1 | Route initialization (single batch) |
+| `load_queue` | Load payload | 4096 | Streaming loads from reader to solvers |
+| `solution_queue` | SearchDocument | 4096 | Streaming results from solvers to writers |
+
+The initialization queues have capacity 1 because they carry a single large
+batch each (all facilities, all routes). The streaming queues use 4096 to
+buffer bursts without blocking the reader or solver threads.
+
+---
+
 ## Module Conventions
 
 - First-party code uses `import std` and named project modules.
