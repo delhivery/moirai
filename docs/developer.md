@@ -222,10 +222,12 @@ Uses `std::lower_bound` over the sorted schedule array. If no departure exists
 in the remainder of the week, wraps to the first departure of the following
 week.
 
-**Reverse**: Given a deadline `t`, find the latest scheduled departure on or
-before `t` (mod week). The result is `t - wait_since_departure -
-transit_duration`. Uses `std::upper_bound` then steps back. Includes the source
-node's outbound processing latency (`reverse_outbound_latency`).
+**Reverse**: Given a deadline `t` at the destination node, find the last
+scheduled trip arriving on or before `t` (mod week). The result is
+`t - wait_since_arrival - reverse_duration`, yielding the departure time at the
+origin of the trip. Uses `std::upper_bound` then steps back. Path
+reconstruction adds the source node's outbound processing latency
+(`reverse_outbound_latency`) when emitting departure timestamps.
 
 ### Weekly Schedule Precomputation
 
