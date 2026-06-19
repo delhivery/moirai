@@ -1016,6 +1016,19 @@ auto field_type(const moirai::Json& properties, std::string_view field)
     .transform([](std::string_view sv) { return std::string(sv); });
 }
 
+auto field_is_object(const moirai::Json& properties, std::string_view field)
+    -> bool {
+  const auto* mapping = mapping_at(properties, field);
+  if (mapping == nullptr) {
+    return false;
+  }
+  const auto type = moirai::find_string_member(*mapping, "type");
+  if (type.has_value() && *type == "object") {
+    return true;
+  }
+  return moirai::find_object_member(*mapping, "properties") != nullptr;
+}
+
 auto field_bool(const moirai::Json& properties, std::string_view field,
                 std::string_view key) -> std::optional<bool> {
   const auto* mapping = mapping_at(properties, field);
@@ -1168,23 +1181,44 @@ auto search_mapping_body_json() -> std::string {
 }
 
 auto mapping_needs_extension(const moirai::Json& properties) -> bool {
-  if (field_type(properties, "is_critical") != std::optional<std::string>{"boolean"}) {
+  if (!field_type(properties, "is_critical").has_value()) {
     return true;
   }
 
   constexpr std::array path_sections{ "earliest", "ultimate" };
+  constexpr std::array path_positions{ "first", "second" };
+  constexpr std::array path_location_fields{
+    std::pair{ "code", "keyword" },
+    std::pair{ "facility_name", "keyword" },
+    std::pair{ "arrival", "date" },
+    std::pair{ "arrival_ts", "long" },
+    std::pair{ "route", "keyword" },
+    std::pair{ "route_name", "keyword" },
+    std::pair{ "departure", "date" },
+    std::pair{ "departure_ts", "long" },
+  };
   for (std::string_view section : path_sections) {
-    if (field_type(properties, std::format("{}.hop_count", section)) !=
-        std::optional<std::string>{"integer"}) {
+    if (!field_type(properties, std::format("{}.hop_count", section))
+           .has_value()) {
       return true;
     }
-    if (field_type(properties, std::format("{}.location_codes", section)) !=
-        std::optional<std::string>{"keyword"}) {
+    if (!field_type(properties, std::format("{}.location_codes", section))
+           .has_value()) {
       return true;
     }
-    if (field_type(properties, std::format("{}.route_codes", section)) !=
-        std::optional<std::string>{"keyword"}) {
+    if (!field_type(properties, std::format("{}.route_codes", section))
+           .has_value()) {
       return true;
+    }
+    for (std::string_view position : path_positions) {
+      const auto position_field = std::format("{}.{}", section, position);
+      for (const auto& [field, expected_type] : path_location_fields) {
+        static_cast<void>(expected_type);
+        if (!field_type(properties, std::format("{}.{}", position_field, field))
+               .has_value()) {
+          return true;
+        }
+      }
     }
   }
 
@@ -1516,6 +1550,9 @@ SearchWriter::validate_index_definition()
 
   const auto validate_field_type =
     [&](std::string_view field, std::string_view expected_type) {
+    if (expected_type == "object" && field_is_object(*properties, field)) {
+      return;
+    }
     const auto actual_type = field_type(*properties, field);
     if (!actual_type.has_value() || *actual_type != expected_type) {
       app.logger().error("Search index {} field {} has type {}, expected {}",

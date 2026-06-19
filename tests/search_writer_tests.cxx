@@ -232,6 +232,16 @@ auto legacy_mapping_missing_extensions() -> std::string {
   return body.dump();
 }
 
+auto incompatible_mapping() -> std::string {
+  auto body = nlohmann::json::parse(valid_mapping());
+  auto& properties = body["moirai"]["mappings"]["properties"];
+  properties["waybill"]["type"] = "text";
+  properties["earliest"]["properties"]["locations"]["enabled"] = true;
+  properties["earliest"]["properties"]["first"]["properties"]["arrival"]["type"] =
+    "text";
+  return body.dump();
+}
+
 auto valid_settings() -> std::string {
   return R"({
     "moirai": {
@@ -491,35 +501,9 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
   auto state = std::make_shared<FakeSearchState>();
   state->responses = {
     { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
-    { "GET", "/moirai/_mapping", { .status_code = 200, .body = R"({
-      "moirai": {"mappings": {"properties": {
-        "waybill": {"type": "text"},
-        "is_critical": {"type": "boolean"},
-        "earliest": {
-          "type": "object",
-          "properties": {
-            "hop_count": {"type": "integer"},
-            "location_codes": {"type": "keyword"},
-            "route_codes": {"type": "keyword"},
-            "locations": {"type": "object", "enabled": true},
-            "first": {
-              "type": "object",
-              "properties": {
-                "arrival": {"type": "text"}
-              }
-            }
-          }
-        },
-        "ultimate": {
-          "type": "object",
-          "properties": {
-            "hop_count": {"type": "integer"},
-            "location_codes": {"type": "keyword"},
-            "route_codes": {"type": "keyword"}
-          }
-        }
-      }}}
-    })" } },
+    { "GET",
+      "/moirai/_mapping",
+      { .status_code = 200, .body = incompatible_mapping() } },
     { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
     { "GET", "", { .status_code = 200, .body = "[]" } },
   };
