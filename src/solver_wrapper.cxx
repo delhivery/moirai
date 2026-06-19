@@ -706,6 +706,7 @@ SolverWrapper::find_paths(
       source.has_value(),
       bag_target,
       target.has_value());
+    response.is_critical = true;
     return response;
   }
 
@@ -819,6 +820,8 @@ SolverWrapper::find_paths(
   if (bag_pdd == CLOCK::max()) {
     bag_pdd = bag_earliest_pdd;
   }
+
+  response.is_critical = critical;
 
   if (!critical) {
     const auto key = cache_key("R:S", *target, *source, bag_pdd);

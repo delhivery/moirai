@@ -29,6 +29,7 @@ export struct SearchDocument {
   std::string fail;
   std::string pdd;
   std::int64_t pdd_ts{};
+  bool is_critical{false};
   SearchPathSection earliest;
   SearchPathSection ultimate;
 

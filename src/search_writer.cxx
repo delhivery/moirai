@@ -678,6 +678,56 @@ void append_int_field(std::string& output, std::string_view key,
   output += std::to_string(value);
 }
 
+void append_bool_field(std::string& output, std::string_view key, bool value,
+                       bool& first) {
+  append_field_prefix(output, key, first);
+  output += value ? "true" : "false";
+}
+
+template <typename SelectValue>
+void append_unique_path_string_array(std::string& output, std::string_view key,
+                                     const SearchPathSection& section,
+                                     bool& first, SelectValue select_value) {
+  append_field_prefix(output, key, first);
+  output.push_back('[');
+  constexpr std::size_t STACK_EMITTED_CAPACITY = 16;
+  std::array<std::string_view, STACK_EMITTED_CAPACITY> stack_emitted{};
+  std::size_t stack_emitted_size = 0;
+  std::vector<std::string_view> heap_emitted;
+  const auto already_emitted = [&](std::string_view value) {
+    return std::ranges::find(stack_emitted.begin(),
+                             stack_emitted.begin() + stack_emitted_size,
+                             value) != stack_emitted.begin() +
+                                         stack_emitted_size ||
+           std::ranges::contains(heap_emitted, value);
+  };
+  const auto remember_emitted = [&](std::string_view value) {
+    if (stack_emitted_size < stack_emitted.size()) {
+      stack_emitted[stack_emitted_size] = value;
+      ++stack_emitted_size;
+      return;
+    }
+    if (heap_emitted.empty()) {
+      heap_emitted.reserve(section.locations.size() - stack_emitted.size());
+    }
+    heap_emitted.push_back(value);
+  };
+  bool array_first = true;
+  for (const auto& location : section.locations) {
+    const std::string_view value = select_value(location);
+    if (value.empty() || already_emitted(value)) {
+      continue;
+    }
+    if (!array_first) {
+      output.push_back(',');
+    }
+    array_first = false;
+    append_json_string(output, value);
+    remember_emitted(value);
+  }
+  output.push_back(']');
+}
+
 void append_location(std::string& output, const SearchPathLocation& location) {
   output.push_back('{');
   bool first = true;
@@ -707,6 +757,31 @@ void append_path_section(std::string& output, std::string_view key,
   append_field_prefix(output, key, first);
   output.push_back('{');
   bool section_first = true;
+
+  append_int_field(output,
+                   "hop_count",
+                   static_cast<std::int64_t>(section.locations.size()),
+                   section_first);
+  append_unique_path_string_array(
+    output,
+    "location_codes",
+    section,
+    section_first,
+    [](const SearchPathLocation& location) -> std::string_view {
+      return location.code;
+    });
+  append_unique_path_string_array(
+    output,
+    "route_codes",
+    section,
+    section_first,
+    [](const SearchPathLocation& location) -> std::string_view {
+      if (!location.has_departure) {
+        return {};
+      }
+      return location.route;
+    });
+
   append_field_prefix(output, "locations", section_first);
   output.push_back('[');
   for (std::size_t index = 0; index < section.locations.size(); ++index) {
@@ -741,6 +816,7 @@ auto serialize_document_body(const SearchDocument& document,
   if (!document.fail.empty()) {
     append_string_field(output, "fail", document.fail, first);
   }
+  append_bool_field(output, "is_critical", document.is_critical, first);
   append_path_section(output, "earliest", document.earliest, first);
   append_path_section(output, "ultimate", document.ultimate, first);
   append_string_field(output, "pdd", document.pdd, first);
@@ -1023,6 +1099,98 @@ auto decimal_from_json(const moirai::Json& value) -> std::optional<double> {
   return parsed;
 }
 
+auto keyword_mapping_json(std::size_t ignore_above) -> std::string {
+  return std::format(R"({{"type":"keyword","ignore_above":{}}})",
+                     ignore_above);
+}
+
+auto display_date_mapping_json() -> std::string {
+  return std::format(R"({{"type":"date","format":"{}"}})",
+                     DISPLAY_DATE_FORMAT);
+}
+
+auto search_location_mapping_json() -> std::string {
+  constexpr std::string_view LONG_TYPE = R"({"type":"long"})";
+  const auto display_date = display_date_mapping_json();
+  return std::format(
+    R"({{"type":"object","dynamic":false,"properties":{{)"
+    R"("code":{},"facility_name":{},"arrival":{},"arrival_ts":{},"route":{},"route_name":{},"departure":{},"departure_ts":{})"
+    R"(}}}})",
+    keyword_mapping_json(128),
+    keyword_mapping_json(256),
+    display_date,
+    LONG_TYPE,
+    keyword_mapping_json(512),
+    keyword_mapping_json(512),
+    display_date,
+    LONG_TYPE);
+}
+
+auto search_path_section_mapping_json() -> std::string {
+  constexpr std::string_view INTEGER_TYPE = R"({"type":"integer"})";
+  const auto location = search_location_mapping_json();
+  return std::format(
+    R"({{"type":"object","dynamic":false,"properties":{{)"
+    R"("hop_count":{},"location_codes":{},"route_codes":{},)"
+    R"("locations":{{"type":"object","enabled":false}},)"
+    R"("first":{},"second":{})"
+    R"(}}}})",
+    INTEGER_TYPE,
+    keyword_mapping_json(128),
+    keyword_mapping_json(512),
+    location,
+    location);
+}
+
+auto search_mapping_body_json() -> std::string {
+  constexpr std::string_view LONG_TYPE = R"({"type":"long"})";
+  constexpr std::string_view BOOLEAN_TYPE = R"({"type":"boolean"})";
+  const auto display_date = display_date_mapping_json();
+  const auto path_section = search_path_section_mapping_json();
+  return std::format(
+    R"({{"dynamic":false,"properties":{{)"
+    R"("waybill":{},"package":{},"cs_slid":{},"cs_act":{},"pid":{},"fail":{},)"
+    R"("is_critical":{},"pdd":{},"pdd_ts":{},"updated_at":{{"type":"date"}},"updated_at_ts":{},)"
+    R"("earliest":{},"ultimate":{})"
+    R"(}}}})",
+    keyword_mapping_json(128),
+    keyword_mapping_json(128),
+    keyword_mapping_json(128),
+    keyword_mapping_json(128),
+    keyword_mapping_json(128),
+    keyword_mapping_json(8191),
+    BOOLEAN_TYPE,
+    display_date,
+    LONG_TYPE,
+    LONG_TYPE,
+    path_section,
+    path_section);
+}
+
+auto mapping_needs_extension(const moirai::Json& properties) -> bool {
+  if (field_type(properties, "is_critical") != std::optional<std::string>{"boolean"}) {
+    return true;
+  }
+
+  constexpr std::array path_sections{ "earliest", "ultimate" };
+  for (std::string_view section : path_sections) {
+    if (field_type(properties, std::format("{}.hop_count", section)) !=
+        std::optional<std::string>{"integer"}) {
+      return true;
+    }
+    if (field_type(properties, std::format("{}.location_codes", section)) !=
+        std::optional<std::string>{"keyword"}) {
+      return true;
+    }
+    if (field_type(properties, std::format("{}.route_codes", section)) !=
+        std::optional<std::string>{"keyword"}) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 } // namespace
 
 auto
@@ -1221,38 +1389,18 @@ SearchWriter::bulk_headers(bool compressed) const -> std::vector<std::string>
 auto
 SearchWriter::create_index_body() const -> std::string
 {
-  const auto keyword = [](std::size_t ignore_above) -> std::string {
-    return std::format(R"({{"type":"keyword","ignore_above":{}}})", ignore_above);
-  };
-  const auto long_type = R"({"type":"long"})";
-  const auto display_date = std::format(
-    R"({{"type":"date","format":"{}"}})", DISPLAY_DATE_FORMAT);
-  const auto location = std::format(
-    R"({{"type":"object","dynamic":false,"properties":{{)"
-    R"("code":{},"facility_name":{},"arrival":{},"arrival_ts":{},"route":{},"route_name":{},"departure":{},"departure_ts":{})"
-    R"(}}}})",
-    keyword(128), keyword(256), display_date, long_type, keyword(512), keyword(512), display_date, long_type);
-  const auto path_section = std::format(
-    R"({{"type":"object","dynamic":false,"properties":{{)"
-    R"("locations":{{"type":"object","enabled":false}},)"
-    R"("first":{},"second":{})"
-    R"(}}}})",
-    location, location);
-
-  return std::format(
-    R"({{"settings":{{"index":{{"number_of_shards":{},"number_of_replicas":{},"refresh_interval":"{}"}}}},)"
-    R"("mappings":{{"dynamic":false,"properties":{{)"
-    R"("waybill":{},"package":{},"cs_slid":{},"cs_act":{},"pid":{},"fail":{},)"
-    R"("pdd":{},"pdd_ts":{},"updated_at":{{"type":"date"}},"updated_at_ts":{},)"
-    R"("earliest":{},"ultimate":{},"critical":{})"
-    R"(}}}}}})",
-    m_index_config.shards,
-    m_index_config.replicas,
-    m_index_config.refresh_interval,
-    keyword(128), keyword(128), keyword(128), keyword(128), keyword(128),
-    keyword(8191),
-    display_date, long_type, long_type,
-    path_section, path_section, path_section);
+  std::string output;
+  output.reserve(512);
+  output += R"({"settings":{"index":{"number_of_shards":)";
+  output += std::to_string(m_index_config.shards);
+  output += R"(,"number_of_replicas":)";
+  output += std::to_string(m_index_config.replicas);
+  output += R"(,"refresh_interval":)";
+  append_json_string(output, m_index_config.refresh_interval);
+  output += R"(}},"mappings":)";
+  output += search_mapping_body_json();
+  output.push_back('}');
+  return output;
 }
 
 void
@@ -1281,49 +1429,85 @@ SearchWriter::create_index()
     m_index_config.refresh_interval);
 }
 
+auto
+SearchWriter::update_index_mapping() -> bool
+{
+  auto& app = moirai::Application::instance();
+  const auto response =
+    m_http_request("PUT",
+                   moirai::append_path(m_uri, "/" + m_search_index + "/_mapping"),
+                   search_mapping_body_json(),
+                   json_headers());
+  if (response.status_code != HTTP_STATUS_OK) {
+    app.logger().error("Unable to update search index mapping {}: HTTP {} {}",
+                       m_search_index,
+                       response.status_code,
+                       response.body);
+    return false;
+  }
+
+  app.logger().information("Updated additive search index mapping for {}",
+                           m_search_index);
+  return true;
+}
+
 void
 SearchWriter::validate_index_definition()
 {
   auto& app = moirai::Application::instance();
-  const auto mapping_response =
-    m_http_request("GET",
-                   moirai::append_path(m_uri, "/" + m_search_index + "/_mapping"),
-                   {},
-                   authorization_headers());
-  if (mapping_response.status_code != HTTP_STATUS_OK) {
-    app.logger().error("Unable to validate search index mapping {}: HTTP {} {}",
-                       m_search_index,
-                       mapping_response.status_code,
-                       mapping_response.body);
-    return;
-  }
+  const auto fetch_properties = [&]() -> std::optional<moirai::Json> {
+    const auto mapping_response =
+      m_http_request("GET",
+                     moirai::append_path(m_uri,
+                                         "/" + m_search_index + "/_mapping"),
+                     {},
+                     authorization_headers());
+    if (mapping_response.status_code != HTTP_STATUS_OK) {
+      app.logger().error("Unable to validate search index mapping {}: HTTP {} {}",
+                         m_search_index,
+                         mapping_response.status_code,
+                         mapping_response.body);
+      return std::nullopt;
+    }
 
-  const auto parsed_mapping = moirai::parse_json(mapping_response.body);
-  if (!parsed_mapping.has_value() || !parsed_mapping->is_object()) {
-    app.logger().error("Unable to parse search index mapping for {}",
+    const auto parsed_mapping = moirai::parse_json(mapping_response.body);
+    if (!parsed_mapping.has_value() || !parsed_mapping->is_object()) {
+      app.logger().error("Unable to parse search index mapping for {}",
+                         m_search_index);
+      return std::nullopt;
+    }
+
+    for (const auto& kv : parsed_mapping->get_object().value_unsafe()) {
+      const auto& index_definition = kv.value;
+      if (!index_definition.is_object()) {
+        continue;
+      }
+      const auto* mappings = moirai::find_object_member(index_definition,
+                                                        "mappings");
+      if (mappings == nullptr) {
+        continue;
+      }
+      const auto* props = moirai::find_object_member(*mappings, "properties");
+      if (props == nullptr) {
+        continue;
+      }
+      return *props;
+    }
+
+    return std::nullopt;
+  };
+
+  std::optional<moirai::Json> properties = fetch_properties();
+
+  if (!properties.has_value()) {
+    app.logger().error("Search index {} mapping has no properties",
                        m_search_index);
     return;
   }
 
-  std::optional<moirai::Json> properties;
-  for (const auto& kv : parsed_mapping->get_object().value_unsafe()) {
-    const auto& index_definition = kv.value;
-    if (!index_definition.is_object()) {
-      continue;
-    }
-    const auto* mappings = moirai::find_object_member(index_definition,
-                                                       "mappings");
-    if (mappings == nullptr) {
-      continue;
-    }
-    const auto* props = moirai::find_object_member(*mappings, "properties");
-    if (props == nullptr) {
-      continue;
-    }
-    properties = *props;
-    break;
+  if (mapping_needs_extension(*properties) && update_index_mapping()) {
+    properties = fetch_properties();
   }
-
   if (!properties.has_value()) {
     app.logger().error("Search index {} mapping has no properties",
                        m_search_index);
@@ -1361,6 +1545,7 @@ SearchWriter::validate_index_definition()
     std::pair{ "cs_act", "keyword" },
     std::pair{ "pid", "keyword" },
     std::pair{ "fail", "keyword" },
+    std::pair{ "is_critical", "boolean" },
     std::pair{ "pdd", "date" },
     std::pair{ "pdd_ts", "long" },
     std::pair{ "updated_at", "date" },
@@ -1371,8 +1556,13 @@ SearchWriter::validate_index_definition()
   }
   validate_field_format("pdd", DISPLAY_DATE_FORMAT);
 
-  constexpr std::array path_sections{ "earliest", "ultimate", "critical" };
+  constexpr std::array path_sections{ "earliest", "ultimate" };
   constexpr std::array path_positions{ "first", "second" };
+  constexpr std::array path_summary_fields{
+    std::pair{ "hop_count", "integer" },
+    std::pair{ "location_codes", "keyword" },
+    std::pair{ "route_codes", "keyword" },
+  };
   constexpr std::array path_location_fields{
     std::pair{ "code", "keyword" },
     std::pair{ "facility_name", "keyword" },
@@ -1385,6 +1575,10 @@ SearchWriter::validate_index_definition()
   };
   for (std::string_view section : path_sections) {
     validate_field_type(section, "object");
+    for (const auto& [field, expected_type] : path_summary_fields) {
+      validate_field_type(std::format("{}.{}", section, field),
+                          expected_type);
+    }
     const auto locations_field = std::format("{}.locations", section);
     validate_field_type(locations_field, "object");
     const auto locations_enabled =

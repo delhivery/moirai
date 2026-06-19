@@ -69,6 +69,7 @@ private:
       -> std::vector<std::string>;
   [[nodiscard]] auto create_index_body() const -> std::string;
   void create_index();
+  auto update_index_mapping() -> bool;
   void validate_index_definition();
   void check_shard_balance();
 

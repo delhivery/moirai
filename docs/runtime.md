@@ -37,13 +37,16 @@ Timestamp strings such as `pdd`, `arrival`, and `departure` are indexed as
 OpenSearch `date` fields using the existing `MM/dd/yy HH:mm:ss` payload format.
 Canonical timestamp counters such as `pdd_ts`, `arrival_ts`, and `departure_ts`
 are `long`, and `updated_at` is an ISO-8601 `date`. Solver timestamps
-(`pdd_ts`, `arrival_ts`, and `departure_ts`) are epoch minutes. Writer
-timestamps (`updated_at_ts`) are epoch seconds.
+(`pdd_ts`, `arrival_ts`, and `departure_ts`) and writer timestamps
+(`updated_at_ts`) are epoch seconds.
 
-Path section arrays (`earliest.locations`, `ultimate.locations`, and
-`critical.locations`) are kept in `_source` only with `enabled: false` to avoid
-indexing every hop in every path. The lightweight `first` and `second` path
-objects remain explicitly indexed for filtering and sorting.
+Full path arrays (`earliest.locations` and `ultimate.locations`) are kept in
+`_source` only with `enabled: false` to avoid indexing every hop in every path.
+The lightweight `first` and `second` path objects remain explicitly indexed for
+filtering and sorting. Each path section also indexes `hop_count`,
+`location_codes`, and `route_codes` summaries for coarse filtering without
+nested-document expansion. Criticality is exposed as the top-level
+`is_critical` boolean.
 
 OpenSearch does not allow changing an existing field type in place. If an older
 index has dynamically inferred fields such as `earliest.first.arrival` as `text`,

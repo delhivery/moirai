@@ -102,6 +102,7 @@ void test_find_paths_non_critical_returns_earliest_and_ultimate() {
     packages);
 
   expect_eq(response.waybill, std::string{"bag"}, "waybill copied");
+  expect_eq(response.is_critical, false, "non-critical flag");
   expect_true(!response.earliest.locations.empty(), "earliest path present");
   expect_true(!response.ultimate.locations.empty(), "ultimate path present");
   expect_eq(response.earliest.locations.size(), std::size_t{2},
@@ -135,6 +136,7 @@ void test_find_paths_critical_omits_ultimate() {
 
   expect_true(!response.earliest.locations.empty(),
               "critical still returns earliest");
+  expect_eq(response.is_critical, true, "critical flag");
   expect_eq(response.ultimate.locations.empty(), true,
             "critical path omits ultimate");
 }
@@ -156,6 +158,7 @@ void test_find_paths_missing_node_returns_fail() {
     packages);
 
   expect_true(!response.fail.empty(), "missing node returns fail");
+  expect_eq(response.is_critical, true, "missing node critical flag");
   expect_true(logs.contains("Pathing failed"), "missing node debug log");
   moirai::Application::instance().logger().set_level("information");
 }
@@ -184,6 +187,7 @@ void test_find_paths_child_can_make_parent_critical() {
             "package id comes from child");
   expect_true(!response.earliest.locations.empty(),
               "child critical returns earliest");
+  expect_eq(response.is_critical, true, "child critical flag");
   expect_eq(response.ultimate.locations.empty(), true,
             "child critical omits ultimate");
 }

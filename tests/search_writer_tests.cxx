@@ -144,6 +144,14 @@ auto long_mapping() -> nlohmann::json {
   return { { "type", "long" } };
 }
 
+auto integer_mapping() -> nlohmann::json {
+  return { { "type", "integer" } };
+}
+
+auto boolean_mapping() -> nlohmann::json {
+  return { { "type", "boolean" } };
+}
+
 auto display_date_mapping() -> nlohmann::json {
   return { { "type", "date" },
            { "format", "MM/dd/yy HH:mm:ss||strict_date_optional_time" } };
@@ -155,9 +163,11 @@ auto location_mapping() -> nlohmann::json {
            { "properties",
              {
                { "code", keyword_mapping(128) },
+               { "facility_name", keyword_mapping(256) },
                { "arrival", display_date_mapping() },
                { "arrival_ts", long_mapping() },
                { "route", keyword_mapping(512) },
+               { "route_name", keyword_mapping(512) },
                { "departure", display_date_mapping() },
                { "departure_ts", long_mapping() },
              } } };
@@ -168,6 +178,9 @@ auto path_section_mapping() -> nlohmann::json {
            { "dynamic", false },
            { "properties",
              {
+               { "hop_count", integer_mapping() },
+               { "location_codes", keyword_mapping(128) },
+               { "route_codes", keyword_mapping(512) },
                { "locations",
                  {
                    { "type", "object" },
@@ -192,16 +205,30 @@ auto valid_mapping() -> std::string {
                 { "cs_act", keyword_mapping(128) },
                 { "pid", keyword_mapping(128) },
                 { "fail", keyword_mapping(8191) },
+                { "is_critical", boolean_mapping() },
                 { "pdd", display_date_mapping() },
                 { "pdd_ts", long_mapping() },
                 { "updated_at", { { "type", "date" } } },
                 { "updated_at_ts", long_mapping() },
                 { "earliest", path_section_mapping() },
                 { "ultimate", path_section_mapping() },
-                { "critical", path_section_mapping() },
               } } } },
       } },
   };
+  return body.dump();
+}
+
+auto legacy_mapping_missing_extensions() -> std::string {
+  auto body = nlohmann::json::parse(valid_mapping());
+  auto& properties = body["moirai"]["mappings"]["properties"];
+  properties.erase("is_critical");
+  constexpr std::array path_sections{ "earliest", "ultimate" };
+  for (std::string_view section : path_sections) {
+    auto& section_properties = properties[section]["properties"];
+    section_properties.erase("hop_count");
+    section_properties.erase("location_codes");
+    section_properties.erase("route_codes");
+  }
   return body.dump();
 }
 
@@ -336,6 +363,10 @@ void test_missing_index_is_created_with_mapping_and_settings() {
               .get<std::size_t>(),
             std::size_t{8191},
             "fail ignore_above");
+  expect_eq(body["mappings"]["properties"]["is_critical"]["type"]
+              .get<std::string>(),
+            std::string{"boolean"},
+            "is_critical mapping");
   expect_eq(body["mappings"]["properties"]["pdd"]["type"].get<std::string>(),
             std::string{"date"},
             "pdd date mapping");
@@ -350,6 +381,21 @@ void test_missing_index_is_created_with_mapping_and_settings() {
                   .get<bool>(),
             false,
             "locations source-only mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]
+                ["hop_count"]["type"]
+                  .get<std::string>(),
+            std::string{"integer"},
+            "hop_count mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]
+                ["location_codes"]["type"]
+                  .get<std::string>(),
+            std::string{"keyword"},
+            "location_codes mapping");
+  expect_eq(body["mappings"]["properties"]["earliest"]["properties"]
+                ["route_codes"]["type"]
+                  .get<std::string>(),
+            std::string{"keyword"},
+            "route_codes mapping");
   expect_eq(body["mappings"]["properties"]["earliest"]["properties"]["first"]
                 ["properties"]["arrival"]["type"]
                   .get<std::string>(),
@@ -375,11 +421,8 @@ void test_missing_index_is_created_with_mapping_and_settings() {
                   .get<std::string>(),
             std::string{"date"},
             "ultimate second departure date mapping");
-  expect_eq(body["mappings"]["properties"]["critical"]["properties"]["second"]
-                ["properties"]["departure_ts"]["type"]
-                  .get<std::string>(),
-            std::string{"long"},
-            "critical second departure_ts mapping");
+  expect_true(!body["mappings"]["properties"].contains("critical"),
+              "dead critical path mapping omitted");
   expect_eq(body["mappings"]["properties"]["updated_at_ts"]["type"]
               .get<std::string>(),
             std::string{"long"},
@@ -406,6 +449,43 @@ void test_existing_index_is_validated_without_recreation() {
               "existing index is not recreated");
 }
 
+void test_existing_index_missing_extensions_is_updated() {
+  BlockingQueue<SearchDocument> queue;
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET",
+      "/moirai/_mapping",
+      { .status_code = 200, .body = legacy_mapping_missing_extensions() } },
+    { "PUT",
+      "/moirai/_mapping",
+      { .status_code = 200, .body = R"({"acknowledged":true})" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+  };
+
+  auto writer = writer_with(state, queue);
+  writer.ensure_index_ready();
+
+  expect_eq(state->calls.size(), std::size_t{6}, "extension update call count");
+  const auto body = nlohmann::json::parse(state->calls[2].body);
+  expect_eq(body["properties"]["is_critical"]["type"].get<std::string>(),
+            std::string{"boolean"},
+            "mapping update includes is_critical");
+  expect_eq(body["properties"]["earliest"]["properties"]["hop_count"]["type"]
+              .get<std::string>(),
+            std::string{"integer"},
+            "mapping update includes hop_count");
+  expect_eq(body["properties"]["ultimate"]["properties"]["location_codes"]
+                ["type"]
+                  .get<std::string>(),
+            std::string{"keyword"},
+            "mapping update includes location_codes");
+  expect_true(!body["properties"].contains("critical"),
+              "mapping update does not reintroduce critical path");
+}
+
 void test_incompatible_mapping_is_logged_without_destructive_change() {
   BlockingQueue<SearchDocument> queue;
   auto state = std::make_shared<FakeSearchState>();
@@ -414,9 +494,13 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
     { "GET", "/moirai/_mapping", { .status_code = 200, .body = R"({
       "moirai": {"mappings": {"properties": {
         "waybill": {"type": "text"},
+        "is_critical": {"type": "boolean"},
         "earliest": {
           "type": "object",
           "properties": {
+            "hop_count": {"type": "integer"},
+            "location_codes": {"type": "keyword"},
+            "route_codes": {"type": "keyword"},
             "locations": {"type": "object", "enabled": true},
             "first": {
               "type": "object",
@@ -424,6 +508,14 @@ void test_incompatible_mapping_is_logged_without_destructive_change() {
                 "arrival": {"type": "text"}
               }
             }
+          }
+        },
+        "ultimate": {
+          "type": "object",
+          "properties": {
+            "hop_count": {"type": "integer"},
+            "location_codes": {"type": "keyword"},
+            "route_codes": {"type": "keyword"}
           }
         }
       }}}
@@ -523,6 +615,18 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
   expect_true(!second_body.contains("_id"), "second body omits _id");
   expect_true(first_body.contains("updated_at"), "first body timestamp text");
   expect_true(second_body.contains("updated_at"), "second body timestamp text");
+  expect_eq(first_body["is_critical"].get<bool>(), false, "first critical flag");
+  expect_eq(second_body["is_critical"].get<bool>(), false, "second critical flag");
+  expect_true(!first_body.contains("critical"), "first body omits critical path");
+  expect_true(!second_body.contains("critical"), "second body omits critical path");
+  expect_eq(first_body["earliest"]["hop_count"].get<std::int64_t>(),
+            std::int64_t{1},
+            "first body hop count");
+  expect_eq(first_body["earliest"]["location_codes"][0].get<std::string>(),
+            std::string{"A"},
+            "first body location summary");
+  expect_true(first_body["earliest"]["route_codes"].empty(),
+              "first body route summary is empty without departures");
   expect_eq(first_body["pdd_ts"].get<std::int64_t>(),
             static_cast<std::int64_t>(
               display_epoch_minutes(first_body["pdd"].get<std::string>())) * 60,
@@ -548,6 +652,75 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
   expect_eq(first_body["updated_at_ts"].get<std::int64_t>(),
             second_body["updated_at_ts"].get<std::int64_t>(),
             "batch timestamps are consistent");
+}
+
+void test_path_summaries_are_deduplicated_and_include_routes() {
+  BlockingQueue<SearchDocument> queue;
+  auto routed = document("wb-routed", "p1");
+  routed.is_critical = true;
+  routed.earliest.locations.clear();
+
+  SearchPathLocation first;
+  first.code = "A";
+  first.arrival = "06/08/26 08:00:00";
+  first.arrival_ts = epoch_seconds("2026-06-08 08:00:00");
+  first.route = "route-1";
+  first.departure = "06/08/26 09:00:00";
+  first.departure_ts = epoch_seconds("2026-06-08 09:00:00");
+  first.has_departure = true;
+
+  SearchPathLocation duplicate_code = first;
+  duplicate_code.route = "route-2";
+  duplicate_code.departure = "06/08/26 10:00:00";
+  duplicate_code.departure_ts = epoch_seconds("2026-06-08 10:00:00");
+
+  SearchPathLocation duplicate_route = first;
+  duplicate_route.code = "B";
+  duplicate_route.arrival = "06/08/26 11:00:00";
+  duplicate_route.arrival_ts = epoch_seconds("2026-06-08 11:00:00");
+
+  routed.earliest.locations.push_back(std::move(first));
+  routed.earliest.locations.push_back(std::move(duplicate_code));
+  routed.earliest.locations.push_back(std::move(duplicate_route));
+  queue.enqueue(std::move(routed));
+  queue.close();
+
+  auto state = std::make_shared<FakeSearchState>();
+  state->responses = {
+    { "HEAD", "/moirai", { .status_code = 200, .body = "" } },
+    { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
+    { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
+    { "GET", "", { .status_code = 200, .body = "[]" } },
+    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
+  };
+
+  auto writer = writer_with(state, queue);
+  writer.run(std::stop_token{});
+
+  const auto lines = split_lines(state->calls.back().body);
+  const auto body = nlohmann::json::parse(lines[1]);
+  expect_eq(body["is_critical"].get<bool>(), true, "critical flag serialized");
+  expect_eq(body["earliest"]["hop_count"].get<std::int64_t>(),
+            std::int64_t{3},
+            "hop count includes every hop");
+  expect_eq(body["earliest"]["location_codes"].size(),
+            std::size_t{2},
+            "location summary deduplicates codes");
+  expect_eq(body["earliest"]["location_codes"][0].get<std::string>(),
+            std::string{"A"},
+            "first location code summary");
+  expect_eq(body["earliest"]["location_codes"][1].get<std::string>(),
+            std::string{"B"},
+            "second location code summary");
+  expect_eq(body["earliest"]["route_codes"].size(),
+            std::size_t{2},
+            "route summary deduplicates routes");
+  expect_eq(body["earliest"]["route_codes"][0].get<std::string>(),
+            std::string{"route-1"},
+            "first route code summary");
+  expect_eq(body["earliest"]["route_codes"][1].get<std::string>(),
+            std::string{"route-2"},
+            "second route code summary");
 }
 
 void test_bulk_flushes_when_byte_limit_is_reached() {
@@ -923,9 +1096,11 @@ void test_shard_skew_logs_warning_and_critical_thresholds() {
 auto main() -> int {
   test_missing_index_is_created_with_mapping_and_settings();
   test_existing_index_is_validated_without_recreation();
+  test_existing_index_missing_extensions_is_updated();
   test_incompatible_mapping_is_logged_without_destructive_change();
   test_bootstrap_failure_prevents_bulk_indexing();
   test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing();
+  test_path_summaries_are_deduplicated_and_include_routes();
   test_bulk_flushes_when_byte_limit_is_reached();
   test_bulk_partial_failure_retries_retryable_items_only();
   test_adaptive_bulk_sizing_grows_after_success();
