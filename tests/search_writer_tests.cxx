@@ -599,6 +599,9 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
   expect_true(!second_body.contains("_id"), "second body omits _id");
   expect_true(first_body.contains("updated_at"), "first body timestamp text");
   expect_true(second_body.contains("updated_at"), "second body timestamp text");
+  const auto updated_at = first_body["updated_at"].get<std::string>();
+  expect_true(updated_at.contains('T') && updated_at.ends_with('Z'),
+              "updated_at is ISO UTC for OpenSearch date mapping");
   expect_eq(first_body["is_critical"].get<bool>(), false, "first critical flag");
   expect_eq(second_body["is_critical"].get<bool>(), false, "second critical flag");
   expect_true(!first_body.contains("critical"), "first body omits critical path");

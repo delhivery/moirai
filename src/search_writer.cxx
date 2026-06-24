@@ -212,6 +212,19 @@ auto default_search_request() -> SearchHttpRequest {
   };
 }
 
+auto utc_timestamp(std::chrono::system_clock::time_point timestamp)
+    -> std::string {
+  const auto seconds = std::chrono::floor<std::chrono::seconds>(timestamp);
+  return std::format("{:%Y-%m-%dT%H:%M:%SZ}", seconds);
+}
+
+auto epoch_seconds(std::chrono::system_clock::time_point timestamp)
+    -> std::int64_t {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+           timestamp.time_since_epoch())
+    .count();
+}
+
 auto audit_timestamp(std::chrono::system_clock::time_point timestamp)
     -> std::string {
   const auto seconds = std::chrono::floor<std::chrono::seconds>(timestamp);
@@ -2139,30 +2152,24 @@ SearchWriter::run(const stop_token& stop_token)
     std::vector<BulkDocument> documents;
     documents.reserve(num_records);
     std::size_t document_bytes = 0;
+    const auto indexed_at = std::chrono::system_clock::now();
+    const auto indexed_at_text = utc_timestamp(indexed_at);
+    const auto indexed_at_seconds = epoch_seconds(indexed_at);
     for (std::size_t index = 0; index < num_records; ++index) {
       if (results[index].id.empty()) {
         app.logger().error("Invalid search payload without id");
         continue;
       }
 
-      const auto& scan_time_text =
-        results[index].earliest.locations.empty()
-          ? std::string_view{}
-          : std::string_view{results[index].earliest.locations.front().arrival};
-      const auto scan_time_ts =
-        results[index].earliest.locations.empty()
-          ? std::int64_t{0}
-          : results[index].earliest.locations.front().arrival_ts;
-
       auto search_body = serialize_document_body(results[index],
-                                                 scan_time_text,
-                                                 scan_time_ts);
+                                                 indexed_at_text,
+                                                 indexed_at_seconds);
       std::string kafka_audit_body;
       if (m_index_config.audit_kafka_enabled) {
         kafka_audit_body =
           serialize_document_body(results[index],
-                                  scan_time_text,
-                                  scan_time_ts,
+                                  indexed_at_text,
+                                  indexed_at_seconds,
                                   LocationEncoding::JsonString);
       }
 
