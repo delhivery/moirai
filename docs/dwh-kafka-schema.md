@@ -11,9 +11,11 @@
 
 ## Important DWH Connector Note
 
-The raw Kafka payload contains `earliest.locations` and `ultimate.locations`, which are arrays of objects. `sop.md` says arrays of objects are not supported by the DWH sink connector. The schema below therefore registers the DWH-safe projection: top-level fields, primitive summary arrays, and the indexed `first` / `second` path objects.
-
-If DWH needs the full path locations array as a queryable column, we should change the producer to emit those arrays as JSON strings, or publish a separate child topic/table with one row per path hop.
+The Kafka audit payload stringifies `earliest.locations` and `ultimate.locations`
+as JSON arrays encoded inside string fields because `sop.md` says arrays of
+objects are not supported by the DWH sink connector. OpenSearch documents still
+store those fields as arrays in `_source`; this DWH Kafka projection keeps the
+full path available without exposing nested object arrays to the connector.
 
 ## Timestamp Conventions
 
@@ -49,6 +51,7 @@ If DWH needs the full path locations array as a queryable column, we should chan
 | `hop_count` | integer bigint | yes | Number of locations in the path. |
 | `location_codes` | array<string> | yes | Unique facility codes in path order. |
 | `route_codes` | array<string> | yes | Unique route ids in path order. Terminal locations do not have route ids. |
+| `locations` | string | yes | Full path locations as a JSON array string. Parse this field to recover the per-hop objects. |
 | `first` | object | yes | First path location. |
 | `second` | object | no | Second path location when the path has at least two hops. |
 
@@ -231,6 +234,15 @@ If DWH needs the full path locations array as a queryable column, we should chan
               { "key": "encrypted", "value": false }
             ]
           },
+          "locations": {
+            "type": "string",
+            "description": "Full earliest path as a JSON array string. Parse this field to recover per-hop objects.",
+            "classification": ["OCD"],
+            "tags": [
+              { "key": "deprecated", "value": false },
+              { "key": "encrypted", "value": false }
+            ]
+          },
           "first": {
             "type": "object",
             "required": [],
@@ -313,6 +325,15 @@ If DWH needs the full path locations array as a queryable column, we should chan
               { "key": "encrypted", "value": false }
             ]
           },
+          "locations": {
+            "type": "string",
+            "description": "Full ultimate path as a JSON array string. Parse this field to recover per-hop objects.",
+            "classification": ["OCD"],
+            "tags": [
+              { "key": "deprecated", "value": false },
+              { "key": "encrypted", "value": false }
+            ]
+          },
           "first": {
             "type": "object",
             "required": [],
@@ -388,24 +409,7 @@ If DWH needs the full path locations array as a queryable column, we should chan
       "thanos::sroute:181104cc-e5ce-465e-8bcb-929610efe468",
       "thanos::sroute:4f7af42b-0c84-4782-a011-250c001c792f"
     ],
-    "locations": [
-      {
-        "code": "INMHAOQD",
-        "facility_name": "Example Origin",
-        "arrival": "06/19/26 06:00:00",
-        "arrival_ts": 1781848800,
-        "route": "thanos::sroute:af47c481-04bc-4ab9-9dbb-445e39eb387b",
-        "route_name": "Example Route 1",
-        "departure": "06/19/26 07:00:00",
-        "departure_ts": 1781852400
-      },
-      {
-        "code": "INKAAZXQ",
-        "facility_name": "Example Hub",
-        "arrival": "06/19/26 12:00:00",
-        "arrival_ts": 1781870400
-      }
-    ],
+    "locations": "[{\"code\":\"INMHAOQD\",\"facility_name\":\"Example Origin\",\"arrival\":\"06/19/26 06:00:00\",\"arrival_ts\":1781848800,\"route\":\"thanos::sroute:af47c481-04bc-4ab9-9dbb-445e39eb387b\",\"route_name\":\"Example Route 1\",\"departure\":\"06/19/26 07:00:00\",\"departure_ts\":1781852400},{\"code\":\"INKAAZXQ\",\"facility_name\":\"Example Hub\",\"arrival\":\"06/19/26 12:00:00\",\"arrival_ts\":1781870400}]",
     "first": {
       "code": "INMHAOQD",
       "facility_name": "Example Origin",
@@ -429,4 +433,3 @@ If DWH needs the full path locations array as a queryable column, we should chan
   "updated_at_ts": 1781851241
 }
 ```
-

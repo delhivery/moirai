@@ -244,6 +244,9 @@ Key mapping properties:
 - `first` and `second` path locations are explicitly indexed for filtering.
 - Summary fields (`hop_count`, `location_codes`, `route_codes`) enable coarse
   path filtering.
+- In the DWH Kafka audit stream only, `earliest.locations` and
+  `ultimate.locations` are emitted as JSON array strings so the DWH connector
+  does not ingest arrays of objects.
 
 If upgrading from an older dynamically-mapped index, recreate the index or
 reindex into a new index with the explicit mapping.

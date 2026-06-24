@@ -972,7 +972,11 @@ void test_audit_sink_writes_closed_append_records() {
 
 void test_kafka_audit_publishes_append_records_with_waybill_key() {
   BlockingQueue<SearchDocument> queue;
-  queue.enqueue(document("wb-kafka-1", "p1"));
+  auto first_document = document("wb-kafka-1", "p1");
+  auto ultimate_location = first_document.earliest.locations.front();
+  ultimate_location.code = "Z";
+  first_document.ultimate.locations.push_back(std::move(ultimate_location));
+  queue.enqueue(std::move(first_document));
   queue.enqueue(document("wb-kafka-2", "p2"));
   queue.close();
 
@@ -1010,7 +1014,32 @@ void test_kafka_audit_publishes_append_records_with_waybill_key() {
                 "kafka audit body includes update timestamp");
     expect_true(!parsed.contains("_id"),
                 "kafka audit body omits OpenSearch id");
+    expect_true(parsed["earliest"]["locations"].is_string(),
+                "kafka audit stringifies earliest locations");
+    const auto earliest_locations = nlohmann::json::parse(
+      parsed["earliest"]["locations"].get<std::string>());
+    expect_true(earliest_locations.is_array(),
+                "kafka earliest locations string is json array");
+    expect_eq(earliest_locations[0]["code"].get<std::string>(),
+              std::string{"A"},
+              "kafka earliest locations string preserves first hop");
+    if (parsed.contains("ultimate")) {
+      expect_true(parsed["ultimate"]["locations"].is_string(),
+                  "kafka audit stringifies ultimate locations");
+      const auto ultimate_locations = nlohmann::json::parse(
+        parsed["ultimate"]["locations"].get<std::string>());
+      expect_true(ultimate_locations.is_array(),
+                  "kafka ultimate locations string is json array");
+      expect_eq(ultimate_locations[0]["code"].get<std::string>(),
+                std::string{"Z"},
+                "kafka ultimate locations string preserves first hop");
+    }
   }
+
+  const auto bulk_lines = split_lines(state->calls.back().body);
+  const auto indexed_body = nlohmann::json::parse(bulk_lines[1]);
+  expect_true(indexed_body["earliest"]["locations"].is_array(),
+              "search bulk keeps earliest locations as array");
 }
 
 void test_file_and_kafka_audit_can_run_together() {
@@ -1045,10 +1074,15 @@ void test_file_and_kafka_audit_can_run_together() {
   expect_eq(nlohmann::json::parse(file_lines[0])["waybill"].get<std::string>(),
             std::string{"wb-both"},
             "file audit waybill");
-  expect_eq(nlohmann::json::parse(audit_state->records[0].body)["waybill"]
-              .get<std::string>(),
+  const auto file_body = nlohmann::json::parse(file_lines[0]);
+  const auto kafka_body = nlohmann::json::parse(audit_state->records[0].body);
+  expect_true(file_body["earliest"]["locations"].is_array(),
+              "file audit keeps earliest locations as array");
+  expect_eq(kafka_body["waybill"].get<std::string>(),
             std::string{"wb-both"},
             "kafka audit waybill");
+  expect_true(kafka_body["earliest"]["locations"].is_string(),
+              "kafka audit stringifies earliest locations with file audit enabled");
 
   std::filesystem::remove_all(audit_dir);
 }

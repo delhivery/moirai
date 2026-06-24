@@ -212,19 +212,6 @@ auto default_search_request() -> SearchHttpRequest {
   };
 }
 
-auto utc_timestamp(std::chrono::system_clock::time_point timestamp)
-    -> std::string {
-  const auto seconds = std::chrono::floor<std::chrono::seconds>(timestamp);
-  return std::format("{:%Y-%m-%dT%H:%M:%SZ}", seconds);
-}
-
-auto epoch_seconds(std::chrono::system_clock::time_point timestamp)
-    -> std::int64_t {
-  return std::chrono::duration_cast<std::chrono::seconds>(
-           timestamp.time_since_epoch())
-    .count();
-}
-
 auto audit_timestamp(std::chrono::system_clock::time_point timestamp)
     -> std::string {
   const auto seconds = std::chrono::floor<std::chrono::seconds>(timestamp);
@@ -470,7 +457,8 @@ public:
     }
   }
 
-  void write(std::string_view key, std::string_view body)
+  void write(std::string_view key, std::string_view body,
+             std::string_view kafka_body)
   {
     if (m_file_enabled) {
       write_file(body);
@@ -480,7 +468,7 @@ public:
       return;
     }
     try {
-      m_kafka_publish(key, body);
+      m_kafka_publish(key, kafka_body);
     } catch (const std::exception& exc) {
       ++m_kafka_failures;
       if (m_kafka_required) {
@@ -749,8 +737,42 @@ void append_location(std::string& output, const SearchPathLocation& location) {
   output.push_back('}');
 }
 
+enum class LocationEncoding {
+  Array,
+  JsonString,
+};
+
+void append_locations_array(std::string& output,
+                            const SearchPathSection& section) {
+  output.push_back('[');
+  for (std::size_t index = 0; index < section.locations.size(); ++index) {
+    if (index > 0) {
+      output.push_back(',');
+    }
+    append_location(output, section.locations[index]);
+  }
+  output.push_back(']');
+}
+
+void append_locations_field(std::string& output,
+                            const SearchPathSection& section,
+                            bool& first,
+                            LocationEncoding encoding) {
+  append_field_prefix(output, "locations", first);
+  if (encoding == LocationEncoding::Array) {
+    append_locations_array(output, section);
+    return;
+  }
+
+  std::string encoded;
+  encoded.reserve(section.locations.size() * 160U);
+  append_locations_array(encoded, section);
+  append_json_string(output, encoded);
+}
+
 void append_path_section(std::string& output, std::string_view key,
-                         const SearchPathSection& section, bool& first) {
+                         const SearchPathSection& section, bool& first,
+                         LocationEncoding location_encoding) {
   if (section.locations.empty()) {
     return;
   }
@@ -783,15 +805,7 @@ void append_path_section(std::string& output, std::string_view key,
       return location.route;
     });
 
-  append_field_prefix(output, "locations", section_first);
-  output.push_back('[');
-  for (std::size_t index = 0; index < section.locations.size(); ++index) {
-    if (index > 0) {
-      output.push_back(',');
-    }
-    append_location(output, section.locations[index]);
-  }
-  output.push_back(']');
+  append_locations_field(output, section, section_first, location_encoding);
 
   append_field_prefix(output, "first", section_first);
   append_location(output, section.locations.front());
@@ -804,7 +818,9 @@ void append_path_section(std::string& output, std::string_view key,
 
 auto serialize_document_body(const SearchDocument& document,
                              std::string_view updated_at,
-                             std::int64_t updated_at_ts) -> std::string {
+                             std::int64_t updated_at_ts,
+                             LocationEncoding location_encoding =
+                               LocationEncoding::Array) -> std::string {
   std::string output;
   output.reserve(512);
   output.push_back('{');
@@ -818,8 +834,16 @@ auto serialize_document_body(const SearchDocument& document,
     append_string_field(output, "fail", document.fail, first);
   }
   append_bool_field(output, "is_critical", document.is_critical, first);
-  append_path_section(output, "earliest", document.earliest, first);
-  append_path_section(output, "ultimate", document.ultimate, first);
+  append_path_section(output,
+                      "earliest",
+                      document.earliest,
+                      first,
+                      location_encoding);
+  append_path_section(output,
+                      "ultimate",
+                      document.ultimate,
+                      first,
+                      location_encoding);
   if (!document.pdd.empty()) {
     append_string_field(output, "pdd", document.pdd, first);
     append_int_field(output, "pdd_ts", document.pdd_ts, first);
@@ -2115,22 +2139,42 @@ SearchWriter::run(const stop_token& stop_token)
     std::vector<BulkDocument> documents;
     documents.reserve(num_records);
     std::size_t document_bytes = 0;
-    const auto indexed_at = std::chrono::system_clock::now();
-    const auto indexed_at_text = utc_timestamp(indexed_at);
-    const auto indexed_at_seconds = epoch_seconds(indexed_at);
     for (std::size_t index = 0; index < num_records; ++index) {
       if (results[index].id.empty()) {
         app.logger().error("Invalid search payload without id");
         continue;
       }
 
+      const auto& scan_time_text =
+        results[index].earliest.locations.empty()
+          ? std::string_view{}
+          : std::string_view{results[index].earliest.locations.front().arrival};
+      const auto scan_time_ts =
+        results[index].earliest.locations.empty()
+          ? std::int64_t{0}
+          : results[index].earliest.locations.front().arrival_ts;
+
+      auto search_body = serialize_document_body(results[index],
+                                                 scan_time_text,
+                                                 scan_time_ts);
+      std::string kafka_audit_body;
+      if (m_index_config.audit_kafka_enabled) {
+        kafka_audit_body =
+          serialize_document_body(results[index],
+                                  scan_time_text,
+                                  scan_time_ts,
+                                  LocationEncoding::JsonString);
+      }
+
       BulkDocument document{
         .id = std::move(results[index].id),
-        .body = serialize_document_body(results[index],
-                                        indexed_at_text,
-                                        indexed_at_seconds),
+        .body = std::move(search_body),
       };
-      audit_sink.write(document.id, document.body);
+      audit_sink.write(document.id,
+                       document.body,
+                       m_index_config.audit_kafka_enabled
+                         ? std::string_view{kafka_audit_body}
+                         : std::string_view{document.body});
       ++metrics.audited_records;
       const auto estimated_bytes =
         document.id.size() + document.body.size() + m_search_index.size() + 64U;

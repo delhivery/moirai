@@ -48,6 +48,10 @@ filtering and sorting. Each path section also indexes `hop_count`,
 nested-document expansion. Criticality is exposed as the top-level
 `is_critical` boolean.
 
+The DWH Kafka audit stream uses the same path summaries, but emits
+`earliest.locations` and `ultimate.locations` as JSON array strings so DWH
+connectors that reject arrays of objects can still carry the full hop list.
+
 OpenSearch does not allow changing an existing field type in place. If an older
 index has dynamically inferred fields such as `earliest.first.arrival` as `text`,
 create a replacement index with the new mapping and reindex, or delete/recreate
