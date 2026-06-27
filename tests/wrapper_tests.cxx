@@ -98,7 +98,9 @@ void test_find_paths_non_critical_returns_earliest_and_ultimate() {
     "A",
     "B",
     epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
     iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
     packages);
 
   expect_eq(response.waybill, std::string{"bag"}, "waybill copied");
@@ -131,7 +133,9 @@ void test_find_paths_critical_omits_ultimate() {
     "A",
     "B",
     epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
     iso_to_date("2026-06-08 09:30:00"),
+    DURATION{0},
     packages);
 
   expect_true(!response.earliest.locations.empty(),
@@ -154,7 +158,9 @@ void test_find_paths_missing_node_returns_fail() {
     "A",
     "missing",
     epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
     iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
     packages);
 
   expect_true(!response.fail.empty(), "missing node returns fail");
@@ -180,7 +186,9 @@ void test_find_paths_child_can_make_parent_critical() {
     "A",
     "B",
     epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
     iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
     packages);
 
   expect_eq(response.package_id, std::string{"child"},
@@ -190,6 +198,77 @@ void test_find_paths_child_can_make_parent_critical() {
   expect_eq(response.is_critical, true, "child critical flag");
   expect_eq(response.ultimate.locations.empty(), true,
             "child critical omits ultimate");
+}
+
+void test_find_paths_source_processing_offset_can_make_critical() {
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+  auto wrapper = make_wrapper(solver);
+
+  std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+  const auto no_offset = wrapper.find_paths(
+    "bag-no-offset",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:45:00"),
+    DURATION{0},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
+    packages);
+  expect_eq(no_offset.is_critical, false,
+            "load catches route before source processing offset");
+
+  const auto fresh_offset = wrapper.find_paths(
+    "bag-fresh-offset",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:45:00"),
+    DURATION{30},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
+    packages);
+  expect_eq(fresh_offset.is_critical, true,
+            "fresh processing offset can miss the current departure");
+}
+
+void test_find_paths_mixed_bag_processing_can_make_parent_critical() {
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  const auto c = add_center(*solver, "C");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+  add_edge(*solver, b, c, "B-C", (10 * 60) + 15, 15);
+  auto wrapper = make_wrapper(solver);
+
+  std::vector<std::tuple<std::string, int32_t, std::string>> packages{
+    {"B", epoch_minutes("2026-06-08 10:05:00"), "same-destination-child"},
+    {"C", epoch_minutes("2026-06-08 10:30:00"), "child"}
+  };
+  const auto without_mixed_processing = wrapper.find_paths(
+    "bag-without-mixed",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
+    packages);
+  expect_eq(without_mixed_processing.is_critical, false,
+            "child path leaves enough time without mixed bag processing");
+
+  const auto with_mixed_processing = wrapper.find_paths(
+    "bag-with-mixed",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{30},
+    packages);
+  expect_eq(with_mixed_processing.is_critical, true,
+            "mixed bag processing can consume parent slack");
 }
 
 void test_find_paths_shared_cache_is_thread_safe() {
@@ -239,7 +318,9 @@ void test_find_paths_shared_cache_is_thread_safe() {
           std::format("N{}", source_index),
           std::format("N{}", target_index),
           epoch_minutes("2026-06-08 07:00:00") + (iteration % 3),
+          DURATION{0},
           iso_to_date("2026-06-10 12:00:00"),
+          DURATION{0},
           packages);
         if (response.failed() || response.earliest.locations.empty()) {
           failures.fetch_add(1, std::memory_order_relaxed);
@@ -262,6 +343,8 @@ auto main() -> int {
   test_find_paths_critical_omits_ultimate();
   test_find_paths_missing_node_returns_fail();
   test_find_paths_child_can_make_parent_critical();
+  test_find_paths_source_processing_offset_can_make_critical();
+  test_find_paths_mixed_bag_processing_can_make_parent_critical();
   test_find_paths_shared_cache_is_thread_safe();
   return 0;
 }

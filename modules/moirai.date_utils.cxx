@@ -37,6 +37,9 @@ export auto iso_to_date(const std::string& date_string, bool is_offset)
 export auto iso_to_date(const std::string& date_string,
                         const TIME_OF_DAY& cutoff) -> CLOCK;
 
+export auto iso_to_date_utc_cutoff(const std::string& date_string,
+                                   const TIME_OF_DAY& cutoff) -> CLOCK;
+
 export auto now_as_int64() -> std::int64_t;
 
 export auto time_string_to_time(std::string_view time_string)

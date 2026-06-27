@@ -45,6 +45,22 @@ public:
     return m_latencies[latency_index(M, P)];
   }
 
+  void set_fresh_processing_time(DURATION value) {
+    m_fresh_processing_time = value;
+  }
+
+  [[nodiscard]] auto get_fresh_processing_time() const -> DURATION {
+    return m_fresh_processing_time;
+  }
+
+  void set_mixed_bag_processing_time(DURATION value) {
+    m_mixed_bag_processing_time = value;
+  }
+
+  [[nodiscard]] auto get_mixed_bag_processing_time() const -> DURATION {
+    return m_mixed_bag_processing_time;
+  }
+
   void set_cutoff(TIME_OF_DAY cutoff) { this->m_cutoff = cutoff; }
 
   auto get_cutoff() const -> TIME_OF_DAY { return m_cutoff; }
@@ -57,6 +73,8 @@ private:
   }
 
   std::array<DURATION, LATENCY_SLOT_COUNT> m_latencies{};
+  DURATION m_fresh_processing_time{};
+  DURATION m_mixed_bag_processing_time{};
   TIME_OF_DAY m_cutoff;
 };
 
@@ -96,6 +114,7 @@ export struct TransportEdge {
   [[nodiscard]] auto weight_alt(CLOCK) const -> COST;
 
   [[nodiscard]] auto wgt() const -> int;
+  [[nodiscard]] auto source_offset() const -> DURATION { return m_offset_source; }
 
   void update(const TransportCenter& source, const TransportCenter& target);
 

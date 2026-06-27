@@ -12,17 +12,11 @@ using moirai_tests::expect_eq;
 using moirai_tests::expect_true;
 using moirai_tests::fixture_path;
 
-void test_init_timings_rejects_bad_inputs() {
+void test_init_timings_legacy_file_is_ignored() {
   WrapperHarness harness;
-  bool missing_threw = false;
-  try {
-    SolverWrapper wrapper(harness.queues(),
-                          harness.solver,
-                          fixture_path("missing-timings.json"));
-  } catch (const std::runtime_error&) {
-    missing_threw = true;
-  }
-  expect_true(missing_threw, "missing timings file throws");
+  SolverWrapper missing_file_wrapper(harness.queues(),
+                                     harness.solver,
+                                     fixture_path("missing-timings.json"));
 
   const auto bad_path =
     std::filesystem::temp_directory_path() / "moirae-bad-timings.json";
@@ -31,13 +25,8 @@ void test_init_timings_rejects_bad_inputs() {
     output << "{}";
   }
 
-  bool non_array_threw = false;
-  try {
-    SolverWrapper wrapper(harness.queues(), harness.solver, bad_path);
-  } catch (const std::runtime_error&) {
-    non_array_threw = true;
-  }
-  expect_true(non_array_threw, "non-array timings payload throws");
+  SolverWrapper bad_file_wrapper(harness.queues(), harness.solver, bad_path);
+  expect_true(true, "legacy timings file is compatibility-only");
 }
 
 void test_endpoint_initialization_builds_graph() {
@@ -57,11 +46,16 @@ void test_endpoint_initialization_builds_graph() {
   const auto center_a = solver->get_node(*a);
   expect_eq(center_a->get_latency<MovementType::CARTING,
                                   ProcessType::INBOUND>().count(),
-            5, "timings parser accepts HH:MM latency");
+            0, "facility API leaves inbound processing on route edges");
   expect_eq(center_a->get_latency<MovementType::CARTING,
                                   ProcessType::OUTBOUND>().count(),
-            10, "timings parser accepts integer latency");
-  expect_eq(center_a->get_cutoff().count(), 360, "cutoff parsed");
+            10, "facility API parses outbound processing");
+  expect_eq(center_a->get_fresh_processing_time().count(), 25,
+            "facility API parses fresh shipment processing");
+  expect_eq(center_a->get_mixed_bag_processing_time().count(), 40,
+            "facility API parses mixed bag processing");
+  expect_eq(center_a->get_cutoff().count(), 360,
+            "facility API normalizes arrival cutoff to UTC");
 
   const auto e = solver->find_node("E");
   expect_true(e.has_value(), "facility without timing exists");
@@ -79,8 +73,6 @@ void test_endpoint_initialization_builds_graph() {
               "loading disallowed B is not a route endpoint");
   expect_true(graph_dump.find("route-missing-node") == std::string::npos,
               "route with missing target node is skipped");
-  expect_true(logs.contains("Skipping invalid facility timings entry"),
-              "invalid timing entry logged");
   expect_true(logs.contains("Skipping facility without facility_code"),
               "missing facility_code logged");
   expect_true(logs.contains("Edge<route-missing-node.0>"),
@@ -149,7 +141,7 @@ void test_initialization_handles_invalid_json_logs() {
 } // namespace
 
 auto main() -> int {
-  test_init_timings_rejects_bad_inputs();
+  test_init_timings_legacy_file_is_ignored();
   test_endpoint_initialization_builds_graph();
   test_initialization_handles_bad_http_responses();
   test_initialization_handles_invalid_json_logs();

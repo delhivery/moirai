@@ -395,12 +395,7 @@ auto Solver::add_edge(const NodeId source, const NodeId target,
   std::array<SolverMinute, DAYS_PER_WEEK> reverse_schedule_values{};
   std::ranges::copy(forward_schedule, forward_schedule_values.begin());
   std::ranges::copy(reverse_schedule, reverse_schedule_values.begin());
-  const auto reverse_outbound_latency =
-      route.movement == MovementType::CARTING
-          ? m_nodes[source]
-                .get_latency<MovementType::CARTING, ProcessType::OUTBOUND>()
-          : m_nodes[source]
-                .get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
+  const auto reverse_outbound_latency = route.source_offset();
   const auto edge_id = static_cast<EdgeId>(m_edges.size());
   const auto vehicle = route.vehicle;
   const auto movement = route.movement;

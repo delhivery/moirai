@@ -42,25 +42,18 @@ TransportEdge::TransportEdge(
 
 void TransportEdge::update(const TransportCenter &source,
                            const TransportCenter &target) {
-
+  (void)target;
+  DURATION outbound_processing{};
   if (movement == MovementType::CARTING) {
-    m_offset_source =
-        source.get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
-    m_offset_target =
-        target.get_latency<MovementType::CARTING, ProcessType::INBOUND>();
+    outbound_processing =
+      source.get_latency<MovementType::CARTING, ProcessType::OUTBOUND>();
   } else {
-    m_offset_source =
-        source.get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
-    m_offset_target =
-        target.get_latency<MovementType::LINEHAUL, ProcessType::INBOUND>();
+    outbound_processing =
+      source.get_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>();
   }
 
-  m_offset_source += duration_loading / 2;
-  if (terminal) {
-    m_offset_target += duration_unloading;
-  } else {
-    m_offset_target += duration_unloading / 2;
-  }
+  m_offset_source = std::max(outbound_processing, duration_loading);
+  m_offset_target = duration_unloading;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)

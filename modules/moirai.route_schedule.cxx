@@ -44,6 +44,7 @@ export struct RouteStopSpec {
   std::optional<std::string_view> center_code;
   std::optional<TIME_OF_DAY> relative_arrival;
   std::optional<TIME_OF_DAY> relative_departure;
+  DURATION processing_time{};
 };
 
 export inline auto build_route_edge_specs(const moirai::Json& route,
@@ -89,15 +90,14 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
     RouteStopSpec spec{
         .center_code = moirai::find_string_member(stop, "center_code"),
         .relative_arrival = std::nullopt,
-        .relative_departure = std::nullopt};
+        .relative_departure = std::nullopt,
+        .processing_time = DURATION{0}};
     if (spec.center_code.has_value()) {
-      if (index > 0) {
-        if (const auto arrival = moirai::find_string_member(stop, "rel_eta");
-            arrival.has_value()) {
-          spec.relative_arrival =
-              std::chrono::duration_cast<TIME_OF_DAY>(
-                  time_string_to_time(*arrival));
-        }
+      if (const auto arrival = moirai::find_string_member(stop, "rel_eta");
+          arrival.has_value()) {
+        spec.relative_arrival =
+            std::chrono::duration_cast<TIME_OF_DAY>(
+                time_string_to_time(*arrival));
       }
       if (loading_stop_values.size() > 1) {
         if (const auto departure = moirai::find_string_member(stop, "rel_etd");
@@ -106,6 +106,12 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
               std::chrono::duration_cast<TIME_OF_DAY>(
                   time_string_to_time(*departure));
         }
+      }
+      if (spec.relative_arrival.has_value() &&
+          spec.relative_departure.has_value() &&
+          *spec.relative_departure >= *spec.relative_arrival) {
+        spec.processing_time = std::chrono::duration_cast<DURATION>(
+            *spec.relative_departure - *spec.relative_arrival);
       }
     }
     loading_stops.push_back(spec);
@@ -130,9 +136,8 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
           reporting_offset + *source.relative_departure;
       const auto duration = std::chrono::duration_cast<TIME_OF_DAY>(
           *target.relative_arrival - *source.relative_departure);
-      const auto duration_loading = TIME_OF_DAY{0};
-      const auto duration_unloading = std::chrono::duration_cast<TIME_OF_DAY>(
-          *target.relative_departure - *target.relative_arrival);
+      const auto duration_loading = source.processing_time;
+      const auto duration_unloading = target.processing_time;
 
       if (duration.count() < 0) {
         continue;

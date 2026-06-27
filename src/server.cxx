@@ -20,7 +20,6 @@ void Moirai::display_help() const {
   std::cout << "Usage: " << m_command_name << " [options]\n\n";
   std::cout << "Required options:\n";
   std::cout << "  -a, --route-api <uri>\n";
-  std::cout << "  -b, --facility-timings <path>\n";
   std::cout << "  -c, --facility-api <uri>\n";
   std::cout << "  -e, --route-token <token>\n";
   std::cout << "  -i, --search-index <string>\n";
@@ -32,6 +31,7 @@ void Moirai::display_help() const {
   std::cout << "  -u, --search-user <string>\n";
   std::cout << "  -w, --search-pass <string>\n\n";
   std::cout << "Optional:\n";
+  std::cout << "  -b, --facility-timings <path> (ignored; compatibility only)\n";
   std::cout << "  -f, --facility-topic <topic> (ignored; compatibility only)\n";
   std::cout << "  -h, --help\n";
   std::cout << "  --kafka-config supports SASL/MSK settings such as\n";
@@ -54,7 +54,6 @@ void Moirai::validate_options() const {
   };
 
   require_value("--route-api", m_route_uri);
-  require_value("--facility-timings", m_facility_timings_filename);
   require_value("--facility-api", m_facility_uri);
   require_value("--route-token", m_route_token);
   require_value("--facility-token", m_facility_token);
@@ -379,7 +378,7 @@ auto Moirai::run_pipeline() -> int {
                                        .load = &load_queue,
                                        .solution = &solution_queue},
           wrapper.get_solver(), m_facility_timings_filename,
-          wrapper.get_cache());
+          wrapper.get_cache(), wrapper.get_facility_profiles());
       secondary.push_back(secondary_wrapper);
       threads.emplace_back(
           [&app, &solution_queue, &active_solver_threads,

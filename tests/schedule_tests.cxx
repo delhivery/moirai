@@ -178,6 +178,13 @@ void test_reverse_schedule_traversal() {
             monday_1200, "reverse zero-day cost is identity");
 }
 
+void test_utc_cutoff_uses_utc_calendar_day() {
+  const auto deadline =
+      iso_to_date_utc_cutoff("2026-06-09 23:59:59", DURATION{4 * 60});
+  expect_eq(deadline, iso_to_date("2026-06-09 04:00:00"),
+            "UTC cutoff uses UTC calendar day");
+}
+
 void test_transport_edge_weights() {
   auto source = std::make_shared<TransportCenter>("source");
   auto target = std::make_shared<TransportCenter>("target");
@@ -212,9 +219,9 @@ void test_transport_edge_weights() {
   terminal_edge.update(source, target);
   const auto terminal_reverse =
       terminal_edge.weight<PathTraversalMode::REVERSE>();
-  expect_eq(terminal_reverse.schedule_offset.count(), 810,
+  expect_eq(terminal_reverse.schedule_offset.count(), 780,
             "terminal reverse offset includes full unloading");
-  expect_eq(terminal_reverse.duration.count(), 250,
+  expect_eq(terminal_reverse.duration.count(), 220,
             "terminal reverse duration includes full unloading");
 
   auto linehaul_source = std::make_shared<TransportCenter>("linehaul_source");
@@ -242,7 +249,7 @@ void test_transport_edge_weights() {
                               MovementType::CARTING, false, day_mask(5));
   zero_duration.update(source, target);
   expect_eq(zero_duration.weight<PathTraversalMode::FORWARD>().duration.count(),
-            50, "zero transit still includes center latencies");
+            20, "zero transit includes outbound processing only");
 
   TransportEdge transient("transient", "transient");
   expect_eq(transient.weight<PathTraversalMode::FORWARD>().unreachable, true,
@@ -257,6 +264,7 @@ auto main() -> int {
   test_route_days_of_week_parsing();
   test_forward_schedule_traversal();
   test_reverse_schedule_traversal();
+  test_utc_cutoff_uses_utc_calendar_day();
   test_transport_edge_weights();
   return 0;
 }

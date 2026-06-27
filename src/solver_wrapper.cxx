@@ -24,16 +24,13 @@ constexpr std::size_t SOLVER_BATCH_SIZE = 64;
 constexpr std::size_t MIN_IPDD_LENGTH = 18;
 constexpr std::string_view ROUTE_EXPANSION_THREADS_ENV =
   "MOIRAI_ROUTE_EXPANSION_THREADS";
+constexpr std::string_view FACILITY_DETAIL_THREADS_ENV =
+  "MOIRAI_FACILITY_DETAIL_THREADS";
 constexpr std::string_view PATH_CACHE_ENABLED_ENV = "MOIRAI_PATH_CACHE_ENABLED";
 constexpr std::string_view PATH_CACHE_MAX_ENTRIES_ENV =
   "MOIRAI_PATH_CACHE_MAX_ENTRIES";
 constexpr std::string_view PATH_CACHE_BUCKET_MINUTES_ENV =
   "MOIRAI_PATH_CACHE_BUCKET_MINUTES";
-const auto DEFAULT_FACILITY_CUTOFF =
-  std::chrono::duration_cast<TIME_OF_DAY>(time_string_to_time("04:00"));
-
-using FacilityTimings =
-  std::tuple<int16_t, int16_t, int16_t, int16_t, TIME_OF_DAY>;
 using PackageInfo = std::tuple<std::string, std::int32_t, std::string>;
 
 
@@ -41,12 +38,21 @@ struct LoadPayload {
   std::string id;
   std::string location;
   std::string destination;
+  std::string origin_center;
   std::string event_time;
   std::string ipdd_destination;
   std::string cs_slid;
   std::string cs_act;
   std::string pid;
   std::optional<moirai::Json> items;
+};
+
+struct FacilityListEntry {
+  std::string code;
+  std::string name;
+  std::string property_id;
+  std::optional<std::string> id;
+  SolverWrapper::FacilityProfile profile;
 };
 
 struct WrapperScratch {
@@ -137,6 +143,7 @@ auto extract_load_payload(const moirai::Json& data)
     .id = std::string(*bag_identifier),
     .location = std::string(*current_location),
     .destination = std::string(*item_destination),
+    .origin_center = optional_string(data, "oc"),
     .event_time = std::string(*event_time),
     .ipdd_destination = optional_string(data, "ipdd_destination"),
     .cs_slid = optional_string(data, "cs_slid"),
@@ -147,13 +154,13 @@ auto extract_load_payload(const moirai::Json& data)
   };
 }
 
-auto parse_facility_latency_minutes(const moirai::Json& object,
-                                    const char* key) -> std::optional<int16_t>
+auto parse_facility_duration(const moirai::Json& object,
+                             const char* key) -> std::optional<DURATION>
 {
   if (const auto parsed_integer =
         moirai::find_integer_member<int16_t>(object, key);
       parsed_integer.has_value()) {
-    return parsed_integer;
+    return DURATION{*parsed_integer};
   }
 
   const auto string_value = moirai::find_string_member(object, key);
@@ -168,7 +175,82 @@ auto parse_facility_latency_minutes(const moirai::Json& object,
     return std::nullopt;
   }
 
-  return static_cast<int16_t>(minutes);
+  return DURATION{static_cast<int16_t>(minutes)};
+}
+
+auto parse_utc_cutoff(const moirai::Json& object,
+                      const char* key) -> std::optional<TIME_OF_DAY>
+{
+  const auto value = parse_facility_duration(object, key);
+  if (!value.has_value()) {
+    return std::nullopt;
+  }
+  return TIME_OF_DAY{
+    static_cast<std::int16_t>(datemod(*value - IST_OFFSET, DURATION{24 * 60}))
+  };
+}
+
+auto facility_identifier(const moirai::Json& object) -> std::optional<std::string>
+{
+  if (const auto id = moirai::find_string_member(object, "id");
+      id.has_value() && !id->empty()) {
+    return std::string(*id);
+  }
+  if (const auto id = moirai::find_integer_member<std::int64_t>(object, "id");
+      id.has_value()) {
+    return std::to_string(*id);
+  }
+  return std::nullopt;
+}
+
+auto parse_facility_profile(const moirai::Json& object)
+    -> SolverWrapper::FacilityProfile
+{
+  SolverWrapper::FacilityProfile profile;
+  const auto* result = moirai::find_object_member(object, "result");
+  const auto* attributes =
+    result == nullptr ? nullptr
+                      : moirai::find_object_member(*result,
+                                                   "facility_attributes");
+  if (attributes == nullptr) {
+    attributes = moirai::find_object_member(object, "facility_attributes");
+  }
+  if (attributes == nullptr) {
+    attributes = result != nullptr ? result : &object;
+  }
+
+  if (const auto outbound =
+        parse_facility_duration(*attributes, "OutboundProcessingTime");
+      outbound.has_value()) {
+    profile.outbound_processing = *outbound;
+  }
+  if (const auto fresh =
+        parse_facility_duration(*attributes, "FreshShipmentProcessingTime");
+      fresh.has_value()) {
+    profile.fresh_processing = *fresh;
+  }
+  if (const auto mixed =
+        parse_facility_duration(*attributes, "MixedBagProcessingTime");
+      mixed.has_value()) {
+    profile.mixed_bag_processing = *mixed;
+  }
+  if (const auto cutoff =
+        parse_utc_cutoff(*attributes, "CenterArrivalCutoff");
+      cutoff.has_value()) {
+    profile.center_arrival_cutoff = *cutoff;
+  }
+  return profile;
+}
+
+auto profile_for(const std::shared_ptr<SolverWrapper::FacilityProfiles>& profiles,
+                 std::string_view code) -> SolverWrapper::FacilityProfile
+{
+  if (profiles == nullptr) {
+    return {};
+  }
+  const auto found = profiles->find(std::string(code));
+  return found == profiles->end() ? SolverWrapper::FacilityProfile{}
+                                  : found->second;
 }
 
 auto parse_route_expansion_threads(std::size_t route_count) -> std::size_t {
@@ -201,6 +283,39 @@ auto parse_route_expansion_threads(std::size_t route_count) -> std::size_t {
   }
 
   return std::clamp(requested, std::size_t{1}, route_count);
+}
+
+auto parse_facility_detail_threads(std::size_t facility_count) -> std::size_t {
+  if (facility_count == 0) {
+    return 0;
+  }
+
+  const char* value = std::getenv(FACILITY_DETAIL_THREADS_ENV.data());
+  if (value != nullptr && std::string_view{value}.empty()) {
+    value = nullptr;
+  }
+
+  std::size_t requested{};
+  if (value != nullptr) {
+    const std::string_view input{value};
+    const auto [ptr, error] =
+      std::from_chars(input.data(), input.data() + input.size(), requested);
+    if (error != std::errc{} || ptr != input.data() + input.size() ||
+        requested == 0) {
+      throw std::runtime_error(
+        std::format("Invalid {} value '{}'",
+                    FACILITY_DETAIL_THREADS_ENV,
+                    input));
+    }
+  } else {
+    requested = std::thread::hardware_concurrency();
+    if (requested == 0) {
+      requested = 1;
+    }
+    requested = std::min<std::size_t>(requested, 16);
+  }
+
+  return std::clamp(requested, std::size_t{1}, facility_count);
 }
 
 auto expand_route_specs(const moirai::Json& routes)
@@ -262,8 +377,12 @@ SolverWrapper::SolverWrapper(
   const std::shared_ptr<Solver>& solver,
   const std::filesystem::path& center_timings_filename,
   std::shared_ptr<PathCache> cache,
+  std::shared_ptr<FacilityProfiles> facility_profiles,
   HttpGet http_get)
   : m_solver(solver)
+  , m_facility_profiles(facility_profiles != nullptr
+                          ? std::move(facility_profiles)
+                          : std::make_shared<FacilityProfiles>())
   , m_load_queue(*queues.load)
   , m_solution_queue(*queues.solution)
   , m_http_get(std::move(http_get))
@@ -285,6 +404,7 @@ SolverWrapper::SolverWrapper(
   , m_node_init_auth_token(std::move(endpoints.node_token))
   , m_edge_init_uri(moirai::parse_uri(endpoints.edge_uri))
   , m_edge_init_auth_token(std::move(endpoints.edge_token))
+  , m_facility_profiles(std::make_shared<FacilityProfiles>())
   , m_node_queue(queues.node)
   , m_edge_queue(queues.edge)
   , m_load_queue(*queues.load)
@@ -348,87 +468,11 @@ SolverWrapper::init_timings(
   const std::filesystem::path& facility_timings_filename)
 {
   auto& app = moirai::Application::instance();
-  std::ifstream facility_timings_stream(facility_timings_filename);
-
-  if (!facility_timings_stream.is_open() || facility_timings_stream.fail()) {
-    throw std::runtime_error(
-      std::format("Failed to open facility timings file {}",
-                  facility_timings_filename.string()));
+  if (!facility_timings_filename.empty()) {
+    app.logger().debug(
+      "Ignoring legacy facility timings file {}; using facility API profiles",
+      facility_timings_filename.string());
   }
-
-  const auto facility_timings_json =
-    moirai::parse_json(facility_timings_stream);
-  if (!facility_timings_json.has_value() ||
-      !facility_timings_json->is_array()) {
-    throw std::runtime_error("Facility timings payload is not a JSON array");
-  }
-
-  app.logger().debug("Found timings for {} facilities",
-                     moirai::json_size(*facility_timings_json));
-
-  for (const auto& facility_timing_entry : *facility_timings_json) {
-    const auto code = moirai::find_string_member(facility_timing_entry, "code");
-    const auto ci = parse_facility_latency_minutes(facility_timing_entry, "ci");
-    const auto co = parse_facility_latency_minutes(facility_timing_entry, "co");
-    const auto li = parse_facility_latency_minutes(facility_timing_entry, "li");
-    const auto lo = parse_facility_latency_minutes(facility_timing_entry, "lo");
-    const auto cut = moirai::find_string_member(facility_timing_entry, "cut");
-    if (!code.has_value() || !ci.has_value() || !co.has_value() ||
-        !li.has_value() || !lo.has_value() || !cut.has_value()) {
-      std::string invalid_fields;
-      const auto append_field =
-        [&invalid_fields](std::string_view field_name) -> void {
-        if (!invalid_fields.empty()) {
-          invalid_fields += ", ";
-        }
-        invalid_fields += field_name;
-      };
-
-      if (!code.has_value()) {
-        append_field("code");
-      }
-      if (!ci.has_value()) {
-        append_field("ci");
-      }
-      if (!co.has_value()) {
-        append_field("co");
-      }
-      if (!li.has_value()) {
-        append_field("li");
-      }
-      if (!lo.has_value()) {
-        append_field("lo");
-      }
-      if (!cut.has_value()) {
-        append_field("cut");
-      }
-
-      app.logger().error("Skipping invalid facility timings entry. "
-                         "Invalid/missing fields: {}. "
-                         "Payload: {}",
-                         invalid_fields,
-                         moirai::dump(facility_timing_entry));
-      continue;
-    }
-
-    try {
-      m_facility_timings_map[std::string(*code)] = FacilityTimings{
-        *ci,
-        *co,
-        *li,
-        *lo,
-        std::chrono::duration_cast<TIME_OF_DAY>(time_string_to_time(*cut)),
-      };
-    } catch (const std::exception& exc) {
-      app.logger().error("Skipping facility timings entry {}: {}. Payload: {}",
-                         *code,
-                         exc.what(),
-                         moirai::dump(facility_timing_entry));
-    }
-  }
-
-  app.logger().debug("Populated timings map for {} facilities",
-                     m_facility_timings_map.size());
 }
 
 auto
@@ -441,6 +485,12 @@ auto
 SolverWrapper::get_cache() const -> std::shared_ptr<PathCache>
 {
   return m_path_cache;
+}
+
+auto
+SolverWrapper::get_facility_profiles() const -> std::shared_ptr<FacilityProfiles>
+{
+  return m_facility_profiles;
 }
 
 void
@@ -477,6 +527,8 @@ SolverWrapper::init_nodes(int16_t page)
       m_solver->reserve_nodes(moirai::json_size(*data) * static_cast<std::size_t>(*pages));
     }
 
+    std::vector<FacilityListEntry> facilities;
+    facilities.reserve(moirai::json_size(*data));
     for (const auto& facility : *data) {
       const auto facility_code =
         moirai::find_string_member(facility, "facility_code");
@@ -485,40 +537,115 @@ SolverWrapper::init_nodes(int16_t page)
         continue;
       }
 
-      FacilityTimings facility_timings{ 0, 0, 0, 0, DEFAULT_FACILITY_CUTOFF };
+      const auto facility_name = moirai::find_string_member(facility, "name");
+      const auto property_id =
+        moirai::find_string_member(facility, "property_id");
+      facilities.push_back(FacilityListEntry{
+        .code = std::string(*facility_code),
+        .name = facility_name.has_value() ? std::string(*facility_name)
+                                          : std::string{},
+        .property_id = property_id.has_value() ? std::string(*property_id)
+                                               : std::string{},
+        .id = facility_identifier(facility),
+        .profile = parse_facility_profile(facility),
+      });
+    }
 
-      if (m_facility_timings_map.contains(std::string(*facility_code))) {
-        facility_timings = m_facility_timings_map[std::string(*facility_code)];
-      } else {
-        app.logger().debug("No timings found for facility: {}", *facility_code);
+    std::vector<FacilityProfile> facility_profiles;
+    facility_profiles.reserve(facilities.size());
+    for (const auto& facility : facilities) {
+      facility_profiles.push_back(facility.profile);
+    }
+
+    const auto fetch_facility_profile =
+      [this, &app, &facilities, &facility_profiles](std::size_t index) -> void {
+      const auto& facility = facilities[index];
+      if (!facility.id.has_value()) {
+        app.logger().debug("No facility id found for {}; using defaults",
+                           facility.code);
+        return;
       }
 
-      const auto facility_name =
-        moirai::find_string_member(facility, "name");
+      auto facility_profile = facility.profile;
+      try {
+        const auto detail_response = m_http_get(
+          moirai::append_path(m_node_init_uri, *facility.id),
+          { std::format("Authorization: Bearer {}", m_node_init_auth_token) });
+        if (detail_response.status_code == HTTP_STATUS_OK) {
+          const auto detail_json = moirai::parse_json(detail_response.body);
+          if (detail_json.has_value() && detail_json->is_object()) {
+            facility_profile = parse_facility_profile(*detail_json);
+          } else {
+            app.logger().error("Unable to parse facility detail for {}",
+                               facility.code);
+          }
+        } else {
+          app.logger().error("Unable to fetch facility detail for {}: {}",
+                             facility.code,
+                             detail_response.body);
+        }
+      } catch (const std::exception& exc) {
+        app.logger().error("Unable to fetch facility detail for {}: {}",
+                           facility.code,
+                           exc.what());
+      }
+      facility_profiles[index] = facility_profile;
+    };
+
+    const auto detail_worker_count =
+      parse_facility_detail_threads(facilities.size());
+    if (detail_worker_count == 1) {
+      for (std::size_t index = 0; index < facilities.size(); ++index) {
+        fetch_facility_profile(index);
+      }
+    } else if (detail_worker_count > 1) {
+      std::atomic_size_t next_facility{0};
+      std::vector<std::jthread> workers;
+      workers.reserve(detail_worker_count);
+      for (std::size_t worker = 0; worker < detail_worker_count; ++worker) {
+        workers.emplace_back([&]() {
+          while (true) {
+            const auto index =
+              next_facility.fetch_add(1, std::memory_order_relaxed);
+            if (index >= facilities.size()) {
+              return;
+            }
+            fetch_facility_profile(index);
+          }
+        });
+      }
+    }
+
+    for (std::size_t index = 0; index < facilities.size(); ++index) {
+      const auto& facility = facilities[index];
+      const auto facility_profile = facility_profiles[index];
+      (*m_facility_profiles)[facility.code] = facility_profile;
+
       auto transport_center = TransportCenter{
-        std::string(*facility_code),
-        facility_name.has_value() ? std::string(*facility_name) : std::string{}
+        facility.code,
+        facility.name
       };
       transport_center
         .set_latency<MovementType::CARTING, ProcessType::INBOUND>(
-          DURATION(std::get<0>(facility_timings)));
+          DURATION{0});
       transport_center
         .set_latency<MovementType::CARTING, ProcessType::OUTBOUND>(
-          DURATION(std::get<1>(facility_timings)));
+          facility_profile.outbound_processing);
       transport_center
         .set_latency<MovementType::LINEHAUL, ProcessType::INBOUND>(
-          DURATION(std::get<2>(facility_timings)));
+          DURATION{0});
       transport_center
         .set_latency<MovementType::LINEHAUL, ProcessType::OUTBOUND>(
-          DURATION(std::get<3>(facility_timings)));
-      transport_center.set_cutoff(std::get<4>(facility_timings));
+          facility_profile.outbound_processing);
+      transport_center.set_fresh_processing_time(
+        facility_profile.fresh_processing);
+      transport_center.set_mixed_bag_processing_time(
+        facility_profile.mixed_bag_processing);
+      transport_center.set_cutoff(facility_profile.center_arrival_cutoff);
       (void)m_solver->add_node(std::move(transport_center));
 
-      const auto property_id =
-        moirai::find_string_member(facility, "property_id");
-      if (property_id.has_value() && !property_id->empty()) {
-        m_facility_groups[std::string(*property_id)].push_back(
-          std::string(*facility_code));
+      if (!facility.property_id.empty()) {
+        m_facility_groups[facility.property_id].push_back(facility.code);
       }
     }
 
@@ -667,13 +794,16 @@ SolverWrapper::find_paths(
   std::string bag_source,
   std::string bag_target,
   int32_t bag_start,
+  DURATION source_processing_offset,
   CLOCK bag_end,
+  DURATION mixed_bag_processing,
   std::vector<PackageInfo>& packages) const
   -> SearchDocument
 {
   auto& app = moirai::Application::instance();
   const CLOCK zero = CLOCK{ std::chrono::minutes{ 0 } };
-  const CLOCK start = zero + std::chrono::minutes{ bag_start };
+  const CLOCK start =
+    zero + std::chrono::minutes{ bag_start } + source_processing_offset;
   CLOCK bag_pdd = bag_end;
   app.logger().debug("Bag end epoch minutes: {}",
                      bag_end.time_since_epoch().count());
@@ -770,46 +900,55 @@ SolverWrapper::find_paths(
     if (bag_pdd < bag_earliest_pdd) {
       critical = true;
     } else if (!packages.empty()) {
-      const auto child_earliest = *std::ranges::min_element(
-        packages, [](const auto& lhs, const auto& rhs) -> auto {
-          return std::get<1>(lhs) < std::get<1>(rhs);
-        });
-
-      const auto child_target = m_solver->find_node(std::get<0>(child_earliest));
-
-      if (child_target != target and child_target.has_value()) {
+      CLOCK required_parent_deadline = CLOCK::max();
+      for (const auto& package : packages) {
         const auto child_pdd =
-          zero + std::chrono::minutes(std::get<1>(child_earliest));
-        const auto child_key =
-          cache_key("R:S", *child_target, *target, child_pdd);
-        const auto child_critical_path = [&]() -> PathCacheEntry {
-          if (auto cached = cache_lookup(child_key)) {
-            return cached->value;
-          }
-          const auto path =
-            m_solver
-              ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
-                *child_target, *target, child_pdd);
-          PathCacheEntry entry;
-          entry.found = !path.empty();
-          if (entry.found) {
-            entry.first_distance = path.front().distance;
-            entry.last_distance = path.back().distance;
-            parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
-          }
-          return cache_store(child_key, std::move(entry));
-        }();
+          zero + std::chrono::minutes(std::get<1>(package));
+        const auto child_target = m_solver->find_node(std::get<0>(package));
+        if (!child_target.has_value()) {
+          continue;
+        }
 
-        if (child_critical_path.found) {
-          const auto child_pdd_at_parent_target = child_critical_path.first_distance;
+        CLOCK child_pdd_at_parent_target = child_pdd;
+        if (child_target != target) {
+          const auto child_key =
+            cache_key("R:S", *child_target, *target, child_pdd);
+          const auto child_critical_path = [&]() -> PathCacheEntry {
+            if (auto cached = cache_lookup(child_key)) {
+              return cached->value;
+            }
+            const auto path =
+              m_solver
+                ->find_path<PathTraversalMode::REVERSE, VehicleType::SURFACE>(
+                  *child_target, *target, child_pdd);
+            PathCacheEntry entry;
+            entry.found = !path.empty();
+            if (entry.found) {
+              entry.first_distance = path.front().distance;
+              entry.last_distance = path.back().distance;
+              parse_path_into<PathTraversalMode::REVERSE>(path, entry.locations);
+            }
+            return cache_store(child_key, std::move(entry));
+          }();
 
-          if (bag_pdd == CLOCK::max()) {
-            bag_pdd = child_pdd_at_parent_target;
+          if (!child_critical_path.found) {
+            continue;
           }
+          child_pdd_at_parent_target =
+            child_critical_path.first_distance - mixed_bag_processing;
+        }
 
-          if (child_pdd_at_parent_target < bag_earliest_pdd) {
-            critical = true;
-          }
+        if (child_pdd_at_parent_target < required_parent_deadline) {
+          required_parent_deadline = child_pdd_at_parent_target;
+        }
+      }
+
+      if (required_parent_deadline != CLOCK::max()) {
+        if (bag_pdd == CLOCK::max() || required_parent_deadline < bag_pdd) {
+          bag_pdd = required_parent_deadline;
+        }
+        if (bag_pdd < bag_earliest_pdd) {
+          critical = true;
         }
       }
     }
@@ -867,8 +1006,10 @@ SolverWrapper::run(const std::stop_token& stop_token)
   auto& app = moirai::Application::instance();
   app.logger().debug("Initializing solver");
   app.logger().debug("Processing loads");
-  app.logger().debug("0. Facility timings has {} entries",
-                     m_facility_timings_map.size());
+  app.logger().debug("0. Facility API profiles has {} entries",
+                     m_facility_profiles == nullptr
+                       ? std::size_t{0}
+                       : m_facility_profiles->size());
 
   while (true) {
     try {
@@ -895,6 +1036,7 @@ SolverWrapper::run(const std::stop_token& stop_token)
 
             auto& packages = wrapper_scratch.packages;
             packages.clear();
+            bool has_mixed_child_destinations = false;
 
             if (load->items.has_value()) {
               packages.reserve(moirai::json_size(*load->items));
@@ -939,14 +1081,14 @@ SolverWrapper::run(const std::stop_token& stop_token)
                     throw std::runtime_error(
                       std::format("ipdd_destination too short: '{}'", ipdd));
                   }
-                  auto waybill_tmax =
-                    iso_to_date(ipdd, true);
-                  if (const auto timing = m_facility_timings_map.find(cn);
-                      timing != m_facility_timings_map.end()) {
-                    waybill_tmax = iso_to_date(
-                      ipdd,
-                      std::get<4>(timing->second));
+                  if (cn != load->destination) {
+                    has_mixed_child_destinations = true;
                   }
+                  const auto destination_profile =
+                    profile_for(m_facility_profiles, cn);
+                  const auto waybill_tmax = iso_to_date_utc_cutoff(
+                    ipdd,
+                    destination_profile.center_arrival_cutoff);
 
                   packages.emplace_back(std::move(cn),
                                         waybill_tmax.time_since_epoch().count(),
@@ -969,19 +1111,29 @@ SolverWrapper::run(const std::stop_token& stop_token)
 
             CLOCK tmax = CLOCK::max();
 
-            if (load->ipdd_destination.length() > MIN_IPDD_LENGTH) {
-              tmax = iso_to_date(load->ipdd_destination, true);
-              if (const auto timing =
-                    m_facility_timings_map.find(load->destination);
-                  timing != m_facility_timings_map.end()) {
-                tmax = iso_to_date(
-                  load->ipdd_destination,
-                  std::get<4>(timing->second));
-              }
+            const auto destination_profile =
+              profile_for(m_facility_profiles, load->destination);
+            if (!load->items.has_value() &&
+                load->ipdd_destination.length() > MIN_IPDD_LENGTH) {
+              tmax = iso_to_date_utc_cutoff(
+                load->ipdd_destination,
+                destination_profile.center_arrival_cutoff);
             }
 
             SearchDocument solution;
             try {
+              DURATION source_processing_offset{0};
+              if (!load->items.has_value() &&
+                  !load->origin_center.empty() &&
+                  load->origin_center == load->location) {
+                source_processing_offset =
+                  profile_for(m_facility_profiles, load->location)
+                    .fresh_processing;
+              }
+              const DURATION mixed_bag_processing =
+                load->items.has_value() && has_mixed_child_destinations
+                  ? destination_profile.mixed_bag_processing
+                  : DURATION{0};
               solution = find_paths(
                 load->id,
                 load->location,
@@ -989,7 +1141,9 @@ SolverWrapper::run(const std::stop_token& stop_token)
                 static_cast<int32_t>(iso_to_date(load->event_time)
                                        .time_since_epoch()
                                        .count()),
+                source_processing_offset,
                 tmax,
+                mixed_bag_processing,
                 packages);
             } catch (const std::exception& exc) {
               app.logger().error(

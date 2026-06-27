@@ -116,6 +116,18 @@ inline auto default_fake_http() -> FakeHttp {
      {.status_code = 200, .body = read_fixture("facilities_page1.json")}},
     {"/facilities?page=2&status=active",
      {.status_code = 200, .body = read_fixture("facilities_page2.json")}},
+    {"/facilities/1",
+     {.status_code = 200,
+      .body = R"({"result":{"facility_attributes":{"OutboundProcessingTime":"00:10","FreshShipmentProcessingTime":"00:25","MixedBagProcessingTime":"00:40","CenterArrivalCutoff":"11:30"}}})"}},
+    {"/facilities/2",
+     {.status_code = 200,
+      .body = R"({"result":{"facility_attributes":{"OutboundProcessingTime":"00:20","FreshShipmentProcessingTime":"00:30","MixedBagProcessingTime":"00:45","CenterArrivalCutoff":"09:30"}}})"}},
+    {"/facilities/3",
+     {.status_code = 200,
+      .body = R"({"result":{"facility_attributes":{"OutboundProcessingTime":"00:30","FreshShipmentProcessingTime":"00:35","MixedBagProcessingTime":"00:50","CenterArrivalCutoff":"09:30"}}})"}},
+    {"/facilities/4",
+     {.status_code = 200,
+      .body = R"({"result":{"facility_attributes":{"OutboundProcessingTime":"00:40","FreshShipmentProcessingTime":"00:45","MixedBagProcessingTime":"00:55","CenterArrivalCutoff":"17:30"}}})"}},
     {"/routes", {.status_code = 200, .body = read_fixture("routes.json")}},
   }};
 }

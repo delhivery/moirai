@@ -2,8 +2,8 @@
   "result": {
     "total_page_count": 2,
     "data": [
-      {"facility_code": "C", "property_id": "P2"},
-      {"facility_code": "D", "property_id": "P2"},
+      {"id": "3", "facility_code": "C", "name": "Gamma", "property_id": "P2"},
+      {"id": "4", "facility_code": "D", "name": "Delta", "property_id": "P2"},
       {"facility_code": "E"}
     ]
   }

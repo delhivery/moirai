@@ -939,7 +939,8 @@ void test_real_route_fixture_scheduled_paths() {
   const auto monday_deadline = iso_to_date("2026-06-08 23:00:00");
   const auto expected_departure =
     calculator.operator()<PathTraversalMode::REVERSE>(
-      monday_deadline, expected_edge.weight<PathTraversalMode::REVERSE>());
+      monday_deadline, expected_edge.weight<PathTraversalMode::REVERSE>()) +
+    expected_edge.source_offset();
   const auto reverse_path =
     graph.solver.find_path<PathTraversalMode::REVERSE, VehicleType::AIR>(
       target, source, monday_deadline);

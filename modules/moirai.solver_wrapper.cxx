@@ -46,6 +46,15 @@ public:
     std::string edge_token;
   };
 
+  struct FacilityProfile {
+    DURATION outbound_processing{};
+    DURATION fresh_processing{};
+    DURATION mixed_bag_processing{};
+    TIME_OF_DAY center_arrival_cutoff{DURATION{240}};
+  };
+
+  using FacilityProfiles = std::unordered_map<std::string, FacilityProfile>;
+
 private:
   std::shared_ptr<Solver> m_solver;
 
@@ -55,11 +64,7 @@ private:
   moirai::Uri m_edge_init_uri;
   std::string m_edge_init_auth_token;
 
-  std::unordered_map<
-      std::string,
-      std::tuple<std::int16_t, std::int16_t, std::int16_t, std::int16_t,
-                 TIME_OF_DAY>>
-      m_facility_timings_map;
+  std::shared_ptr<FacilityProfiles> m_facility_profiles;
 
   std::unordered_map<std::string, std::vector<std::string>> m_facility_groups;
 
@@ -75,6 +80,7 @@ public:
   SolverWrapper(RuntimeQueues queues, const std::shared_ptr<Solver>& solver,
                 const std::filesystem::path& center_timings_filename,
                 std::shared_ptr<PathCache> cache = nullptr,
+                std::shared_ptr<FacilityProfiles> facility_profiles = nullptr,
                 HttpGet http_get = moirai::http_get);
 
   SolverWrapper(RuntimeQueues queues, InitEndpoints endpoints,
@@ -94,10 +100,13 @@ public:
 
   [[nodiscard]] auto get_solver() const -> std::shared_ptr<Solver>;
   [[nodiscard]] auto get_cache() const -> std::shared_ptr<PathCache>;
+  [[nodiscard]] auto get_facility_profiles() const
+      -> std::shared_ptr<FacilityProfiles>;
 
   auto find_paths(
       std::string bag, std::string bag_source, std::string bag_target,
-      std::int32_t bag_start, CLOCK bag_end,
+      std::int32_t bag_start, DURATION source_processing_offset,
+      CLOCK bag_end, DURATION mixed_bag_processing,
       std::vector<std::tuple<std::string, std::int32_t, std::string>>& packages)
       const -> SearchDocument;
 
