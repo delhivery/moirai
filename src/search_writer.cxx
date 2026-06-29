@@ -35,6 +35,7 @@ struct BulkDocument {
 struct BulkMetrics {
   std::uint64_t attempted_records{0};
   std::uint64_t audited_records{0};
+  std::uint64_t skipped_failed_records{0};
   std::uint64_t indexed_records{0};
   std::uint64_t failed_records{0};
   std::uint64_t retried_records{0};
@@ -1970,9 +1971,10 @@ SearchWriter::run(const stop_token& stop_token)
       return;
     }
     app.logger().information(
-      "Search writer metrics: audited={} indexed={} failed={} retried={} bulk_requests={} "
-      "uploaded_bytes={} records_per_sec={} bytes_per_sec={} queue_depth={}",
+      "Search writer metrics: audited={} skipped_failed={} indexed={} failed={} retried={} "
+      "bulk_requests={} uploaded_bytes={} records_per_sec={} bytes_per_sec={} queue_depth={}",
       metrics.audited_records,
+      metrics.skipped_failed_records,
       metrics.indexed_records,
       metrics.failed_records,
       metrics.retried_records,
@@ -1983,6 +1985,7 @@ SearchWriter::run(const stop_token& stop_token)
       m_solution_queue.size_approx());
     metrics.last_report = now;
     metrics.audited_records = 0;
+    metrics.skipped_failed_records = 0;
     metrics.indexed_records = 0;
     metrics.failed_records = 0;
     metrics.retried_records = 0;
@@ -2158,6 +2161,10 @@ SearchWriter::run(const stop_token& stop_token)
     for (std::size_t index = 0; index < num_records; ++index) {
       if (results[index].id.empty()) {
         app.logger().error("Invalid search payload without id");
+        continue;
+      }
+      if (results[index].failed()) {
+        ++metrics.skipped_failed_records;
         continue;
       }
 

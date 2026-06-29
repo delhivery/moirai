@@ -641,7 +641,7 @@ void test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing() {
             "batch timestamps are consistent");
 }
 
-void test_failed_document_omits_empty_date_fields() {
+void test_failed_document_is_not_audited_or_indexed() {
   SearchDocument failed;
   failed.id = "wb-failed";
   failed.waybill = "wb-failed";
@@ -659,22 +659,23 @@ void test_failed_document_omits_empty_date_fields() {
     { "GET", "/moirai/_mapping", { .status_code = 200, .body = valid_mapping() } },
     { "GET", "/moirai/_settings", { .status_code = 200, .body = valid_settings() } },
     { "GET", "", { .status_code = 200, .body = "[]" } },
-    { "POST", "/_bulk", { .status_code = 200, .body = R"({"errors":false})" } },
   };
+  auto config = test_config();
+  config.audit_kafka_enabled = true;
+  config.audit_kafka_topic = "moirai.audit";
+  auto audit_state = std::make_shared<FakeAuditState>();
 
-  auto writer = writer_with(state, queue);
+  auto writer = writer_with(state, queue, config, fake_audit(audit_state));
   writer.run(std::stop_token{});
 
-  const auto lines = split_lines(state->calls.back().body);
-  expect_eq(lines.size(), std::size_t{2}, "failed document bulk line count");
-  const auto body = nlohmann::json::parse(lines[1]);
-  expect_eq(body["fail"].get<std::string>(),
-            std::string{"pathing failed"},
-            "failed document preserves reason");
-  expect_true(!body.contains("pdd"),
-              "failed document omits empty pdd date");
-  expect_true(!body.contains("pdd_ts"),
-              "failed document omits meaningless pdd_ts");
+  expect_eq(audit_state->records.empty(),
+            true,
+            "failed document is not published to kafka audit");
+  expect_true(std::ranges::none_of(state->calls,
+                                   [](const RecordedCall& call) {
+                                     return call.method == "POST";
+                                   }),
+              "failed document is not bulk indexed");
 }
 
 void test_path_summaries_are_deduplicated_and_include_routes() {
@@ -1197,7 +1198,7 @@ auto main() -> int {
   test_incompatible_mapping_is_logged_without_destructive_change();
   test_bootstrap_failure_prevents_bulk_indexing();
   test_bulk_indexing_uses_stable_ids_timestamps_and_no_custom_routing();
-  test_failed_document_omits_empty_date_fields();
+  test_failed_document_is_not_audited_or_indexed();
   test_path_summaries_are_deduplicated_and_include_routes();
   test_bulk_flushes_when_byte_limit_is_reached();
   test_bulk_partial_failure_retries_retryable_items_only();
