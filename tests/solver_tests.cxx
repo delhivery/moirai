@@ -692,6 +692,12 @@ void test_route_edge_spec_expansion() {
   expect_eq(specs[0].edge.days_of_week,
             static_cast<std::uint8_t>(ALL_DAYS_OF_WEEK & ~day_mask(0)),
             "days copied to route edges");
+  expect_eq(specs[0].edge.duration_loading.count(), 30,
+            "source halt window is halved for loading");
+  expect_eq(specs[0].edge.duration_unloading.count(), 15,
+            "target halt window is halved for unloading");
+  expect_eq(specs[1].edge.duration_unloading.count(), 23,
+            "odd target halt window half rounds up");
 
   {
     auto j = make_base_route_json();

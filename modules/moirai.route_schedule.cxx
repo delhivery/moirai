@@ -68,6 +68,10 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
           time_string_to_time(*reporting_time)) -
       ist_offset;
   const auto scheduled_days = parse_route_days_of_week(route);
+  const auto split_halt_processing = [](DURATION processing_time) -> DURATION {
+    return DURATION{
+        static_cast<std::int16_t>((processing_time.count() + 1) / 2)};
+  };
 
   std::vector<moirai::Json> loading_stop_values;
   loading_stop_values.reserve(moirai::json_size(*stops));
@@ -136,8 +140,8 @@ export inline auto build_route_edge_specs(const moirai::Json& route,
           reporting_offset + *source.relative_departure;
       const auto duration = std::chrono::duration_cast<TIME_OF_DAY>(
           *target.relative_arrival - *source.relative_departure);
-      const auto duration_loading = source.processing_time;
-      const auto duration_unloading = target.processing_time;
+      const auto duration_loading = split_halt_processing(source.processing_time);
+      const auto duration_unloading = split_halt_processing(target.processing_time);
 
       if (duration.count() < 0) {
         continue;
