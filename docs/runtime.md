@@ -64,6 +64,114 @@ Production builds should use the default binary heap solver queue:
 values, so pass this flag explicitly or remove old build directories before
 rebuilding. The bucket queue is kept as an experimental option only.
 
+## Capacity-Aware Routing
+
+Capacity-aware online routing is disabled by default. When enabled, the solver
+checks capacity on concrete trip instances, keyed internally by route edge and
+selected departure epoch minute. Path cache lookups are bypassed for
+capacity-aware searches because reservations change the feasible edge set in real
+time.
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `MOIRAI_CAPACITY_ENABLED` | `false` | Enable capacity checks during forward/reverse path searches |
+| `MOIRAI_CAPACITY_MISSING_ALLOWED` | `true` | Treat missing capacity buckets as available; set `false` once all trip capacities are loaded |
+| `MOIRAI_CAPACITY_RESERVE_EARLIEST` | `true` | Atomically reserve capacity for the emitted earliest path |
+| `MOIRAI_CAPACITY_ALLOW_PROTECTED` | `false` | Allow online searches to consume protected forecast capacity |
+| `MOIRAI_CAPACITY_SEARCH_WEEKS` | `1` | Number of weekly schedule cycles to scan beyond the current cycle for an available departure |
+| `MOIRAI_CAPACITY_CANDIDATE_COUNT` | `1` | Number of candidate paths to generate for capacity-aware forward searches |
+| `MOIRAI_CAPACITY_DEFAULT_DEMAND` | `1` | Capacity units consumed when the load payload omits `capacity_units` |
+| `MOIRAI_CAPACITY_DEFAULT_UNITS` | unset | Optional default capacity for missing buckets |
+| `MOIRAI_CAPACITY_PRICE_WEIGHT` | `0` | Convert optimizer/forecast edge prices into equivalent routing minutes |
+| `MOIRAI_CAPACITY_PROTECTION_WEIGHT` | `0` | Penalize routes that would consume protected forecast capacity |
+| `MOIRAI_CAPACITY_CRITICAL_PRICE_WEIGHT` | `MOIRAI_CAPACITY_PRICE_WEIGHT` | Price weight for reverse critical/ultimate searches |
+| `MOIRAI_CAPACITY_CRITICAL_PROTECTION_WEIGHT` | `MOIRAI_CAPACITY_PROTECTION_WEIGHT` | Protected-capacity penalty for reverse critical/ultimate searches |
+| `MOIRAI_CAPACITY_FORECAST_PROTECTION_RATIO` | `0` | Protect this fraction of each capacity bucket when no explicit protected/forecast value is supplied |
+| `MOIRAI_CAPACITY_FORECAST_MIN_PROTECTED_UNITS` | `0` | Minimum protected units to apply with the forecast protection policy |
+| `MOIRAI_CAPACITY_FORECAST_MAX_PROTECTED_UNITS` | unset | Maximum protected units to apply with the forecast protection policy |
+| `MOIRAI_CAPACITY_STATE_PATH` | unset | Persist capacity buckets and owner reservations across restarts |
+| `MOIRAI_CAPACITY_STATE_BACKEND` | `auto` | `auto`, `snapshot`, or `rocksdb`; `auto` uses RocksDB when compiled and the path is not a `.log`, `.txt`, or `.snapshot` file |
+| `MOIRAI_CAPACITY_STATE_REBUILD` | `false` | Clear local capacity state before processing stream records |
+| `MOIRAI_CAPACITY_RESERVATION_TTL_MINUTES` | `0` | Expire owner reservations after this many minutes; `0` disables expiry |
+| `MOIRAI_CAPACITY_FREEZE_BEFORE_DEPARTURE_MINUTES` | `0` | Prevent different same-owner re-reservations inside this departure freeze window |
+
+Load payloads may provide a positive integer `capacity_units` field. If omitted,
+the configured default demand is used.
+
+Capacity records can flow through the same solver input stream. They do not emit
+search documents. Supported fields:
+
+| Field | Meaning |
+| --- | --- |
+| `edge` | Numeric solver edge id |
+| `edge_code` | Route edge code; resolved against the loaded graph |
+| `departure` | Concrete departure epoch minute |
+| `departure_ts` | Concrete departure epoch seconds, converted to minutes |
+| `capacity` | Total capacity units for the edge departure |
+| `reserved` | Reserved units to seed from an external snapshot |
+| `consumed` | Consumed units to seed from an external snapshot |
+| `mode`, `update_mode`, `op` | `snapshot` by default; `delta` adds numeric fields to the current bucket |
+| `protected` | Forecast-protected units not available to normal online search |
+| `forecast_protected` | Alias for forecast-derived protected units when `protected` is absent |
+| `forecast_units` | Alias for forecast-derived protected units when `protected` / `forecast_protected` are absent |
+| `forecast_demand` | Alias for forecast-derived protected units when the fields above are absent |
+| `historical_demand` | Alias for protected demand derived from historical features |
+| `scenario_demand` | Alias for protected demand from a future burst/scenario model |
+| `critical_forecast` | Alias for protected demand reserved for future critical shipments |
+| `reserve_ratio`, `protection_ratio`, `forecast_reserve_ratio` | Per-bucket protection-ratio override |
+| `min_protected`, `min_protected_units` | Per-bucket minimum protected-unit override |
+| `max_protected`, `max_protected_units` | Per-bucket maximum protected-unit override |
+| `price` | Scarcity price used by dual-price routing |
+
+Explicit `protected` / forecast fields win over policy-derived protection. If a
+capacity record supplies only `capacity`, the configured forecast protection
+ratio/min/max policy derives protected capacity for that bucket.
+
+Lifecycle records can also flow through the load stream. They do not emit search
+documents. Use `capacity_action`, `reservation_action`, or `action` with
+`release` / `consume`, plus an `owner`, `reservation_owner`, `id`, `waybill`, or
+`package` field. Release removes an owner reservation; consume removes the owner
+reservation and moves its reserved units into consumed capacity.
+
+`MOIRAI_CAPACITY_STATE_PATH` is optional. With the snapshot backend, Moirai writes
+an atomic local text snapshot. With the RocksDB backend, Moirai stores the same
+bucket and reservation records under `bucket:` and `reservation:` keys. Restore
+loads buckets first, then owner reservations, so reserved capacity is
+reconstructed from owner state rather than trusting stale aggregate counters.
+
+RocksDB is compiled in only when `pkg-config` can find `rocksdb` at CMake
+configure time. If `MOIRAI_CAPACITY_STATE_BACKEND=rocksdb` is set for a build
+without RocksDB support, startup fails instead of silently falling back to a
+different durability mode.
+
+## Rolling-Horizon Optimization
+
+Rolling-horizon optimization is disabled by default. When enabled together with
+capacity routing, the wrapper generates multiple forward candidates for each
+load in the current horizon batch, solves a capacity-constrained assignment over
+that candidate set, commits the selected reservations, and emits the selected
+earliest path. The horizon is bounded by
+`MOIRAI_ROLLING_HORIZON_MAX_BATCH_SIZE` and
+`MOIRAI_ROLLING_HORIZON_WINDOW_MS`.
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `MOIRAI_ROLLING_HORIZON_ENABLED` | `false` | Optimize candidate choices for each solver batch |
+| `MOIRAI_ROLLING_HORIZON_USE_HIGHS` | `true` | Use HiGHS when compiled; otherwise the deterministic greedy fallback is used |
+| `MOIRAI_ROLLING_HORIZON_COMMIT` | `false` | Commit optimizer-selected reservations even if `MOIRAI_CAPACITY_RESERVE_EARLIEST=false` |
+| `MOIRAI_ROLLING_HORIZON_MAX_BATCH_SIZE` | `64` | Maximum loads to optimize together in one horizon solve |
+| `MOIRAI_ROLLING_HORIZON_WINDOW_MS` | `0` | After the first load arrives, wait up to this long for more loads before solving |
+| `MOIRAI_ROLLING_HORIZON_SLA_PENALTY` | `1000000` | Objective penalty for selecting an SLA-breaching candidate |
+| `MOIRAI_ROLLING_HORIZON_HOP_PENALTY` | `1000` | Objective penalty per hop |
+| `MOIRAI_ROLLING_HORIZON_LATENESS_PENALTY` | `100` | Objective penalty per late minute |
+| `MOIRAI_ROLLING_HORIZON_PRICE_SCALE` | `10` | Capacity shadow-price scale written back for online dual-price routing |
+| `MOIRAI_ROLLING_HORIZON_PRICE_SMOOTHING` | `0` | Exponential smoothing factor for capacity price updates; `0` fully applies the newest price |
+
+HiGHS is compiled in only when CMake finds `highs::highs`. If HiGHS is absent or
+returns an incomplete assignment, Moirai uses the greedy optimizer. Candidate
+generation is controlled by `MOIRAI_CAPACITY_CANDIDATE_COUNT`; values above `1`
+are needed for the optimizer to have alternate route choices.
+
 ## simdjson Provider
 
 Production builds default to a pinned source build of simdjson 4.6.4:

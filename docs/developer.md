@@ -139,6 +139,14 @@ At startup, the primary `SolverWrapper` builds the graph:
 Secondary solver threads share the same `Solver` instance (read-only after
 initialization) and the same path cache.
 
+Route expansion first drops halt centers where `loading_allowed` is explicitly
+`false`. It then creates the N choose 2 directed edges among the remaining halt
+centers. For each generated edge, source-side loading uses half of the source
+halt window and target-side unloading uses half of the target halt window,
+rounded up to the nearest minute. This keeps a later departure from being
+rejected because the solver charged the whole intermediate halt window on both
+sides of the connection.
+
 ---
 
 ## CSR Graph Representation
@@ -273,8 +281,8 @@ For the reverse direction, `schedule_offset = departure + transit +
 target_offset` (when does this trip arrive at the target).
 
 The `source_offset` and `target_offset` used here incorporate facility
-processing latencies (inbound or outbound, depending on movement type) plus
-half the loading or unloading time (full unloading for terminal edges).
+processing latencies (inbound or outbound, depending on movement type) plus the
+route-expanded loading or unloading time for the concrete edge.
 
 ### Thread-Local Scratch Buffers
 
@@ -298,6 +306,73 @@ where `SURFACE < AIR`. Querying with `VehicleType::AIR` allows both surface and
 air edges; querying with `VehicleType::SURFACE` restricts to surface-only. This
 is checked per-edge via `edge.vehicle <= V`.
 
+### Capacity-Aware Traversal
+
+The static solver remains the default. Capacity-aware routing is activated by
+passing a `CapacitySearch` to `find_path`. The traversal still walks the same CSR
+graph, but each candidate schedule instance is expanded into a concrete
+departure epoch minute and checked against `CapacityReservationStore`.
+
+Capacity keys are `{edge_id, departure_epoch_minute}`. This distinguishes the
+same scheduled edge on different days and lets the solver skip a full departure
+while still considering a later departure of the same route. When capacity mode
+is active, wrapper-level path-cache reads/writes are bypassed because a cached
+path can become infeasible as soon as another shipment reserves capacity.
+
+The traversal stores two values per label:
+
+- the physical node time used for ETA/ETD output and schedule feasibility
+- an objective score used by the queue
+
+With no dual prices, the score is identical to the physical time objective. When
+`CapacitySearch.price_weight` or `CapacitySearch.protection_weight` is set,
+capacity scarcity is converted into equivalent routing minutes. That changes
+which path is selected without corrupting the physical timestamps returned in
+`PathStep`.
+
+Owner-aware reservations are maintained in `CapacityReservationStore`. A new
+reservation for the same owner releases the previous reservation atomically
+before checking the replacement path. Reservations can be released or consumed,
+and snapshots expose both buckets and owners for durable replay.
+
+### Capacity State And Optimization
+
+`moirai.capacity_optimizer` contains the layers above hot-path traversal:
+
+- `CapacityStateLog` persists capacity buckets and owner reservations through
+  either an atomic snapshot file or RocksDB. RocksDB support is selected at
+  configure time when `pkg-config` finds `rocksdb`; explicit RocksDB requests
+  fail fast in builds without that dependency. Restore loads buckets with
+  reserved capacity cleared, then replays owner reservations to reconstruct
+  reservation pressure.
+- `parse_capacity_ingestion_record()` and
+  `apply_capacity_ingestion_record()` ingest capacity/protection/price updates.
+  Explicit `protected` or forecast fields win; otherwise
+  `CapacityProtectionPolicy` can derive protected units from capacity using a
+  configured reserve ratio and min/max clamps.
+- `RollingHorizonOptimizer` accepts shipments with pre-generated path
+  candidates and enforces capacity over the candidate set. It uses HiGHS when
+  `highs::highs` is available at configure time, otherwise it falls back to a
+  deterministic greedy optimizer. HiGHS results are validated for complete
+  assignment before use; incomplete results fall back to greedy.
+- Optimizer output includes capacity prices. Committing an optimizer result
+  reserves selected candidates by shipment id and writes the prices back into
+  `CapacityReservationStore`, which the online solver can consume as dual-price
+  feedback.
+
+Candidate generation lives in `Solver::find_path_candidates()`. It returns the
+best path, then searches for alternatives by excluding one edge from existing
+candidates. This is deliberately compact: it gives the rolling optimizer
+multiple feasible choices without building a full time-expanded network in the
+online process.
+
+The runtime wrapper uses this optimizer as a rolling assignment layer: after the
+first load is dequeued, it can wait briefly for nearby arrivals, up to the
+configured horizon window and max batch size. It optimizes generated forward
+candidates, commits selected reservations when configured, and then emits the
+chosen earliest paths. This is the production-safe near-real-time slice. It is
+not a cross-batch reoptimizer or exact column-generation implementation.
+
 ### Path Reconstruction
 
 After Dijkstra terminates (target node popped from the queue), the path is
@@ -307,18 +382,17 @@ its source:
 - **Forward**: Trace from solver-target to solver-source via `edge.source`,
   collecting nodes and edges. Reverse the collected list to get chronological
   order. Each step records the node, the outbound edge (from cold storage), and
-  the node's arrival time from `distances[]`.
+  the node's arrival time from `distances[]`. The exact selected outbound
+  departure is carried separately from the traversal relaxation, so output and
+  capacity reservations use the same concrete trip instance.
 - **Reverse**: The solver is called with `find_path<REVERSE>(destination,
   origin, pdd)` -- so the solver-source is the shipment destination and the
   solver-target is the shipment origin. Trace from solver-target (shipment
   origin) toward solver-source (shipment destination) via `edge.target`. Each
-  step records `distances[node] + edge.reverse_outbound_latency` as the
-  reported time. The `reverse_outbound_latency` is the raw outbound processing
-  latency at that node for the edge's movement type, converting the solver's
-  internal "processing-start" time to when the package clears outbound
-  processing. The final step (shipment destination) records `distances[node]`
-  directly with no outbound edge. The resulting path is ordered from shipment
-  origin to shipment destination.
+  step records the concrete departure selected during reverse traversal. The
+  final step (shipment destination) records `distances[node]` directly with no
+  outbound edge. The resulting path is ordered from shipment origin to shipment
+  destination.
 
 ---
 
