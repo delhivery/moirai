@@ -1,6 +1,7 @@
 #include <nlohmann/json.hpp>
 
 import std;
+import moirai.capacity_optimizer;
 import moirai.date_utils;
 import moirai.json_utils;
 import moirai.route_schedule;
@@ -957,6 +958,501 @@ void test_real_route_fixture_scheduled_paths() {
               "real restricted reverse path skips disallowed Monday");
 }
 
+void test_capacity_owner_lifecycle() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey key{.edge = 7, .departure = 100};
+  store.set_capacity(key, 2);
+
+  const std::array instances{key};
+  const auto first =
+    store.reserve_for("shipment-1", std::span<const CapacityInstanceKey>{instances}, 1);
+  expect_true(first.has_value(), "owner reservation succeeds");
+  expect_eq(store.remaining(key).value_or(99), CapacityUnits{1},
+            "reservation reduces remaining capacity");
+
+  const auto second =
+    store.reserve_for("shipment-1", std::span<const CapacityInstanceKey>{instances}, 1);
+  expect_true(second.has_value(), "same owner reservation is idempotent");
+  expect_eq(store.remaining(key).value_or(99), CapacityUnits{1},
+            "same owner does not double reserve");
+
+  const auto consumed = store.consume("shipment-1");
+  expect_true(consumed.has_value(), "owner reservation can be consumed");
+  expect_eq(store.remaining(key).value_or(99), CapacityUnits{1},
+            "consumed capacity remains unavailable");
+  expect_true(!store.reservation("shipment-1").has_value(),
+              "consume clears owner reservation");
+}
+
+void test_capacity_bucket_invariants_and_delta_records() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey key{.edge = 8, .departure = 200};
+
+  store.set_bucket(key,
+                   CapacityBucket{
+                     .capacity = 5,
+                     .reserved = 6,
+                     .consumed = 2,
+                     .protected_units = 9,
+                     .price = -10.0,
+                   });
+  const auto clamped = store.bucket(key);
+  expect_true(clamped.has_value(), "clamped bucket exists");
+  expect_eq(clamped->capacity, CapacityUnits{5}, "capacity preserved");
+  expect_eq(clamped->reserved, CapacityUnits{3},
+            "reserved is clamped to capacity minus consumed");
+  expect_eq(clamped->consumed, CapacityUnits{2}, "consumed preserved");
+  expect_eq(clamped->protected_units, CapacityUnits{5},
+            "protected units are clamped to capacity");
+  expect_eq(clamped->price, 0.0, "negative price is clamped");
+  expect_eq(store.metrics().invalid_buckets_clamped, std::uint64_t{1},
+            "invalid bucket clamp is counted");
+
+  moirai::apply_capacity_ingestion_record(
+    store,
+    moirai::CapacityIngestionRecord{
+      .key = key,
+      .mode = moirai::CapacityUpdateMode::SNAPSHOT,
+      .capacity = CapacityUnits{10},
+      .reserved = CapacityUnits{1},
+      .consumed = CapacityUnits{2},
+      .protected_units = CapacityUnits{3},
+      .price = 4.0,
+      .reserve_ratio = std::nullopt,
+      .min_protected_units = std::nullopt,
+      .max_protected_units = std::nullopt,
+    });
+  moirai::apply_capacity_ingestion_record(
+    store,
+    moirai::CapacityIngestionRecord{
+      .key = key,
+      .mode = moirai::CapacityUpdateMode::DELTA,
+      .capacity = CapacityUnits{5},
+      .reserved = CapacityUnits{2},
+      .consumed = CapacityUnits{1},
+      .protected_units = CapacityUnits{4},
+      .price = 1.5,
+      .reserve_ratio = std::nullopt,
+      .min_protected_units = std::nullopt,
+      .max_protected_units = std::nullopt,
+    });
+  const auto delta = store.bucket(key);
+  expect_true(delta.has_value(), "delta bucket exists");
+  expect_eq(delta->capacity, CapacityUnits{15}, "delta adds capacity");
+  expect_eq(delta->reserved, CapacityUnits{3}, "delta adds reserved units");
+  expect_eq(delta->consumed, CapacityUnits{3}, "delta adds consumed units");
+  expect_eq(delta->protected_units, CapacityUnits{7},
+            "delta adds protected units");
+  expect_eq(delta->price, 5.5, "delta adds price");
+}
+
+void test_capacity_reservation_metadata_expiry_and_freeze() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey first{.edge = 9, .departure = 300};
+  const CapacityInstanceKey second{.edge = 10, .departure = 300};
+  store.set_capacity(first, 2);
+  store.set_capacity(second, 2);
+
+  const std::array first_instances{first};
+  const auto frozen = store.reserve_for(
+    "shipment-freeze",
+    std::span<const CapacityInstanceKey>{first_instances},
+    1,
+    CapacityReservationOptions{
+      .reserved_at = CLOCK{CLOCK::duration{10}},
+      .expires_at = CLOCK{CLOCK::duration{50}},
+      .frozen_at = CLOCK{CLOCK::duration{40}},
+      .payload = R"({"id":"shipment-freeze"})",
+    });
+  expect_true(frozen.has_value(), "metadata reservation succeeds");
+  expect_eq(frozen->payload, std::string{R"({"id":"shipment-freeze"})"},
+            "payload is preserved");
+  expect_true(store.expire_before(CLOCK{CLOCK::duration{49}}).empty(),
+              "reservation before expiry is retained");
+
+  const std::array second_instances{second};
+  const auto frozen_replace = store.reserve_for(
+    "shipment-freeze",
+    std::span<const CapacityInstanceKey>{second_instances},
+    1,
+    CapacityReservationOptions{
+      .reserved_at = CLOCK{CLOCK::duration{40}},
+      .expires_at = CLOCK{CLOCK::duration{80}},
+      .frozen_at = CLOCK{CLOCK::duration{70}},
+      .payload = "replacement",
+    });
+  expect_true(!frozen_replace.has_value(),
+              "different reservation cannot replace a frozen owner");
+  const auto frozen_same = store.reserve_for(
+    "shipment-freeze",
+    std::span<const CapacityInstanceKey>{first_instances},
+    1,
+    CapacityReservationOptions{
+      .reserved_at = CLOCK{CLOCK::duration{40}},
+      .expires_at = CLOCK{CLOCK::duration{80}},
+      .frozen_at = CLOCK{CLOCK::duration{70}},
+      .payload = "same",
+    });
+  expect_true(frozen_same.has_value(),
+              "same reservation remains idempotent after freeze");
+
+  const auto expired = store.expire_before(CLOCK{CLOCK::duration{50}});
+  expect_eq(expired.size(), std::size_t{1}, "expired reservation returned");
+  expect_true(!store.reservation("shipment-freeze").has_value(),
+              "expired reservation is removed");
+  expect_eq(store.metrics().reservations_expired, std::uint64_t{1},
+            "expiry metric is counted");
+}
+
+void test_capacity_protection_dual_prices_and_candidates() {
+  GraphBuilder graph;
+  const auto a = graph.add_center("A");
+  const auto b = graph.add_center("B");
+  const auto c = graph.add_center("C");
+  graph.add_edge(a, b, "A-B", 9 * 60, 30);
+  graph.add_edge(a, c, "A-C", 9 * 60, 30);
+  graph.add_edge(c, b, "C-B", 10 * 60, 30);
+
+  const auto direct = graph.solver.find_edge("A-B");
+  const auto first_leg = graph.solver.find_edge("A-C");
+  const auto second_leg = graph.solver.find_edge("C-B");
+  expect_true(direct.has_value() && first_leg.has_value() && second_leg.has_value(),
+              "test edges are indexed");
+
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  store.set_missing_capacity_allowed(false);
+  const auto direct_departure =
+    static_cast<SolverMinute>(iso_to_date("2026-06-08 09:00:00")
+                                .time_since_epoch()
+                                .count());
+  const auto second_departure =
+    static_cast<SolverMinute>(iso_to_date("2026-06-08 10:00:00")
+                                .time_since_epoch()
+                                .count());
+  store.set_capacity({.edge = *direct, .departure = direct_departure}, 10);
+  store.set_capacity({.edge = *first_leg, .departure = direct_departure}, 10);
+  store.set_capacity({.edge = *second_leg, .departure = second_departure}, 10);
+
+  CapacitySearch search{
+    .store = &store,
+    .units = 1,
+    .search_weeks = 1,
+  };
+  PathCandidateMetrics metrics;
+  const auto candidates =
+    graph.solver.find_path_candidates<PathTraversalMode::FORWARD,
+                                      VehicleType::SURFACE>(
+      a,
+      b,
+      iso_to_date("2026-06-08 08:00:00"),
+      search,
+      PathCandidateOptions{
+        .max_candidates = 2,
+        .search_weeks = 1,
+        .max_expansions = 16,
+        .deadline = iso_to_date("2026-06-08 12:00:00"),
+        .metrics = &metrics,
+      });
+  expect_eq(candidates.size(), std::size_t{2},
+            "candidate generation returns direct and alternate paths");
+  expect_eq(metrics.generated, std::size_t{2},
+            "candidate metrics record generated paths");
+  expect_true(metrics.expansions > 0,
+              "candidate metrics record bounded expansions");
+  expect_eq(metrics.slack_duplicates, std::size_t{0},
+            "candidate metrics expose slack diversity");
+  expect_eq(edge_codes(candidates.front()), std::vector<std::string>{"A-B"},
+            "first candidate is direct path");
+
+  store.set_protected_capacity({.edge = *direct, .departure = direct_departure}, 10);
+  const auto protected_path =
+    graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      a,
+      b,
+      iso_to_date("2026-06-08 08:00:00"),
+      search);
+  expect_eq(edge_codes(protected_path),
+            std::vector<std::string>({"A-C", "C-B"}),
+            "protected capacity is unavailable to normal search");
+
+  store.set_protected_capacity({.edge = *direct, .departure = direct_departure}, 0);
+  store.set_price({.edge = *direct, .departure = direct_departure}, 10'000.0);
+  CapacitySearch priced_search = search;
+  priced_search.price_weight = 1.0;
+  const auto priced_path =
+    graph.solver.find_path<PathTraversalMode::FORWARD, VehicleType::SURFACE>(
+      a,
+      b,
+      iso_to_date("2026-06-08 08:00:00"),
+      priced_search);
+  expect_eq(edge_codes(priced_path),
+            std::vector<std::string>({"A-C", "C-B"}),
+	            "dual price steers path away from scarce direct edge");
+}
+
+void test_capacity_forecast_protection_policy() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey first{.edge = 11, .departure = 100};
+  const CapacityInstanceKey second{.edge = 12, .departure = 100};
+  const CapacityInstanceKey third{.edge = 13, .departure = 100};
+
+  const auto forecast_doc = TestDoc::from(nlohmann::json{
+    {"edge", first.edge},
+    {"departure", first.departure},
+    {"capacity", 10},
+    {"forecast_demand", 4},
+  });
+  const auto forecast_record =
+    moirai::parse_capacity_ingestion_record(forecast_doc.element);
+  expect_true(forecast_record.has_value(), "forecast capacity record parses");
+  moirai::apply_capacity_ingestion_record(store, *forecast_record);
+  expect_eq(store.protected_capacity(first), CapacityUnits{4},
+            "forecast demand seeds protected capacity");
+
+  moirai::apply_capacity_ingestion_record(
+    store,
+    moirai::CapacityIngestionRecord{
+      .key = second,
+      .capacity = CapacityUnits{10},
+      .reserved = std::nullopt,
+      .consumed = std::nullopt,
+      .protected_units = std::nullopt,
+      .price = std::nullopt,
+      .reserve_ratio = std::nullopt,
+      .min_protected_units = std::nullopt,
+      .max_protected_units = std::nullopt,
+    },
+    moirai::CapacityProtectionPolicy{
+      .reserve_ratio = 0.25,
+      .min_protected_units = 3,
+      .max_protected_units = CapacityUnits{4},
+    });
+  expect_eq(store.protected_capacity(second), CapacityUnits{3},
+            "ratio policy derives protected capacity");
+
+  moirai::apply_capacity_ingestion_record(
+    store,
+    moirai::CapacityIngestionRecord{
+      .key = second,
+      .capacity = CapacityUnits{10},
+      .reserved = std::nullopt,
+      .consumed = std::nullopt,
+      .protected_units = CapacityUnits{1},
+      .price = std::nullopt,
+      .reserve_ratio = std::nullopt,
+      .min_protected_units = std::nullopt,
+      .max_protected_units = std::nullopt,
+    },
+    moirai::CapacityProtectionPolicy{
+      .reserve_ratio = 0.75,
+      .min_protected_units = 3,
+      .max_protected_units = std::nullopt,
+    });
+  expect_eq(store.protected_capacity(second), CapacityUnits{1},
+            "explicit protected capacity overrides forecast policy");
+
+  moirai::apply_capacity_ingestion_record(
+    store,
+    moirai::CapacityIngestionRecord{
+      .key = third,
+      .mode = moirai::CapacityUpdateMode::SNAPSHOT,
+      .capacity = CapacityUnits{10},
+      .reserved = std::nullopt,
+      .consumed = std::nullopt,
+      .protected_units = std::nullopt,
+      .price = std::nullopt,
+      .reserve_ratio = 0.40,
+      .min_protected_units = CapacityUnits{5},
+      .max_protected_units = CapacityUnits{6},
+    },
+    moirai::CapacityProtectionPolicy{});
+  expect_eq(store.protected_capacity(third), CapacityUnits{5},
+            "record-level protection policy overrides defaults");
+  expect_eq(store.available(third, CapacityUnits{6}, false),
+            false,
+            "normal availability respects protected capacity");
+  expect_eq(store.available(third, CapacityUnits{6}, true),
+            true,
+            "explicit protected override can use protected capacity");
+  expect_eq(store.metrics().protected_capacity_saved, std::uint64_t{1},
+            "protected-capacity deferral is counted");
+  expect_eq(store.metrics().protected_capacity_used, std::uint64_t{1},
+            "protected-capacity override use is counted");
+}
+
+void test_capacity_state_log_and_optimizer() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey direct{.edge = 1, .departure = 100};
+  const CapacityInstanceKey alternate{.edge = 2, .departure = 100};
+  store.set_bucket(direct,
+                   CapacityBucket{
+                     .capacity = 2,
+                     .reserved = 1,
+                     .consumed = 0,
+                     .protected_units = 0,
+                     .price = 0.0,
+                   });
+  store.set_capacity(alternate, 2);
+  const std::array direct_instances{direct};
+  expect_true(store.reserve_for("existing",
+                                std::span<const CapacityInstanceKey>{direct_instances},
+                                1,
+                                CapacityReservationOptions{
+                                  .reserved_at = CLOCK{CLOCK::duration{1}},
+                                  .expires_at = CLOCK{CLOCK::duration{500}},
+                                  .frozen_at = CLOCK{CLOCK::duration{400}},
+                                  .payload = "existing-payload",
+                                })
+                .has_value(),
+              "existing reservation succeeds");
+
+  const auto state_path =
+    std::filesystem::temp_directory_path() /
+    std::format("moirai-capacity-state-{}.log",
+                std::chrono::steady_clock::now().time_since_epoch().count());
+  moirai::CapacityStateLog state{state_path};
+  state.persist_snapshot(store);
+
+  CapacityReservationStore restored;
+  restored.set_enabled(true);
+  state.restore(restored);
+  expect_eq(restored.remaining(direct).value_or(99), CapacityUnits{0},
+            "state restore preserves reservation pressure");
+  expect_true(restored.reservation("existing").has_value(),
+              "state restore preserves owner reservation");
+  expect_eq(restored.reservation("existing")->payload,
+            std::string{"existing-payload"},
+            "state restore preserves owner payload");
+
+  const moirai::OptimizationShipment shipment{
+    .id = "shipment",
+    .candidates = {
+      moirai::OptimizationPathCandidate{
+        .capacity_instances = {direct},
+        .units = 1,
+        .hops = 1,
+        .arrival = CLOCK{CLOCK::duration{120}},
+        .deadline = CLOCK{CLOCK::duration{200}},
+        .cost = 0.0,
+        .sla_feasible = true,
+      },
+      moirai::OptimizationPathCandidate{
+        .capacity_instances = {alternate},
+        .units = 1,
+        .hops = 2,
+        .arrival = CLOCK{CLOCK::duration{150}},
+        .deadline = CLOCK{CLOCK::duration{200}},
+        .cost = 0.0,
+        .sla_feasible = true,
+      },
+    },
+    .units = 1,
+    .deadline = CLOCK{CLOCK::duration{200}},
+    .reservation_options = {},
+    .priority = 1,
+  };
+  moirai::RollingHorizonConfig optimizer_config;
+  optimizer_config.enabled = true;
+  optimizer_config.use_highs = true;
+  moirai::RollingHorizonOptimizer optimizer{optimizer_config};
+  const std::array shipments{shipment};
+  const auto result =
+    optimizer.optimize(std::span<const moirai::OptimizationShipment>{shipments},
+                       restored);
+  expect_eq(result.chosen_candidate.size(), std::size_t{1},
+            "optimizer returns one decision");
+  expect_true(result.chosen_candidate.front().has_value(),
+              "optimizer chooses a feasible candidate");
+  expect_eq(*result.chosen_candidate.front(), std::size_t{1},
+            "optimizer avoids exhausted direct capacity");
+  expect_eq(optimizer.commit(
+              std::span<const moirai::OptimizationShipment>{shipments},
+              result,
+              restored),
+            std::size_t{1},
+            "optimizer can commit chosen reservations");
+  std::filesystem::remove(state_path);
+
+#ifdef MOIRAI_WITH_ROCKSDB
+  const auto rocksdb_path =
+    std::filesystem::temp_directory_path() /
+    std::format("moirai-capacity-rocksdb-{}",
+                std::chrono::steady_clock::now().time_since_epoch().count());
+  moirai::CapacityStateLog rocksdb_state{
+    rocksdb_path,
+    moirai::CapacityStateBackend::ROCKSDB,
+  };
+  rocksdb_state.persist_snapshot(restored);
+  CapacityReservationStore rocksdb_restored;
+  rocksdb_restored.set_enabled(true);
+  rocksdb_state.restore(rocksdb_restored);
+  expect_true(rocksdb_restored.reservation("existing").has_value(),
+              "rocksdb restore preserves existing owner reservation");
+  expect_true(rocksdb_restored.reservation("shipment").has_value(),
+              "rocksdb restore preserves optimizer committed reservation");
+  std::filesystem::remove_all(rocksdb_path);
+#endif
+}
+
+void test_rolling_horizon_lexicographic_objective() {
+  CapacityReservationStore store;
+  store.set_enabled(true);
+  const CapacityInstanceKey direct{.edge = 20, .departure = 100};
+  const CapacityInstanceKey alternate_first{.edge = 21, .departure = 100};
+  const CapacityInstanceKey alternate_second{.edge = 22, .departure = 110};
+  store.set_capacity(direct, 1);
+  store.set_capacity(alternate_first, 1);
+  store.set_capacity(alternate_second, 1);
+
+  const moirai::OptimizationShipment shipment{
+    .id = "shipment-lex",
+    .candidates = {
+      moirai::OptimizationPathCandidate{
+        .capacity_instances = {direct},
+        .units = 1,
+        .hops = 1,
+        .arrival = CLOCK{CLOCK::duration{500}},
+        .deadline = CLOCK{CLOCK::duration{200}},
+        .cost = 0.0,
+        .sla_feasible = false,
+      },
+      moirai::OptimizationPathCandidate{
+        .capacity_instances = {alternate_first, alternate_second},
+        .units = 1,
+        .hops = 2,
+        .arrival = CLOCK{CLOCK::duration{180}},
+        .deadline = CLOCK{CLOCK::duration{200}},
+        .cost = 0.0,
+        .sla_feasible = true,
+      },
+    },
+    .units = 1,
+    .deadline = CLOCK{CLOCK::duration{200}},
+    .reservation_options = {},
+    .priority = 0,
+  };
+  moirai::RollingHorizonConfig config;
+  config.use_highs = false;
+  config.sla_breach_penalty = 1.0;
+  config.hop_penalty = 1'000'000.0;
+  config.lateness_penalty_per_minute = 1.0;
+  moirai::RollingHorizonOptimizer optimizer{config};
+  const std::array shipments{shipment};
+  const auto result =
+    optimizer.optimize(std::span<const moirai::OptimizationShipment>{shipments},
+                       store);
+  expect_true(result.chosen_candidate.front().has_value(),
+              "lexicographic optimizer chooses a candidate");
+  expect_eq(*result.chosen_candidate.front(), std::size_t{1},
+            "SLA-feasible candidate dominates fewer-hop SLA breach");
+}
+
 } // namespace
 
 auto main() -> int {
@@ -971,5 +1467,12 @@ auto main() -> int {
   test_large_route_edge_spec_expansion();
   test_real_route_fixture_edge_expansion();
   test_real_route_fixture_scheduled_paths();
+  test_capacity_owner_lifecycle();
+  test_capacity_bucket_invariants_and_delta_records();
+  test_capacity_reservation_metadata_expiry_and_freeze();
+  test_capacity_protection_dual_prices_and_candidates();
+  test_capacity_forecast_protection_policy();
+  test_capacity_state_log_and_optimizer();
+  test_rolling_horizon_lexicographic_objective();
   return 0;
 }

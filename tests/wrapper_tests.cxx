@@ -1,4 +1,5 @@
 #include "blocking_queue.hxx"
+#include <cstdlib>
 #include <nlohmann/json.hpp>
 #include "test_helpers.hxx"
 
@@ -13,6 +14,32 @@ import moirai.transportation;
 namespace {
 
 using moirai_tests::display_epoch_minutes;
+
+class ScopedEnv {
+private:
+  std::string m_name;
+  std::optional<std::string> m_previous;
+
+public:
+  ScopedEnv(std::string name, std::string value)
+      : m_name(std::move(name)) {
+    if (const char* previous = std::getenv(m_name.c_str()); previous != nullptr) {
+      m_previous = previous;
+    }
+    if (::setenv(m_name.c_str(), value.c_str(), 1) != 0) {
+      std::cerr << "failed to set env " << m_name << '\n';
+      std::exit(1);
+    }
+  }
+
+  ~ScopedEnv() {
+    if (m_previous.has_value()) {
+      (void)::setenv(m_name.c_str(), m_previous->c_str(), 1);
+    } else {
+      (void)::unsetenv(m_name.c_str());
+    }
+  }
+};
 
 template <typename T, typename U>
 void expect_eq(const T& actual, const U& expected, std::string_view label,
@@ -65,7 +92,9 @@ auto add_edge(Solver& solver, NodeId source, NodeId target,
 }
 
 auto make_wrapper(std::shared_ptr<Solver> solver,
-                  std::shared_ptr<PathCache> cache = nullptr) -> SolverWrapper {
+                  std::shared_ptr<PathCache> cache = nullptr,
+                  std::shared_ptr<CapacityReservationStore> capacity_store = nullptr)
+    -> SolverWrapper {
   static const auto timings_path =
     std::filesystem::temp_directory_path() / "moirae-wrapper-empty-timings.json";
   static std::once_flag timings_once;
@@ -82,7 +111,22 @@ auto make_wrapper(std::shared_ptr<Solver> solver,
     .load = &load_queue,
     .solution = &solution_queue,
   };
-  return SolverWrapper(queues, solver, timings_path, std::move(cache));
+  return SolverWrapper(queues,
+                       solver,
+                       timings_path,
+                       std::move(cache),
+                       nullptr,
+                       std::move(capacity_store));
+}
+
+auto section_routes(const SearchPathSection& section) -> std::vector<std::string> {
+  std::vector<std::string> routes;
+  for (const auto& location : section.locations) {
+    if (location.has_departure) {
+      routes.push_back(location.route);
+    }
+  }
+  return routes;
 }
 
 void test_find_paths_non_critical_returns_earliest_and_ultimate() {
@@ -336,6 +380,302 @@ void test_find_paths_shared_cache_is_thread_safe() {
   expect_true(metrics.misses > 0, "shared path cache records misses");
 }
 
+void test_capacity_reservation_routes_around_full_departure() {
+  const ScopedEnv enabled{"MOIRAI_CAPACITY_ENABLED", "true"};
+  const ScopedEnv missing{"MOIRAI_CAPACITY_MISSING_ALLOWED", "false"};
+
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  const auto c = add_center(*solver, "C");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+  add_edge(*solver, a, c, "A-C", 9 * 60, 30);
+  add_edge(*solver, c, b, "C-B", 10 * 60, 30);
+
+  auto capacity = std::make_shared<CapacityReservationStore>();
+  const auto direct = solver->find_edge("A-B");
+  const auto first_leg = solver->find_edge("A-C");
+  const auto second_leg = solver->find_edge("C-B");
+  expect_true(direct.has_value(), "direct edge exists");
+  expect_true(first_leg.has_value(), "first alternate edge exists");
+  expect_true(second_leg.has_value(), "second alternate edge exists");
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *direct,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    1);
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *first_leg,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    10);
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *second_leg,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 10:00:00"))},
+    10);
+
+  auto wrapper = make_wrapper(solver, nullptr, capacity);
+  std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+  const auto first = wrapper.find_paths(
+    "bag-1",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
+    packages);
+  expect_eq(section_routes(first.earliest),
+            std::vector<std::string>({"A-B"}),
+            "first capacity-aware shipment uses direct edge");
+
+  const auto second = wrapper.find_paths(
+    "bag-2",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
+    iso_to_date("2026-06-08 12:00:00"),
+    DURATION{0},
+    packages);
+  expect_eq(section_routes(second.earliest),
+            std::vector<std::string>({"A-C", "C-B"}),
+            "second capacity-aware shipment avoids reserved direct edge");
+  const auto remaining = capacity->remaining(
+    CapacityInstanceKey{.edge = *direct,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))});
+  expect_true(remaining.has_value(), "direct remaining capacity exists");
+  expect_eq(*remaining, CapacityUnits{0}, "direct capacity exhausted");
+}
+
+void test_capacity_search_waits_for_later_departure_instance() {
+  const ScopedEnv enabled{"MOIRAI_CAPACITY_ENABLED", "true"};
+  const ScopedEnv missing{"MOIRAI_CAPACITY_MISSING_ALLOWED", "false"};
+
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+
+  auto capacity = std::make_shared<CapacityReservationStore>();
+  const auto edge = solver->find_edge("A-B");
+  expect_true(edge.has_value(), "edge exists");
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *edge,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    0);
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *edge,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-09 09:00:00"))},
+    1);
+
+  auto wrapper = make_wrapper(solver, nullptr, capacity);
+  std::vector<std::tuple<std::string, int32_t, std::string>> packages;
+  const auto response = wrapper.find_paths(
+    "bag",
+    "A",
+    "B",
+    epoch_minutes("2026-06-08 08:00:00"),
+    DURATION{0},
+    iso_to_date("2026-06-10 12:00:00"),
+    DURATION{0},
+    packages);
+
+  expect_true(!response.earliest.locations.empty(),
+              "later capacity instance keeps path feasible");
+  expect_eq(response.earliest.locations.front().departure_ts,
+            static_cast<std::int64_t>(
+              epoch_minutes("2026-06-09 09:00:00")) * 60,
+            "capacity search selects later departure instance");
+}
+
+void test_rolling_horizon_runtime_selects_capacity_feasible_candidates() {
+  const ScopedEnv enabled{"MOIRAI_CAPACITY_ENABLED", "true"};
+  const ScopedEnv missing{"MOIRAI_CAPACITY_MISSING_ALLOWED", "false"};
+  const ScopedEnv candidates{"MOIRAI_CAPACITY_CANDIDATE_COUNT", "2"};
+  const ScopedEnv rolling{"MOIRAI_ROLLING_HORIZON_ENABLED", "true"};
+  const ScopedEnv highs{"MOIRAI_ROLLING_HORIZON_USE_HIGHS", "false"};
+  const ScopedEnv max_batch{"MOIRAI_ROLLING_HORIZON_MAX_BATCH_SIZE", "2"};
+  const ScopedEnv window{"MOIRAI_ROLLING_HORIZON_WINDOW_MS", "25"};
+
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  const auto c = add_center(*solver, "C");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+  add_edge(*solver, a, c, "A-C", 9 * 60, 30);
+  add_edge(*solver, c, b, "C-B", 11 * 60, 30);
+
+  auto capacity = std::make_shared<CapacityReservationStore>();
+  const auto direct = solver->find_edge("A-B");
+  const auto first_leg = solver->find_edge("A-C");
+  const auto second_leg = solver->find_edge("C-B");
+  expect_true(direct.has_value(), "direct edge exists");
+  expect_true(first_leg.has_value(), "alternate first edge exists");
+  expect_true(second_leg.has_value(), "alternate second edge exists");
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *direct,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    1);
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *first_leg,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    10);
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *second_leg,
+	                        .departure = static_cast<SolverMinute>(
+	                          epoch_minutes("2026-06-08 11:00:00"))},
+	    10);
+
+  BlockingQueue<std::string> load_queue;
+  BlockingQueue<SearchDocument> solution_queue;
+  SolverWrapper::RuntimeQueues queues{
+    .node = nullptr,
+    .edge = nullptr,
+    .load = &load_queue,
+    .solution = &solution_queue,
+  };
+  static const auto timings_path =
+    std::filesystem::temp_directory_path() /
+    "moirae-wrapper-rolling-empty-timings.json";
+  {
+    std::ofstream timings(timings_path);
+    timings << "[]";
+  }
+  auto profiles = std::make_shared<SolverWrapper::FacilityProfiles>();
+  (*profiles)["B"].center_arrival_cutoff = DURATION{10 * 60 + 30};
+  SolverWrapper wrapper{
+    queues,
+    solver,
+    timings_path,
+    nullptr,
+    profiles,
+    capacity,
+  };
+
+  const auto load = [](std::string id, const bool constrained) {
+    auto payload = nlohmann::json{
+      {"id", std::move(id)},
+      {"location", "A"},
+      {"destination", "B"},
+      {"time", "2026-06-08 08:00:00"},
+      {"capacity_units", 1},
+    };
+    if (constrained) {
+      payload["ipdd_destination"] = "2026-06-08 00:00:00";
+    }
+    return payload.dump();
+  };
+  expect_true(load_queue.enqueue(load("bag-1", false)), "first load enqueued");
+  expect_true(load_queue.enqueue(load("bag-2", true)), "second load enqueued");
+  load_queue.close();
+  wrapper.run(std::stop_token{});
+
+  std::array<SearchDocument, 2> results;
+  const auto count = solution_queue.try_dequeue_bulk(results.data(),
+                                                    results.size());
+  expect_eq(count, std::size_t{2}, "rolling horizon emits two documents");
+  expect_eq(section_routes(results[0].earliest),
+            std::vector<std::string>({"A-C", "C-B"}),
+            "unconstrained rolling output yields scarce direct capacity");
+  expect_eq(section_routes(results[1].earliest),
+            std::vector<std::string>({"A-B"}),
+            "SLA-constrained rolling output receives direct route");
+  expect_true(capacity->reservation("bag-1").has_value(),
+              "first rolling result is reserved");
+  expect_true(capacity->reservation("bag-2").has_value(),
+              "second rolling result is reserved");
+}
+
+void test_capacity_lifecycle_events_are_idempotent_and_order_tolerant() {
+  const ScopedEnv enabled{"MOIRAI_CAPACITY_ENABLED", "true"};
+  const ScopedEnv missing{"MOIRAI_CAPACITY_MISSING_ALLOWED", "false"};
+
+  auto solver = std::make_shared<Solver>();
+  const auto a = add_center(*solver, "A");
+  const auto b = add_center(*solver, "B");
+  add_edge(*solver, a, b, "A-B", 9 * 60, 60);
+
+  auto capacity = std::make_shared<CapacityReservationStore>();
+  const auto edge = solver->find_edge("A-B");
+  expect_true(edge.has_value(), "edge exists");
+  capacity->set_capacity(
+    CapacityInstanceKey{.edge = *edge,
+                        .departure = static_cast<SolverMinute>(
+                          epoch_minutes("2026-06-08 09:00:00"))},
+    1);
+
+  BlockingQueue<std::string> load_queue;
+  BlockingQueue<SearchDocument> solution_queue;
+  SolverWrapper::RuntimeQueues queues{
+    .node = nullptr,
+    .edge = nullptr,
+    .load = &load_queue,
+    .solution = &solution_queue,
+  };
+  static const auto timings_path =
+    std::filesystem::temp_directory_path() /
+    "moirae-wrapper-lifecycle-empty-timings.json";
+  {
+    std::ofstream timings(timings_path);
+    timings << "[]";
+  }
+  SolverWrapper wrapper{
+    queues,
+    solver,
+    timings_path,
+    nullptr,
+    nullptr,
+    capacity,
+  };
+
+  const auto load = nlohmann::json{
+    {"id", "bag-lifecycle"},
+    {"location", "A"},
+    {"destination", "B"},
+    {"time", "2026-06-08 08:00:00"},
+    {"capacity_units", 1},
+  }.dump();
+  const auto release = nlohmann::json{
+    {"capacity_action", "release"},
+    {"owner", "bag-lifecycle"},
+  }.dump();
+  const auto consume = nlohmann::json{
+    {"capacity_action", "consume"},
+    {"owner", "bag-lifecycle"},
+  }.dump();
+
+  expect_true(load_queue.enqueue(release),
+              "out-of-order release enqueued");
+  expect_true(load_queue.enqueue(load), "load enqueued");
+  expect_true(load_queue.enqueue(load), "duplicate load enqueued");
+  expect_true(load_queue.enqueue(consume), "consume enqueued");
+  expect_true(load_queue.enqueue(consume), "duplicate consume enqueued");
+  load_queue.close();
+  wrapper.run(std::stop_token{});
+
+  std::array<SearchDocument, 2> results;
+  const auto count = solution_queue.try_dequeue_bulk(results.data(),
+                                                    results.size());
+  expect_eq(count, std::size_t{2},
+            "duplicate load emits duplicate path recommendations");
+  expect_true(!capacity->reservation("bag-lifecycle").has_value(),
+              "consume clears lifecycle reservation");
+  expect_eq(capacity->remaining(CapacityInstanceKey{
+              .edge = *edge,
+              .departure = static_cast<SolverMinute>(
+                epoch_minutes("2026-06-08 09:00:00"))})
+              .value_or(99),
+            CapacityUnits{0},
+            "consumed capacity remains unavailable after duplicate events");
+}
+
 } // namespace
 
 auto main() -> int {
@@ -346,5 +686,9 @@ auto main() -> int {
   test_find_paths_source_processing_offset_can_make_critical();
   test_find_paths_mixed_bag_processing_can_make_parent_critical();
   test_find_paths_shared_cache_is_thread_safe();
+  test_capacity_reservation_routes_around_full_departure();
+  test_capacity_search_waits_for_later_departure_instance();
+  test_rolling_horizon_runtime_selects_capacity_feasible_candidates();
+  test_capacity_lifecycle_events_are_idempotent_and_order_tolerant();
   return 0;
 }

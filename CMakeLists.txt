@@ -278,6 +278,8 @@ message(STATUS
 
 find_package(PkgConfig REQUIRED)
 find_package(RdKafkaCPP QUIET)
+find_package(highs QUIET)
+pkg_check_modules(ROCKSDB QUIET IMPORTED_TARGET rocksdb)
 
 if(RdKafkaCPP_FOUND)
   set(MOIRAI_RDKAFKA_TARGET RdKafkaCPP::RdKafkaCPP)
@@ -293,6 +295,7 @@ set(MOIRAI_MODULE_SOURCES
     modules/moirai.transportation.cxx
     modules/moirai.route_schedule.cxx
     modules/moirai.solver.cxx
+    modules/moirai.capacity_optimizer.cxx
     modules/moirai.search_document.cxx
     modules/moirai.processor.cxx
     modules/moirai.app.cxx
@@ -309,6 +312,7 @@ set(MOIRAI_IMPLEMENTATION_SOURCES
     src/date_utils.cxx
     src/transportation.cxx
     src/solver.cxx
+    src/capacity_optimizer.cxx
     src/utils.cxx
     src/scan_reader.cxx
     src/kafka_reader.cxx
@@ -366,6 +370,14 @@ target_link_libraries(
          OpenSSL::SSL
          OpenSSL::Crypto
          simdjson::simdjson)
+if(TARGET highs::highs)
+  target_compile_definitions(moirai_core PRIVATE MOIRAI_WITH_HIGHS=1)
+  target_link_libraries(moirai_core PUBLIC highs::highs)
+endif()
+if(ROCKSDB_FOUND)
+  target_compile_definitions(moirai_core PUBLIC MOIRAI_WITH_ROCKSDB=1)
+  target_link_libraries(moirai_core PUBLIC PkgConfig::ROCKSDB)
+endif()
 
 if(ANALYZE)
   set_property(TARGET moirai_core PROPERTY CXX_INCLUDE_WHAT_YOU_USE

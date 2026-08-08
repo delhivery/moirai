@@ -7,15 +7,177 @@ import moirai.transportation;
 export using NodeId = std::uint32_t;
 export using EdgeId = std::uint32_t;
 export using SolverMinute = std::uint32_t;
+export using SolverScore = std::int64_t;
+export using CapacityUnits = std::uint32_t;
 export inline constexpr NodeId INVALID_NODE =
     std::numeric_limits<NodeId>::max();
 export inline constexpr EdgeId INVALID_EDGE =
     std::numeric_limits<EdgeId>::max();
 
+export struct CapacityInstanceKey {
+  EdgeId edge{INVALID_EDGE};
+  SolverMinute departure{};
+
+  [[nodiscard]] auto operator==(const CapacityInstanceKey&) const
+      -> bool = default;
+};
+
+export struct CapacityInstanceKeyHash {
+  [[nodiscard]] auto operator()(const CapacityInstanceKey& key) const noexcept
+      -> std::size_t {
+    const auto edge_hash = std::hash<EdgeId>{}(key.edge);
+    const auto departure_hash = std::hash<SolverMinute>{}(key.departure);
+    return edge_hash ^ (departure_hash + 0x9e3779b97f4a7c15ULL +
+                        (edge_hash << 6U) + (edge_hash >> 2U));
+  }
+};
+
+export struct CapacityBucket {
+  CapacityUnits capacity{};
+  CapacityUnits reserved{};
+  CapacityUnits consumed{};
+  CapacityUnits protected_units{};
+  double price{};
+};
+
+export struct CapacityReservation {
+  std::vector<CapacityInstanceKey> instances;
+  CapacityUnits units{1};
+  CLOCK reserved_at{};
+  CLOCK expires_at{CLOCK::max()};
+  CLOCK frozen_at{CLOCK::max()};
+  std::string payload;
+
+  [[nodiscard]] auto empty() const -> bool { return instances.empty(); }
+};
+
+export struct CapacityReservationOptions {
+  CLOCK reserved_at{};
+  CLOCK expires_at{CLOCK::max()};
+  CLOCK frozen_at{CLOCK::max()};
+  std::string payload;
+};
+
+export struct CapacityStoreMetrics {
+  std::uint64_t reservations_created{};
+  std::uint64_t reservations_replaced{};
+  std::uint64_t reservations_released{};
+  std::uint64_t reservations_consumed{};
+  std::uint64_t reservations_expired{};
+  std::uint64_t reservation_failures{};
+  std::uint64_t invalid_buckets_clamped{};
+  std::uint64_t protected_capacity_saved{};
+  std::uint64_t protected_capacity_used{};
+};
+
+export class CapacityReservationStore {
+private:
+  mutable std::mutex m_mutex;
+  std::unordered_map<CapacityInstanceKey, CapacityBucket, CapacityInstanceKeyHash>
+      m_buckets;
+	  std::unordered_map<std::string, CapacityReservation> m_reservations;
+	  std::optional<CapacityUnits> m_default_capacity;
+	  mutable CapacityStoreMetrics m_metrics;
+	  bool m_enabled{false};
+  bool m_missing_capacity_allowed{true};
+
+public:
+  void set_enabled(bool enabled);
+  [[nodiscard]] auto enabled() const -> bool;
+
+  void set_missing_capacity_allowed(bool allowed);
+  [[nodiscard]] auto missing_capacity_allowed() const -> bool;
+
+  void set_default_capacity(std::optional<CapacityUnits> capacity);
+  [[nodiscard]] auto default_capacity() const -> std::optional<CapacityUnits>;
+
+  void set_capacity(CapacityInstanceKey key, CapacityUnits capacity);
+  void set_bucket(CapacityInstanceKey key, CapacityBucket bucket);
+  [[nodiscard]] auto bucket(CapacityInstanceKey key) const
+      -> std::optional<CapacityBucket>;
+  void set_protected_capacity(CapacityInstanceKey key, CapacityUnits units);
+  [[nodiscard]] auto protected_capacity(CapacityInstanceKey key) const
+      -> CapacityUnits;
+  void set_price(CapacityInstanceKey key, double price);
+  [[nodiscard]] auto price(CapacityInstanceKey key) const -> double;
+  [[nodiscard]] auto remaining(CapacityInstanceKey key) const
+      -> std::optional<CapacityUnits>;
+  [[nodiscard]] auto available(CapacityInstanceKey key, CapacityUnits units,
+                               bool allow_protected_capacity = false) const
+      -> bool;
+  [[nodiscard]] auto penalty_minutes(CapacityInstanceKey key, CapacityUnits units,
+                                     bool allow_protected_capacity,
+                                     double price_weight,
+                                     double protection_weight) const
+      -> SolverScore;
+  [[nodiscard]] auto reserve(std::span<const CapacityInstanceKey> instances,
+                             CapacityUnits units) -> std::optional<CapacityReservation>;
+	  [[nodiscard]] auto reserve_for(std::string owner,
+	                                 std::span<const CapacityInstanceKey> instances,
+	                                 CapacityUnits units,
+	                                 CapacityReservationOptions options = {})
+	      -> std::optional<CapacityReservation>;
+	  void release(const CapacityReservation& reservation);
+  [[nodiscard]] auto release(std::string_view owner)
+      -> std::optional<CapacityReservation>;
+	  [[nodiscard]] auto consume(std::string_view owner)
+	      -> std::optional<CapacityReservation>;
+	  [[nodiscard]] auto expire_before(CLOCK deadline)
+	      -> std::vector<std::pair<std::string, CapacityReservation>>;
+	  void clear();
+	  [[nodiscard]] auto reservation(std::string_view owner) const
+	      -> std::optional<CapacityReservation>;
+	  [[nodiscard]] auto metrics() const -> CapacityStoreMetrics;
+	  [[nodiscard]] auto buckets_snapshot() const
+	      -> std::vector<std::pair<CapacityInstanceKey, CapacityBucket>>;
+  [[nodiscard]] auto reservations_snapshot() const
+      -> std::vector<std::pair<std::string, CapacityReservation>>;
+};
+
+export struct CapacitySearch {
+  const CapacityReservationStore* store{nullptr};
+  std::span<const EdgeId> excluded_edges{};
+  CapacityUnits units{1};
+  std::uint8_t search_weeks{1};
+  bool allow_protected_capacity{false};
+  double price_weight{0.0};
+  double protection_weight{0.0};
+};
+
+export struct PathCandidateMetrics {
+  std::size_t requested{};
+  std::size_t generated{};
+  std::size_t expansions{};
+  std::size_t duplicates{};
+  std::size_t route_duplicates{};
+  std::size_t hub_duplicates{};
+  std::size_t departure_day_duplicates{};
+  std::size_t slack_duplicates{};
+  std::int64_t latency_ms{};
+  bool expansion_cap_reached{false};
+};
+
+export struct PathCandidateOptions {
+  std::size_t max_candidates{1};
+  std::uint8_t search_weeks{1};
+  std::size_t max_expansions{256};
+  bool allow_protected_capacity{false};
+  double price_weight{0.0};
+  double protection_weight{0.0};
+  CLOCK deadline{CLOCK::max()};
+  bool diversify_routes{true};
+  bool diversify_hubs{true};
+  bool diversify_departure_days{true};
+  bool diversify_slack{true};
+  PathCandidateMetrics* metrics{nullptr};
+};
+
 export struct PathStep {
   const TransportCenter* node{nullptr};
   const TransportEdge* outbound{nullptr};
+  EdgeId outbound_edge{INVALID_EDGE};
   CLOCK distance{};
+  CLOCK departure{};
 };
 
 export struct Path {
@@ -114,16 +276,19 @@ private:
   [[nodiscard]] auto incoming_edges(NodeId node) const -> std::span<const EdgeId>;
   [[nodiscard]] auto build_forward_path(NodeId source, NodeId target,
                                         const std::vector<SolverMinute>& distances,
-                                        const std::vector<EdgeId>& predecessors)
+                                        const std::vector<EdgeId>& predecessors,
+                                        const std::vector<SolverMinute>& departures)
       const -> Path;
   [[nodiscard]] auto build_reverse_path(NodeId source, NodeId target,
                                         const std::vector<SolverMinute>& distances,
-                                        const std::vector<EdgeId>& predecessors)
+                                        const std::vector<EdgeId>& predecessors,
+                                        const std::vector<SolverMinute>& departures)
       const -> Path;
 
   template <PathTraversalMode P, VehicleType V>
   [[nodiscard]] auto find_path_impl(NodeId source, NodeId target,
-                                    CLOCK start) const -> Path;
+                                    CLOCK start,
+                                    const CapacitySearch* capacity) const -> Path;
 
 public:
   void finalize_graph() const;
@@ -162,4 +327,14 @@ public:
   template <PathTraversalMode P, VehicleType V = VehicleType::AIR>
   [[nodiscard]] auto find_path(NodeId source, NodeId target, CLOCK start) const
       -> Path;
+
+  template <PathTraversalMode P, VehicleType V = VehicleType::AIR>
+  [[nodiscard]] auto find_path(NodeId source, NodeId target, CLOCK start,
+                               const CapacitySearch& capacity) const -> Path;
+
+  template <PathTraversalMode P, VehicleType V = VehicleType::AIR>
+  [[nodiscard]] auto find_path_candidates(
+      NodeId source, NodeId target, CLOCK start,
+      const CapacitySearch& capacity,
+      const PathCandidateOptions& options = {}) const -> std::vector<Path>;
 };

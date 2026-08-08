@@ -2,6 +2,7 @@
 
 #include "cameron314/concurrentqueue.h"
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <limits>
@@ -100,6 +101,40 @@ public:
       std::unique_lock lock(m_state_mutex);
       m_not_empty.wait(lock, stop_token,
                        [this]() -> bool { return m_closed || m_size > 0; });
+      if (m_size == 0) {
+        return 0;
+      }
+
+      reserved = std::min(m_size, items.size());
+      m_size -= reserved;
+    }
+
+    if (m_bounded) {
+      m_not_full.notify_all();
+    }
+
+    drain_reserved(items.data(), reserved);
+    return reserved;
+  }
+
+  template <typename Rep, typename Period>
+  auto wait_dequeue_bulk_for(
+      std::span<T> items,
+      const std::chrono::duration<Rep, Period> &timeout,
+      const std::stop_token &stop_token) -> size_t {
+    if (items.empty()) {
+      return 0;
+    }
+
+    size_t reserved = 0;
+    {
+      std::unique_lock lock(m_state_mutex);
+      std::stop_callback callback(
+          stop_token, [this]() noexcept { m_not_empty.notify_all(); });
+      const auto deadline = std::chrono::steady_clock::now() + timeout;
+      m_not_empty.wait_until(lock, deadline, [this, &stop_token]() -> bool {
+        return m_closed || m_size > 0 || stop_token.stop_requested();
+      });
       if (m_size == 0) {
         return 0;
       }

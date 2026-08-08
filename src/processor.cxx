@@ -17,8 +17,6 @@ void parse_path_into<PathTraversalMode::FORWARD>(
       continue;
     }
     if (step.outbound != nullptr) {
-      const auto departure =
-        get_departure(step.distance, step.outbound->departure);
       SearchPathLocation entry = {
         .code = step.node->code,
         .facility_name = step.node->name,
@@ -26,8 +24,8 @@ void parse_path_into<PathTraversalMode::FORWARD>(
         .arrival_ts = step.distance.time_since_epoch().count() * 60,
         .route = step.outbound->route_prefix,
         .route_name = step.outbound->name,
-        .departure = format_clock(departure),
-        .departure_ts = departure.time_since_epoch().count() * 60,
+        .departure = format_clock(step.departure),
+        .departure_ts = step.departure.time_since_epoch().count() * 60,
         .has_departure = true,
       };
       response.push_back(std::move(entry));
@@ -71,12 +69,12 @@ void parse_path_into<PathTraversalMode::REVERSE>(
         .arrival_ts = arrival.time_since_epoch().count() * 60,
         .route = step.outbound->route_prefix,
         .route_name = step.outbound->name,
-        .departure = format_clock(step.distance),
-        .departure_ts = step.distance.time_since_epoch().count() * 60,
+        .departure = format_clock(step.departure),
+        .departure_ts = step.departure.time_since_epoch().count() * 60,
         .has_departure = true,
       };
       response.push_back(std::move(entry));
-      arrival = step.distance + step.outbound->duration;
+      arrival = step.departure + step.outbound->duration;
     }
   }
 }

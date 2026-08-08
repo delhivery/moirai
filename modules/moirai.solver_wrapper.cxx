@@ -7,6 +7,7 @@ export module moirai.solver_wrapper;
 
 export import std;
 export import moirai.date_utils;
+export import moirai.capacity_optimizer;
 export import moirai.http;
 export import moirai.search_document;
 export import moirai.solver;
@@ -14,6 +15,7 @@ export import moirai.transportation;
 
 export struct PathCacheEntry {
   std::vector<SearchPathLocation> locations;
+  std::vector<CapacityInstanceKey> capacity_instances;
   CLOCK first_distance{};
   CLOCK last_distance{};
   bool found{false};
@@ -25,6 +27,29 @@ export struct PathCacheConfig {
   bool enabled{true};
   std::size_t max_entries{65'536};
   std::uint32_t bucket_minutes{1};
+};
+
+export struct CapacityRoutingConfig {
+  bool enabled{false};
+  bool missing_capacity_allowed{true};
+  bool reserve_earliest{true};
+  bool allow_protected_capacity{false};
+  std::uint8_t search_weeks{1};
+  std::size_t candidate_count{1};
+  CapacityUnits default_demand{1};
+  std::optional<CapacityUnits> default_capacity;
+	  double price_weight{0.0};
+	  double protection_weight{0.0};
+	  double critical_price_weight{0.0};
+	  double critical_protection_weight{0.0};
+	  moirai::CapacityProtectionPolicy protection_policy;
+	  bool rebuild_state{false};
+	  std::chrono::minutes reservation_ttl{std::chrono::minutes{0}};
+	  std::chrono::minutes freeze_before_departure{std::chrono::minutes{0}};
+	  std::filesystem::path state_path;
+  moirai::CapacityStateBackend state_backend{
+    moirai::CapacityStateBackend::AUTO
+  };
 };
 
 export class SolverWrapper {
@@ -75,12 +100,17 @@ private:
   HttpGet m_http_get;
   std::shared_ptr<PathCache> m_path_cache;
   PathCacheConfig m_cache_config;
+  std::shared_ptr<CapacityReservationStore> m_capacity_store;
+  CapacityRoutingConfig m_capacity_config;
+  std::shared_ptr<moirai::CapacityStateLog> m_capacity_state;
+  moirai::RollingHorizonConfig m_rolling_config;
 
 public:
   SolverWrapper(RuntimeQueues queues, const std::shared_ptr<Solver>& solver,
                 const std::filesystem::path& center_timings_filename,
                 std::shared_ptr<PathCache> cache = nullptr,
                 std::shared_ptr<FacilityProfiles> facility_profiles = nullptr,
+                std::shared_ptr<CapacityReservationStore> capacity_store = nullptr,
                 HttpGet http_get = moirai::http_get);
 
   SolverWrapper(RuntimeQueues queues, InitEndpoints endpoints,
@@ -102,12 +132,19 @@ public:
   [[nodiscard]] auto get_cache() const -> std::shared_ptr<PathCache>;
   [[nodiscard]] auto get_facility_profiles() const
       -> std::shared_ptr<FacilityProfiles>;
+  [[nodiscard]] auto get_capacity_store() const
+      -> std::shared_ptr<CapacityReservationStore>;
 
   auto find_paths(
       std::string bag, std::string bag_source, std::string bag_target,
       std::int32_t bag_start, DURATION source_processing_offset,
       CLOCK bag_end, DURATION mixed_bag_processing,
-      std::vector<std::tuple<std::string, std::int32_t, std::string>>& packages)
+	      std::vector<std::tuple<std::string, std::int32_t, std::string>>& packages,
+	      CapacityUnits capacity_units = 1,
+	      bool reserve_capacity = true,
+	      CapacityReservationOptions reservation_options = {},
+	      std::vector<moirai::OptimizationPathCandidate>* candidates = nullptr,
+	      std::vector<std::vector<SearchPathLocation>>* candidate_locations = nullptr)
       const -> SearchDocument;
 
   void run(const std::stop_token& stop_token);
