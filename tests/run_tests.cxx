@@ -94,6 +94,27 @@ void test_valid_payload_produces_solution() {
   expect_eq(solution.pid, std::string{"PID"}, "pid copied");
 }
 
+void test_load_time_is_interpreted_as_ist_payload_time() {
+  const auto payload = R"({
+    "id":"bag-ist-time",
+    "location":"A",
+    "destination":"C",
+    "time":"2026-06-09 07:30:00",
+    "ipdd_destination":"2026-06-10 23:59:59"
+  })";
+  const auto result = run_single_payload(payload);
+  expect_eq(result.outputs.size(), std::size_t{1},
+            "IST payload time produces one solution");
+  const auto& locations = result.outputs[0].earliest.locations;
+  expect_eq(locations.size(), std::size_t{2}, "IST payload path has two stops");
+  expect_eq(locations.front().departure,
+            std::string{"06/09/26 03:30:00"},
+            "IST payload time catches same-day UTC-normalized departure");
+  expect_eq(locations.back().arrival,
+            std::string{"06/09/26 05:45:00"},
+            "IST payload time arrives on same UTC day");
+}
+
 void test_invalid_payloads_produce_no_solution() {
   const auto invalid_json = run_single_payload("not-json");
   expect_eq(invalid_json.outputs.empty(), true,
@@ -229,6 +250,7 @@ void test_path_cache_hits_repeated_loads() {
 
 auto main() -> int {
   test_valid_payload_produces_solution();
+  test_load_time_is_interpreted_as_ist_payload_time();
   test_invalid_payloads_produce_no_solution();
   test_waybill_items_are_filtered_and_used();
   test_item_alias_is_supported();

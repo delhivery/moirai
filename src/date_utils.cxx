@@ -33,7 +33,8 @@ auto parse_int(std::string_view input) -> int {
 auto parse_iso_datetime(std::string_view input) -> CLOCK {
   if (input.size() < ISO_DATETIME_LENGTH || input[DATE_DASH_2_OFFSET] != '-' ||
       input[DATE_DASH_3_OFFSET] != '-' ||
-      input[DATE_TIME_SEPARATOR_OFFSET] != ' ' ||
+      (input[DATE_TIME_SEPARATOR_OFFSET] != ' ' &&
+       input[DATE_TIME_SEPARATOR_OFFSET] != 'T') ||
       input[TIME_HOUR_SEPARATOR_OFFSET] != ':' ||
       input[TIME_MINUTE_SEPARATOR_OFFSET] != ':') {
     throw std::runtime_error("Failed to parse date string");
@@ -148,6 +149,32 @@ auto iso_to_date_utc_cutoff(const std::string &date_string,
   const CLOCK t_utc = parse_iso_datetime(date_string);
   const auto day = std::chrono::floor<std::chrono::days>(t_utc);
   return CLOCK{day} + cutoff;
+}
+
+auto iso_local_to_utc(const std::string& date_string,
+                      const DURATION& utc_offset) -> CLOCK {
+  return parse_iso_datetime(date_string) - utc_offset;
+}
+
+auto iso_local_date_to_utc_cutoff(const std::string& date_string,
+                                  const TIME_OF_DAY& utc_cutoff,
+                                  const DURATION& utc_offset) -> CLOCK {
+  const CLOCK local_timestamp = parse_iso_datetime(date_string);
+  const auto local_day = std::chrono::floor<std::chrono::days>(local_timestamp);
+  CLOCK deadline = CLOCK{local_day} + utc_cutoff;
+
+  const auto normalized_offset =
+      DURATION{static_cast<std::int16_t>(
+          datemod(utc_offset, std::chrono::days{1}))};
+  if (normalized_offset.count() > 0) {
+    const auto previous_utc_day_threshold =
+        DURATION{MINUTES_PER_DAY} - normalized_offset;
+    if (utc_cutoff >= previous_utc_day_threshold) {
+      deadline -= std::chrono::days{1};
+    }
+  }
+
+  return deadline;
 }
 
 auto now_as_int64() -> std::int64_t {

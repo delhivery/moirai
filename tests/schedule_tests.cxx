@@ -185,6 +185,25 @@ void test_utc_cutoff_uses_utc_calendar_day() {
             "UTC cutoff uses UTC calendar day");
 }
 
+void test_local_payload_times_are_normalized_to_utc() {
+  constexpr auto ist_offset = DURATION{330};
+  expect_eq(iso_local_to_utc("2026-08-26T11:10:35", ist_offset),
+            iso_to_date("2026-08-26 05:40:00"),
+            "timezone-less IST payload timestamp converts to UTC");
+
+  expect_eq(iso_local_date_to_utc_cutoff("2026-08-28T23:59:59",
+                                         DURATION{4 * 60 + 30},
+                                         ist_offset),
+            iso_to_date("2026-08-28 04:30:00"),
+            "IST delivery date uses same-date UTC cutoff after IST midnight");
+
+  expect_eq(iso_local_date_to_utc_cutoff("2026-08-28T23:59:59",
+                                         DURATION{19 * 60},
+                                         ist_offset),
+            iso_to_date("2026-08-27 19:00:00"),
+            "IST delivery date handles cutoff on previous UTC day");
+}
+
 void test_transport_edge_weights() {
   auto source = std::make_shared<TransportCenter>("source");
   auto target = std::make_shared<TransportCenter>("target");
@@ -265,6 +284,7 @@ auto main() -> int {
   test_forward_schedule_traversal();
   test_reverse_schedule_traversal();
   test_utc_cutoff_uses_utc_calendar_day();
+  test_local_payload_times_are_normalized_to_utc();
   test_transport_edge_weights();
   return 0;
 }

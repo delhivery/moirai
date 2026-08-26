@@ -2031,9 +2031,10 @@ SolverWrapper::run(const std::stop_token& stop_token)
                   }
                   const auto destination_profile =
                     profile_for(m_facility_profiles, cn);
-                  const auto waybill_tmax = iso_to_date_utc_cutoff(
+                  const auto waybill_tmax = iso_local_date_to_utc_cutoff(
                     ipdd,
-                    destination_profile.center_arrival_cutoff);
+                    destination_profile.center_arrival_cutoff,
+                    IST_OFFSET);
 
                   packages.emplace_back(std::move(cn),
                                         waybill_tmax.time_since_epoch().count(),
@@ -2060,9 +2061,10 @@ SolverWrapper::run(const std::stop_token& stop_token)
               profile_for(m_facility_profiles, load->destination);
             if (!load->items.has_value() &&
                 load->ipdd_destination.length() > MIN_IPDD_LENGTH) {
-              tmax = iso_to_date_utc_cutoff(
+              tmax = iso_local_date_to_utc_cutoff(
                 load->ipdd_destination,
-                destination_profile.center_arrival_cutoff);
+                destination_profile.center_arrival_cutoff,
+                IST_OFFSET);
             }
 
             SearchDocument solution;
@@ -2087,7 +2089,8 @@ SolverWrapper::run(const std::stop_token& stop_token)
                 load->id,
                 load->location,
                 load->destination,
-                static_cast<int32_t>(iso_to_date(load->event_time)
+                static_cast<int32_t>(iso_local_to_utc(load->event_time,
+                                                      IST_OFFSET)
                                        .time_since_epoch()
                                        .count()),
                 source_processing_offset,
