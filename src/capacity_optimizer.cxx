@@ -314,15 +314,15 @@ constexpr std::string_view ROCKSDB_RESERVATION_PREFIX = "reservation:";
     -> std::unique_ptr<rocksdb::DB> {
   rocksdb::Options options;
   options.create_if_missing = true;
-  rocksdb::DB* raw_db = nullptr;
-  const auto status = rocksdb::DB::Open(options, path.string(), &raw_db);
+  std::unique_ptr<rocksdb::DB> db;
+  const auto status = rocksdb::DB::Open(options, path.string(), &db);
   if (!status.ok()) {
     throw std::runtime_error(
         std::format("Unable to open RocksDB capacity state {}: {}",
                     path.string(),
                     status.ToString()));
   }
-  return std::unique_ptr<rocksdb::DB>{raw_db};
+  return db;
 }
 
 void restore_rocksdb_state(const std::filesystem::path& path,
