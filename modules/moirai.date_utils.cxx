@@ -40,6 +40,13 @@ export auto iso_to_date(const std::string& date_string,
 export auto iso_to_date_utc_cutoff(const std::string& date_string,
                                    const TIME_OF_DAY& cutoff) -> CLOCK;
 
+export auto iso_local_to_utc(const std::string& date_string,
+                             const DURATION& utc_offset) -> CLOCK;
+
+export auto iso_local_date_to_utc_cutoff(const std::string& date_string,
+                                         const TIME_OF_DAY& utc_cutoff,
+                                         const DURATION& utc_offset) -> CLOCK;
+
 export auto now_as_int64() -> std::int64_t;
 
 export auto time_string_to_time(std::string_view time_string)
